@@ -1052,6 +1052,7 @@ impl<'script> WindowDecl<'script> {
             kind,
             params,
             script,
+            tick_script,
         } = self;
         WindowDecl {
             mid,
@@ -1064,6 +1065,7 @@ impl<'script> WindowDecl<'script> {
                 .collect(),
 
             script: script.map(Script::into_static),
+            tick_script: tick_script.map(Script::into_static),
         }
     }
 }

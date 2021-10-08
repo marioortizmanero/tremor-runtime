@@ -24,7 +24,7 @@ use super::{
     Query, Registry, Result, ScriptDecl, ScriptStmt, Select, SelectStmt, Serialize, Stmt,
     StreamStmt, Upable, Value, WindowDecl, WindowKind,
 };
-use crate::ast::visitors::{GroupByExprExtractor, TargetEventRefVisitor};
+use crate::ast::visitors::{GroupByExprExtractor, TargetEventRef};
 use crate::{ast::InvokeAggrFn, impl_expr};
 use beef::Cow;
 
@@ -353,6 +353,7 @@ pub struct WindowDeclRaw<'script> {
     pub(crate) id: String,
     pub(crate) kind: WindowKind,
     pub(crate) params: WithExprsRaw<'script>,
+    pub(crate) named_script: Option<(IdentRaw<'script>, ScriptRaw<'script>)>,
     pub(crate) script: Option<ScriptRaw<'script>>,
 }
 
@@ -364,12 +365,24 @@ impl<'script> Upable<'script> for WindowDeclRaw<'script> {
         // warn params if `emit_empty_windows` is defined, but neither `max_groups` nor `evicition_period` is defined
         let params = up_params(self.params, helper)?;
 
+        let tick_script = self
+            .named_script
+            .map(|(i, s)| {
+                if i != "tick" {
+                    Err("Only `tick` scripts are supported by windows".into())
+                } else {
+                    s.up_script(helper)
+                }
+            })
+            .transpose()?;
+
         Ok(WindowDecl {
             mid: helper.add_meta_w_name(self.start, self.end, &self.id),
             module: helper.module.clone(),
             id: self.id,
             kind: self.kind,
             params,
+            tick_script,
             script: maybe_script,
         })
     }
@@ -462,8 +475,7 @@ impl<'script> Upable<'script> for SelectRaw<'script> {
         if !windows.is_empty() {
             // if we have windows we need to forbid free event references in the target if they are not
             // inside an aggregate function or can be rewritten to a group reference
-            TargetEventRefVisitor::new(group_by_expressions, &helper.meta)
-                .rewrite_target(&mut target)?;
+            TargetEventRef::new(group_by_expressions, &helper.meta).rewrite_target(&mut target)?;
         }
 
         let from = match self.from {
