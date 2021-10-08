@@ -275,6 +275,8 @@ impl<'script> WindowDecl<'script> {
     pub const INTERVAL: &'static str = "interval";
     /// `size` setting
     pub const SIZE: &'static str = "size";
+    /// `state` setting
+    pub const STATE: &'static str = "state";
 
     /// Calculate the fully qualified window name
     #[must_use]

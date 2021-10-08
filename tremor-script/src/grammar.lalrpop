@@ -78,7 +78,7 @@ ModuleStmts: StmtsRaw<'input> = {
 // In case we need to limit the content of stmt
 ModuleInnerStmt: StmtRaw<'input> = {
     <m:ModuleStmt> => StmtRaw::ModuleStmt(m),
-    <start:@L> "define" <kind:WindowKind> "window" <id:Ident> <params:WithScriptClause> <end:@L> => StmtRaw::WindowDecl(WindowDeclRaw { start, end, id: id.to_string(), kind, params: params.0, script: params.1 }),
+    <start:@L> "define" <kind:WindowKind> "window" <id:Ident> <params:MaybeScriptWithClause> <end:@L> => StmtRaw::WindowDecl(WindowDeclRaw { start, end, id: id.to_string(), kind, params: params.0, script: params.1 }),
 
     <start:@L> "define" <kind:OperatorKind> "operator" <id:Ident> <params:WithClause> <end:@L> => StmtRaw::OperatorDecl(Box::new(OperatorDeclRaw { start, end, kind, id: id.to_string(), params: Some(params) })),
     <start:@L> "define" <kind:OperatorKind> "operator" <id:Ident>  <end:@L> => StmtRaw::OperatorDecl(Box::new(OperatorDeclRaw { start, end, kind, id: id.to_string(), params: None })),
@@ -118,7 +118,7 @@ WindowKind: WindowKind = {
 Stmt: StmtRaw<'input> = {
     <m:ModuleStmt> => StmtRaw::ModuleStmt(m),
 
-    <start:@L> "define" <kind:WindowKind> "window" <id:Ident> <params:WithScriptClause> <end:@L> => StmtRaw::WindowDecl(WindowDeclRaw { start, end, id: id.to_string(), kind, params: params.0, script: params.1 }),
+    <start:@L> "define" <kind:WindowKind> "window" <id:Ident> <params:MaybeScriptWithClause> <end:@L> => StmtRaw::WindowDecl(WindowDeclRaw { start, end, id: id.to_string(), kind, params: params.0, script: params.1 }),
 
     <start:@L> "define" <kind:OperatorKind> "operator" <id:Ident> <params:WithClause> <end:@L> => StmtRaw::OperatorDecl(Box::new(OperatorDeclRaw { start, end, kind, id: id.to_string(), params: Some(params) })),
     <start:@L> "define" <kind:OperatorKind> "operator" <id:Ident>  <end:@L> => StmtRaw::OperatorDecl(Box::new(OperatorDeclRaw { start, end, kind, id: id.to_string(), params: None })),
@@ -213,16 +213,16 @@ GroupDefs_: Vec<GroupByRaw<'input>> = {
     <Sep<GroupDefs_, GroupDef, ",">> => <>
 }
 
-EmbeddedScriptImut: Option<ScriptRaw<'input>> = {
+MaybeEmbeddedScript: Option<ScriptRaw<'input>> = {
     ("script" <EmbeddedScriptContent>)? => <>?,
 }
 
 EmbeddedScriptContent: Option<ScriptRaw<'input>> = {
-    <ExprImut> => Some(ScriptRaw::new(vec![ExprRaw::Imut(<>)], None)),
+    <Exprs> => Some(ScriptRaw::new(<>, None)),
 }
 
-WithScriptClause: (WithExprsRaw<'input>, Option<ScriptRaw<'input>>) = {
-    "with" <with:WithExprs> <script:EmbeddedScriptImut> "end" => (with, script),
+MaybeScriptWithClause: (WithExprsRaw<'input>, Option<ScriptRaw<'input>>) = {
+    "with" <with:WithExprs> <script:MaybeEmbeddedScript> "end" => (with, script),
 }
 
 WithClause: WithExprsRaw<'input> = {
@@ -246,7 +246,8 @@ WithExprs_: WithExprsRaw<'input> = {
 }
 
 WithExpr: (IdentRaw<'input>, ImutExprRaw<'input>) = {
-    <start:@L> <name:Ident> "=" <expr:ExprImut> => (name, expr)
+    <name:Ident> "=" <expr:ExprImut> => (name, expr),
+    <start:@L> "state" <end:@L> "=" <expr:ExprImut> => (IdentRaw{start, end, id: "state".into()}, expr)
 }
 
 OperatorKind: OperatorKindRaw = {
