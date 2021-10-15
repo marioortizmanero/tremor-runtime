@@ -45,6 +45,7 @@ use VisitRes::Walk;
 /// Visitor for traversing all `Exprs`s within the given `Exprs`
 ///
 /// Implement your custom expr visiting logic by overwriting the methods.
+#[cfg(not(tarpaulin_include))]
 pub trait ExprVisitor<'script> {
     /// visit a generic `Expr` (this is called before the concrete `visit_*` method)
     ///
@@ -123,6 +124,7 @@ pub trait ExprVisitor<'script> {
 /// Visitor for traversing all `ImutExprInt`s within the given `ImutExprInt`
 ///
 /// Implement your custom expr visiting logic by overwriting the methods.
+#[cfg(not(tarpaulin_include))]
 pub trait ImutExprVisitor<'script> {
     /// visit a `Record`
     ///
