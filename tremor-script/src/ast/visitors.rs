@@ -14,13 +14,13 @@
 
 use super::{
     ArrayPattern, ArrayPredicatePattern, BinExpr, Bytes, ClauseGroup, Comprehension, DefaultCase,
-    EmitExpr, EventPath, Expr, ExprPath, GroupBy, GroupByInt, IfElse, ImutExprInt, Invoke,
-    InvokeAggr, List, Literal, LocalPath, Match, Merge, MetadataPath, NodeMetas, Patch,
-    PatchOperation, Path, Pattern, PredicateClause, PredicatePattern, Record, RecordPattern, Recur,
-    ReservedPath, Segment, StatePath, StrLitElement, StringLit, TestExpr, TuplePattern, UnaryExpr,
+    EmitExpr, EventPath, Expr, ExprPath, GroupByInt, IfElse, ImutExprInt, Invoke, InvokeAggr, List,
+    Literal, LocalPath, Match, Merge, MetadataPath, Patch, PatchOperation, Path, Pattern,
+    PredicateClause, PredicatePattern, Record, RecordPattern, Recur, ReservedPath, Segment,
+    StatePath, StrLitElement, StringLit, TestExpr, TuplePattern, UnaryExpr,
 };
 
-use crate::errors::{error_event_ref_not_allowed, Result};
+use crate::errors::Result;
 
 pub(crate) mod group_by_extractor;
 pub(crate) mod target_event_ref;
@@ -44,9 +44,7 @@ use VisitRes::Walk;
 
 /// Visitor for traversing all `Exprs`s within the given `Exprs`
 ///
-/// Implement your custom expr visiting logic by overwriting the visit_* methods.
-/// You do not need to traverse further down. This is done by the provided `walk_*` methods.
-/// The walk_* methods implement walking the expression tree, those do not need to be changed.
+/// Implement your custom expr visiting logic by overwriting the methods.
 pub trait ExprVisitor<'script> {
     /// visit a generic `Expr` (this is called before the concrete `visit_*` method)
     ///
@@ -67,7 +65,7 @@ pub trait ExprVisitor<'script> {
         Ok(Walk)
     }
 
-    /// visit a emit expr
+    /// visit a `EmitExpr`
     ///
     /// # Errors
     /// if the walker function fails
@@ -75,7 +73,7 @@ pub trait ExprVisitor<'script> {
         Ok(Walk)
     }
 
-    /// visit a match expr
+    /// visit a `IfElse`
     ///
     /// # Errors
     /// if the walker function fails
@@ -83,7 +81,7 @@ pub trait ExprVisitor<'script> {
         Ok(Walk)
     }
 
-    /// visit a DefaultCase expr
+    /// visit a `DefaultCase`
     ///
     /// # Errors
     /// if the walker function fails
@@ -91,7 +89,7 @@ pub trait ExprVisitor<'script> {
         Ok(Walk)
     }
 
-    /// visit a match expr
+    /// visit a `Match`
     ///
     /// # Errors
     /// if the walker function fails
@@ -99,7 +97,7 @@ pub trait ExprVisitor<'script> {
         Ok(Walk)
     }
 
-    /// visit a group clause
+    /// visit a `ClauseGroup`
     ///
     /// # Errors
     /// if the walker function fails
@@ -110,7 +108,7 @@ pub trait ExprVisitor<'script> {
         Ok(Walk)
     }
 
-    /// visit a predicate clause
+    /// visit a `PredicateClause`
     ///
     /// # Errors
     /// if the walker function fails
@@ -124,11 +122,9 @@ pub trait ExprVisitor<'script> {
 
 /// Visitor for traversing all `ImutExprInt`s within the given `ImutExprInt`
 ///
-/// Implement your custom expr visiting logic by overwriting the visit_* methods.
-/// You do not need to traverse further down. This is done by the provided `walk_*` methods.
-/// The walk_* methods implement walking the expression tree, those do not need to be changed.
+/// Implement your custom expr visiting logic by overwriting the methods.
 pub trait ImutExprVisitor<'script> {
-    /// visit a record
+    /// visit a `Record`
     ///
     /// # Errors
     /// if the walker function fails

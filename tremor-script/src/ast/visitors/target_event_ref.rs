@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
+use super::{ImutExprVisitor, Path, Result, VisitRes};
 use crate::{
     ast::base_expr::BaseExpr,
-    ast::{eq::AstEq, walkers::ImutExprWalker},
+    ast::{eq::AstEq, walkers::ImutExprWalker, ImutExprInt, NodeMetas},
+    errors::error_event_ref_not_allowed,
 };
 
 /// analyze the select target expr if it references the event outside of an aggregate function

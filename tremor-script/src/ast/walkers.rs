@@ -105,7 +105,7 @@ pub trait ExprWalker<'script>:
         self.walk_default_case(&mut ifelse.else_clause)
     }
 
-    /// walk a DefaultCase expr
+    /// walk a `DefaultCase`
     ///
     /// # Errors
     /// if the walker function fails
@@ -350,7 +350,7 @@ pub trait ImutExprWalker<'script>: ImutExprVisitor<'script> {
         self.walk_expr(&mut predicate.last_expr)
     }
 
-    /// Walks a ClauseGroup
+    /// Walks a `ClauseGroup`
     ///
     /// # Errors
     /// if the walker function fails
@@ -413,7 +413,7 @@ pub trait ImutExprWalker<'script>: ImutExprVisitor<'script> {
         Ok(())
     }
 
-    /// walk match patterns
+    /// walk match `Pattern`
     ///
     /// # Errors
     /// if the walker function fails
@@ -800,10 +800,9 @@ pub trait ImutExprWalker<'script>: ImutExprVisitor<'script> {
             ImutExprInt::Match(mmatch) => self.walk_match(mmatch.as_mut()),
             ImutExprInt::Comprehension(comp) => self.walk_comprehension(comp.as_mut()),
             ImutExprInt::Merge(merge) => self.walk_merge(merge.as_mut()),
-            ImutExprInt::Path(path) => self.walk_path(path),
             ImutExprInt::String(string) => self.walk_string(string),
             ImutExprInt::Local { idx, .. } => self.walk_local(idx),
-            ImutExprInt::Present { path, .. } => self.walk_path(path),
+            ImutExprInt::Path(path) | ImutExprInt::Present { path, .. } => self.walk_path(path),
             ImutExprInt::Invoke(invoke) => self.walk_invoke(invoke),
             ImutExprInt::Invoke1(invoke1) => self.walk_invoke1(invoke1),
             ImutExprInt::Invoke2(invoke2) => self.walk_invoke2(invoke2),

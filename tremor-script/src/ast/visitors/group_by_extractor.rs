@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
+use crate::ast::{GroupBy, ImutExprInt};
+
+use super::GroupByVisitor;
+
 pub(crate) struct GroupByExprExtractor<'script> {
     pub(crate) expressions: Vec<ImutExprInt<'script>>,
 }
@@ -37,6 +40,9 @@ impl<'script> GroupByVisitor<'script> for GroupByExprExtractor<'script> {
 
 #[cfg(test)]
 mod test {
+    use crate::ast::{GroupByInt, List, Literal};
+    use crate::Result;
+
     use super::*;
     #[test]
     fn test_group_expr_extractor() -> Result<()> {

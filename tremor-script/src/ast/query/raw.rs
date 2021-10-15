@@ -380,9 +380,7 @@ impl<'script> Upable<'script> for WindowDeclRaw<'script> {
         let tick_script = self
             .named_script
             .map(|(i, s)| {
-                if i != "tick" {
-                    Err(Error::from("Only `tick` scripts are supported by windows"))
-                } else {
+                if i == "tick" {
                     let mut s = s.up_script(helper)?;
                     for expr in &mut s.exprs {
                         OnlyMutState::validate(expr)
@@ -391,6 +389,8 @@ impl<'script> Upable<'script> for WindowDeclRaw<'script> {
                             .map_err(|e| err_generic(expr, expr, &e, &helper.meta))?;
                     }
                     Ok(s)
+                } else {
+                    Err(Error::from("Only `tick` scripts are supported by windows"))
                 }
             })
             .transpose()?;
