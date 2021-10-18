@@ -515,6 +515,8 @@ mod tests {
         found: usize,
     }
     impl<'script> ImutExprWalker<'script> for Find42Visitor {}
+    impl<'script> ExprWalker<'script> for Find42Visitor {}
+    impl<'script> ExprVisitor<'script> for Find42Visitor {}
     impl<'script> ImutExprVisitor<'script> for Find42Visitor {
         fn literal(&mut self, literal: &mut Literal<'script>) -> Result<VisitRes> {
             if let Some(42) = literal.value.as_u64() {
@@ -526,6 +528,12 @@ mod tests {
     }
 
     fn test_walk<'script>(script: &'script str, expected_42s: usize) -> Result<()> {
+        test_walk_imut(script, expected_42s)?;
+        test_walk_mut(script, expected_42s)?;
+        Ok(())
+    }
+
+    fn test_walk_imut<'script>(script: &'script str, expected_42s: usize) -> Result<()> {
         let module_path = ModulePath::load();
         let mut registry = registry();
         crate::std_lib::load(&mut registry);
@@ -547,7 +555,25 @@ mod tests {
             .unwrap()
             .into_static();
         let mut visitor = Find42Visitor::default();
-        visitor.walk_expr(&mut imut_expr)?;
+        ImutExprWalker::walk_expr(&mut visitor, &mut imut_expr)?;
+        assert_eq!(
+            expected_42s, visitor.found,
+            "Did not find {} 42s in {:?}, only {}",
+            expected_42s, imut_expr, visitor.found
+        );
+        Ok(())
+    }
+
+    fn test_walk_mut<'script>(script: &'script str, expected_42s: usize) -> Result<()> {
+        let module_path = ModulePath::load();
+        let mut registry = registry();
+        crate::std_lib::load(&mut registry);
+        let script_script: crate::script::Script =
+            crate::script::Script::parse(&module_path, "test", script.to_owned(), &registry)?;
+        let script: &crate::ast::Script = script_script.script.suffix();
+        let mut imut_expr = script.exprs.last().cloned().unwrap().into_static();
+        let mut visitor = Find42Visitor::default();
+        ExprWalker::walk_expr(&mut visitor, &mut imut_expr)?;
         assert_eq!(
             expected_42s, visitor.found,
             "Did not find {} 42s in {:?}, only {}",

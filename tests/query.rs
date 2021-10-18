@@ -141,6 +141,7 @@ test_cases!(
     pp_alias_operator,
     pp_config_directive,
     // INSERT
+    window_state_by_two_vec,
     alias_script_params_overwrite,
     cardinality,
     mod_def,
