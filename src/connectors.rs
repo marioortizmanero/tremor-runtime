@@ -33,8 +33,6 @@ pub(crate) mod pb;
 /// Home of the famous metrics collector
 pub(crate) mod metrics;
 
-/// Exit Connector
-// pub(crate) mod exit;
 /// quiescence stuff
 pub(crate) mod quiescence;
 
@@ -941,7 +939,21 @@ pub enum Connectivity {
     Disconnected,
 }
 
-// The low-level connector interface used for the plugins
+/// A Connector connects the tremor runtime to the outside world.
+///
+/// It can be a source of events, as such it is polled for new data.
+/// It can also be a sink for events, as such events are sent to it from pipelines.
+/// A connector can act as sink and source or just as one of those.
+///
+/// A connector encapsulates the establishment and maintenance of connections to the outside world,
+/// such as tcp connections, file handles etc. etc.
+///
+/// It is a meta entity on top of the sink and source part.
+/// The connector has its own control plane and is an artefact in the tremor repository.
+/// It controls the sink and source parts which are connected to the rest of the runtime via links to pipelines.
+///
+/// This trait specifically is the low-level connector interface used for the
+/// plugin system. The `Connector` type wraps it up for ease of use.
 #[abi_stable::sabi_trait]
 pub trait RawConnector: Send {
     /// create a source part for this connector if applicable
@@ -985,22 +997,30 @@ pub trait RawConnector: Send {
     /// called once when the connector is started
     /// `connect` will be called after this for the first time, leave connection attempts in `connect`.
     fn on_start(&mut self, _ctx: &ConnectorContext) -> MayPanic<RResult<ConnectorState>> {
-        ROk(ConnectorState::Running)
+        NoPanic(ROk(ConnectorState::Running))
     }
 
     /// called when the connector pauses
-    fn on_pause(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {}
+    fn on_pause(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {
+        NoPanic(())
+    }
     /// called when the connector resumes
-    fn on_resume(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {}
+    fn on_resume(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {
+        NoPanic(())
+    }
 
     /// Drain
     ///
     /// Ensure no new events arrive at the source part of this connector when this function returns
     /// So we can safely send the `Drain` signal.
-    fn on_drain(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {}
+    fn on_drain(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {
+        NoPanic(())
+    }
 
     /// called when the connector is stopped
-    fn on_stop(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {}
+    fn on_stop(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {
+        NoPanic(())
+    }
 
     /// returns the default codec for this connector
     // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
