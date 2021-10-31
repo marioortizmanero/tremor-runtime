@@ -143,6 +143,7 @@ pub(crate) struct ReconnectRuntime {
 /// can use to asynchronously notify the runtime whenever their connection is lost
 ///
 /// This will change the connector state properly and trigger a new reconnect attempt (according to the configured logic)
+// TODO: StableAbi. This can be achieved by making it an opaque type.
 #[derive(Clone)]
 pub struct ConnectionLostNotifier(Sender<Msg>);
 

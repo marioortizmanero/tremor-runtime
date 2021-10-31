@@ -18,6 +18,7 @@ use crate::connectors::prelude::*;
 use crate::errors::{ErrorKind, Result};
 use crate::url::ports::{ERR, IN, OUT};
 use crate::url::TremorUrl;
+use abi_stable::{std_types::ROption, StableAbi};
 use async_broadcast::{broadcast, Receiver, Sender, TryRecvError, TrySendError};
 use beef::Cow;
 use halfbrown::HashMap;
@@ -25,7 +26,6 @@ use tremor_pipeline::{CbAction, Event, EventOriginUri, DEFAULT_STREAM_ID};
 use tremor_script::utils::hostname;
 use tremor_script::EventPayload;
 use tremor_value::prelude::*;
-use abi_stable::{StableAbi, std_types::ROption};
 
 const MEASUREMENT: Cow<'static, str> = Cow::const_str("measurement");
 const TAGS: Cow<'static, str> = Cow::const_str("tags");

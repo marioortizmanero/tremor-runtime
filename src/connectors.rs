@@ -25,6 +25,11 @@ pub(crate) mod reconnect;
 /// home for connector specific function
 pub(crate) mod functions;
 
+/// opentelemetry
+pub(crate) mod otel;
+/// protobuf helpers
+pub(crate) mod pb;
+
 /// Home of the famous metrics collector
 pub(crate) mod metrics;
 
@@ -32,11 +37,6 @@ pub(crate) mod metrics;
 // pub(crate) mod exit;
 /// quiescence stuff
 pub(crate) mod quiescence;
-
-/// opentelemetry
-pub(crate) mod otel;
-/// protobuf helpers
-pub(crate) mod pb;
 
 pub mod plugins;
 
@@ -50,6 +50,10 @@ use crate::connectors::metrics::{MetricsSinkReporter, SourceReporter};
 use crate::connectors::sink::{SinkAddr, SinkContext, SinkMsg};
 use crate::connectors::source::{SourceAddr, SourceContext, SourceMsg};
 use crate::errors::{Error, ErrorKind, RResult, Result};
+use crate::pdk::{
+    panic::MayPanic::{self, NoPanic},
+    RResult,
+};
 use crate::pipeline;
 use crate::system::World;
 use crate::url::ports::{ERR, IN, OUT};
@@ -66,7 +70,6 @@ use self::quiescence::QuiescenceBeacon;
 use self::reconnect::{Attempt, ReconnectRuntime};
 
 use abi_stable::{
-    StableAbi,
     declare_root_module_statics,
     library::RootModule,
     package_version_strings,
@@ -77,6 +80,7 @@ use abi_stable::{
         RResult::{RErr, ROk},
         RStr, RString,
     },
+    StableAbi,
 };
 
 /// sender for connector manager messages
@@ -911,7 +915,7 @@ pub struct ConnectorContext {
     /// The Quiescence Beacon
     pub quiescence_beacon: QuiescenceBeacon,
     /// Notifier
-    pub notifier: reconnect::ConnectionLostNotifier, // TODO: StableAbi
+    pub notifier: reconnect::ConnectionLostNotifier,
 }
 
 impl ConnectorContext {
@@ -947,9 +951,8 @@ pub trait RawConnector: Send {
     fn create_source(
         &mut self,
         _source_context: SourceContext,
-        _builder: source::SourceManagerBuilder,
-    ) -> RResult<ROption<source::SourceAddr>> { // TODO derive StableAbi
-        ROk(RNone)
+    ) -> MayPanic<RResult<ROption<RawSource_TO<'static, RBox<()>>>>> {
+        NoPanic(ROk(RNone))
     }
 
     /// Create a sink part for this connector if applicable
@@ -959,9 +962,8 @@ pub trait RawConnector: Send {
     fn create_sink(
         &mut self,
         _sink_context: SinkContext,
-        _builder: sink::SinkManagerBuilder,
-    ) -> RResult<ROption<sink::SinkAddr>> { // TODO derive StableAbi
-        ROk(RNone)
+    ) -> MayPanic<RResult<ROption<RawSink_TO<'static, RBox<()>>>>> {
+        NoPanic(ROk(RNone))
     }
 
     /// Attempt to connect to the outside world.
@@ -978,29 +980,31 @@ pub trait RawConnector: Send {
     ///
     /// To know when to stop reading new data from the external connection, the `quiescence` beacon
     /// can be used. Call `.reading()` and `.writing()` to see if you should continue doing so, if not, just stop and rest.
-    fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> RResult<bool>;
+    fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> MayPanic<RResult<bool>>;
 
     /// called once when the connector is started
     /// `connect` will be called after this for the first time, leave connection attempts in `connect`.
-    fn on_start(&mut self, _ctx: &ConnectorContext) -> RResult<ConnectorState> {
+    fn on_start(&mut self, _ctx: &ConnectorContext) -> MayPanic<RResult<ConnectorState>> {
         ROk(ConnectorState::Running)
     }
 
     /// called when the connector pauses
-    fn on_pause(&mut self, _ctx: &ConnectorContext) {}
+    fn on_pause(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {}
     /// called when the connector resumes
-    fn on_resume(&mut self, _ctx: &ConnectorContext) {}
+    fn on_resume(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {}
 
     /// Drain
     ///
     /// Ensure no new events arrive at the source part of this connector when this function returns
     /// So we can safely send the `Drain` signal.
-    fn on_drain(&mut self, _ctx: &ConnectorContext) {}
+    fn on_drain(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {}
 
     /// called when the connector is stopped
-    fn on_stop(&mut self, _ctx: &ConnectorContext) {}
+    fn on_stop(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {}
 
     /// returns the default codec for this connector
+    // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
+    // otherwise, rather than a function?
     fn default_codec<'a>(&'a self) -> RStr<'a>;
 }
 
@@ -1014,9 +1018,10 @@ impl Connector {
         source_context: SourceContext,
         builder: source::SourceManagerBuilder,
     ) -> Result<Option<source::SourceAddr>> {
-        match self.0.create_source(source_context, builder) {
-            ROk(source) => Ok(source.into()),
-            RErr(err) => Err(err),
+        match self.0.create_source(source_context.clone()).unwrap() {
+            ROk(RSome(raw_source)) => builder.spawn(raw_source, source_context).map(Some),
+            ROk(RNone) => Ok(None),
+            RErr(err) => Err(err.into()),
         }
     }
 
@@ -1026,44 +1031,44 @@ impl Connector {
         sink_context: SinkContext,
         builder: sink::SinkManagerBuilder,
     ) -> Result<Option<sink::SinkAddr>> {
-        match self.0.create_sink(sink_context, builder) {
-            ROk(sink) => Ok(sink.into()),
-            RErr(err) => Err(err),
+        match self.0.create_sink(sink_context.clone()).unwrap() {
+            ROk(RSome(raw_sink)) => builder.spawn(raw_sink, sink_context).map(Some),
+            ROk(RNone) => Ok(None),
+            RErr(err) => Err(err.into()),
         }
     }
 
     #[inline]
-    pub async fn connect(
-        &mut self,
-        ctx: &ConnectorContext,
-        notifier: &Attempt,
-    ) -> Result<bool> {
-        self.0.connect(ctx, notifier).into()
+    pub async fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> Result<bool> {
+        self.0
+            .connect(ctx, attempt)
+            .unwrap()
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]
     pub async fn on_start(&mut self, ctx: &ConnectorContext) -> Result<ConnectorState> {
-        self.0.on_start(ctx).into()
+        self.0
+            .on_start(ctx)
+            .unwrap()
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]
     pub async fn on_pause(&mut self, ctx: &ConnectorContext) {
-        self.0.on_pause(ctx)
+        self.0.on_pause(ctx).unwrap()
     }
 
     #[inline]
     pub async fn on_resume(&mut self, ctx: &ConnectorContext) {
-        self.0.on_resume(ctx)
-    }
-
-    #[inline]
-    pub async fn on_drain(&mut self, ctx: &ConnectorContext) {
-        self.0.on_drain(ctx)
+        self.0.on_resume(ctx).unwrap()
     }
 
     #[inline]
     pub async fn on_stop(&mut self, ctx: &ConnectorContext) {
-        self.0.on_stop(ctx)
+        self.0.on_stop(ctx).unwrap()
     }
 
     #[inline]
@@ -1079,7 +1084,7 @@ pub trait ConnectorBuilder: Sync + Send {
     ///
     /// # Errors
     ///  * If the config is invalid for the connector
-    async fn from_config(&self, id: &TremorUrl, config: &Option<OpConfig>) -> Result<Connector>;
+    async fn from_config(&self, id: &TremorUrl, config: &ROption<OpConfig>) -> RResult<Connector>;
 }
 
 /// registering builtin connector types
@@ -1088,6 +1093,6 @@ pub trait ConnectorBuilder: Sync + Send {
 ///  * If a builtin connector couldn't be registered
 #[cfg(not(tarpaulin_include))]
 pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
-    // TODO: load dynamically
+    // TODO: load plugins dynamically
     Ok(())
 }

@@ -13,8 +13,11 @@
 // limitations under the License.
 
 use crate::errors::{Error, ErrorKind, Result};
+use abi_stable::{
+    std_types::{ROption, RString},
+    StableAbi,
+};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use abi_stable::{StableAbi, std_types::{RString, ROption}};
 use std::fmt;
 
 /// The type or resource the url references

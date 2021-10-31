@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use abi_stable::{std_types::RArc, StableAbi};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use abi_stable::{StableAbi, std_types::RArc};
 
 /// use this beacon to check if tasks reading or writing from external connections should stop
 #[repr(C)]

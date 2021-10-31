@@ -24,6 +24,10 @@ use crate::codec::{self, Codec};
 use crate::config::{Codec as CodecConfig, Connector as ConnectorConfig};
 use crate::connectors::{Msg, StreamDone};
 use crate::errors::Result;
+use crate::pdk::{
+    panic::MayPanic::{self, NoPanic},
+    RResult,
+};
 use crate::permge::PriorityMerge;
 use crate::pipeline;
 use crate::postprocessor::{make_postprocessors, postprocess, Postprocessors};
@@ -43,7 +47,11 @@ use tremor_common::time::nanotime;
 use tremor_pipeline::{CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID};
 use tremor_script::EventPayload;
 
-use abi_stable::StableAbi;
+use abi_stable::{
+    rvec,
+    std_types::{RResult::ROk, RStr, RVec},
+    StableAbi,
+};
 
 use tremor_value::Value;
 
@@ -107,49 +115,50 @@ pub enum AsyncSinkReply {
 ///
 /// A response is an event generated from the sink delivery.
 pub type ResultVec = Result<Vec<SinkReply>>;
+pub type RResultVec = RResult<RVec<SinkReply>>;
 
 /// connector sink - receiving events
-#[async_trait::async_trait]
-pub trait Sink: Send {
+#[abi_stable::sabi_trait]
+pub trait RawSink: Send {
     /// called when receiving an event
-    async fn on_event(
+    fn on_event(
         &mut self,
-        input: &str,
+        input: RStr<'_>,
         event: Event,
         ctx: &SinkContext,
         serializer: &mut EventSerializer,
         start: u64,
-    ) -> ResultVec;
+    ) -> RResultVec;
     /// called when receiving a signal
-    async fn on_signal(
+    fn on_signal(
         &mut self,
         _signal: Event,
         _ctx: &SinkContext,
         _serializer: &mut EventSerializer,
-    ) -> ResultVec {
-        Ok(vec![])
+    ) -> RResultVec {
+        ROk(rvec![])
     }
 
     /// Pull metrics from the sink
-    fn metrics(&mut self, _timestamp: u64) -> Vec<EventPayload> {
-        vec![]
+    fn metrics(&mut self, _timestamp: u64) -> RVec<EventPayload> {
+        rvec![]
     }
 
     // lifecycle stuff
     /// called when started
-    async fn on_start(&mut self, _ctx: &mut SinkContext) {}
+    fn on_start(&mut self, _ctx: &mut SinkContext) {}
     /// called when paused
-    async fn on_pause(&mut self, _ctx: &mut SinkContext) {}
+    fn on_pause(&mut self, _ctx: &mut SinkContext) {}
     /// called when resumed
-    async fn on_resume(&mut self, _ctx: &mut SinkContext) {}
+    fn on_resume(&mut self, _ctx: &mut SinkContext) {}
     /// called when stopped
-    async fn on_stop(&mut self, _ctx: &mut SinkContext) {}
+    fn on_stop(&mut self, _ctx: &mut SinkContext) {}
 
     // connectivity stuff
     /// called when sink lost connectivity
-    async fn on_connection_lost(&mut self, _ctx: &mut SinkContext) {}
+    fn on_connection_lost(&mut self, _ctx: &mut SinkContext) {}
     /// called when sink re-established connectivity
-    async fn on_connection_established(&mut self, _ctx: &mut SinkContext) {}
+    fn on_connection_established(&mut self, _ctx: &mut SinkContext) {}
 
     /// if `true` events are acknowledged/failed automatically by the sink manager.
     /// Such sinks should return SinkReply::None from on_event or SinkReply::Fail if they fail immediately.
@@ -163,6 +172,72 @@ pub trait Sink: Send {
     /// if false events can be considered delivered once `on_event` returns.
     fn asynchronous(&self) -> bool {
         false
+    }
+}
+
+// Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
+// types so that it's easier to use with `std`.
+pub struct Sink(pub RawSink_TO<'static, RBox<()>>);
+impl Sink {
+    fn on_event(
+        &mut self,
+        input: RStr<'_>,
+        event: Event,
+        ctx: &SinkContext,
+        serializer: &mut EventSerializer,
+        start: u64,
+    ) -> RResultVec {
+        self.0
+            .on_event(input.into(), event, ctx, serializer, start)
+            .unwrap()
+            .map(Into::into) // RVec -> Vec
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
+    }
+    fn on_signal(
+        &mut self,
+        signal: Event,
+        ctx: &SinkContext,
+        serializer: &mut EventSerializer,
+    ) -> RResultVec {
+        self.0
+            .on_signal(signal, ctx, serializer)
+            .unwrap()
+            .map(Into::into) // RVec -> Vec
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
+    }
+
+    fn metrics(&mut self, timestamp: u64) -> RVec<EventPayload> {
+        self.0.metrics(timestamp).unwrap().into()
+    }
+
+    fn on_start(&mut self, ctx: &mut SinkContext) -> MayPanic<()> {
+        NoPanic(())
+    }
+    fn on_pause(&mut self, ctx: &mut SinkContext) -> MayPanic<()> {
+        NoPanic(())
+    }
+    fn on_resume(&mut self, ctx: &mut SinkContext) -> MayPanic<()> {
+        NoPanic(())
+    }
+    fn on_stop(&mut self, ctx: &mut SinkContext) -> MayPanic<()> {
+        NoPanic(())
+    }
+
+    fn on_connection_lost(&mut self, ctx: &mut SinkContext) -> MayPanic<()> {
+        NoPanic(())
+    }
+    fn on_connection_established(&mut self, ctx: &mut SinkContext) -> MayPanic<()> {
+        NoPanic(())
+    }
+
+    pub fn auto_ack(&self) -> bool {
+        self.0.auto_ack()
+    }
+
+    pub fn asynchronous(&self) -> bool {
+        self.0.asynchronous()
     }
 }
 

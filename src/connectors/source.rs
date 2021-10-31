@@ -26,11 +26,20 @@ use tremor_script::{EventPayload, ValueAndMeta};
 use crate::codec::{self, Codec};
 use crate::config::{Codec as CodecConfig, Connector as ConnectorConfig};
 use crate::connectors::Msg;
-use crate::errors::{Error, Result, RResult};
+use crate::errors::{Error, RResult, Result};
+use crate::pdk::{
+    panic::MayPanic::{self, NoPanic},
+    RResult,
+};
 use crate::pipeline;
 use crate::preprocessor::{make_preprocessors, preprocess, Preprocessors};
 use crate::url::ports::{ERR, OUT};
 use crate::url::TremorUrl;
+use abi_stable::{
+    rvec,
+    std_types::{ROption, RString, RVec, Tuple2},
+    StableAbi,
+};
 use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
 use beef::Cow;
 use tremor_pipeline::{
@@ -38,7 +47,6 @@ use tremor_pipeline::{
 };
 use tremor_value::{literal, Value};
 use value_trait::Builder;
-use abi_stable::{StableAbi, std_types::{RString, RVec, ROption, Tuple2}};
 
 use super::metrics::SourceReporter;
 use super::quiescence::QuiescenceBeacon;
@@ -124,7 +132,7 @@ pub type SourceReplySender = Sender<SourceReply>;
 pub trait RawSource: Send {
     /// Pulls an event from the source if one exists
     /// `idgen` is passed in so the source can inspect what event id it would get if it was producing 1 event from the pulled data
-    fn pull_data(&mut self, pull_id: u64, ctx: &SourceContext) -> RResult<SourceReply>;
+    fn pull_data(&mut self, pull_id: u64, ctx: &SourceContext) -> MayPanic<RResult<SourceReply>>;
     /// This callback is called when the data provided from
     /// pull_event did not create any events, this is needed for
     /// linked sources that require a 1:1 mapping between requests
@@ -134,13 +142,13 @@ pub trait RawSource: Send {
         _pull_id: u64,
         _stream: u64,
         _ctx: &SourceContext,
-    ) -> RResult<()> {
-        Ok(())
+    ) -> MayPanic<RResult<()>> {
+        NoPanic(ROk(()))
     }
 
     /// Pulls custom metrics from the source
-    fn metrics(&mut self, _timestamp: u64) -> RVec<EventPayload> {
-        vec![]
+    fn metrics(&mut self, _timestamp: u64) -> MayPanic<RVec<EventPayload>> {
+        NoPanic(rvec![])
     }
 
     ///////////////////////////
@@ -148,68 +156,98 @@ pub trait RawSource: Send {
     ///////////////////////////
 
     /// called when the source is started. This happens only once in the whole source lifecycle, before any other callbacks
-    fn on_start(&mut self, _ctx: &mut SourceContext) {}
+    fn on_start(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
+        NoPanic(())
+    }
     /// called when the source is explicitly paused as result of a user/operator interaction
     /// in contrast to `on_cb_close` which happens automatically depending on downstream pipeline or sink connector logic.
-    fn on_pause(&mut self, _ctx: &mut SourceContext) {}
+    fn on_pause(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
+        NoPanic(())
+    }
     /// called when the source is explicitly resumed from being paused
-    fn on_resume(&mut self, _ctx: &mut SourceContext) {}
+    fn on_resume(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
+        NoPanic(())
+    }
     /// called when the source is stopped. This happens only once in the whole source lifecycle, as the very last callback
-    fn on_stop(&mut self, _ctx: &mut SourceContext) {}
+    fn on_stop(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
+        NoPanic(())
+    }
 
     // circuit breaker callbacks
     /// called when we receive a `close` Circuit breaker event from any connected pipeline
     /// Expected reaction is to pause receiving messages, which is handled automatically by the runtime
     /// Source implementations might want to close connections or signal a pause to the upstream entity it connects to if not done in the connector (the default)
     // TODO: add info of Cb event origin (port, origin_uri)?
-    fn on_cb_close(&mut self, _ctx: &mut SourceContext) {}
+    fn on_cb_close(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
+        NoPanic(())
+    }
     /// Called when we receive a `open` Circuit breaker event from any connected pipeline
     /// This means we can start/continue polling this source for messages
     /// Source implementations might want to start establishing connections if not done in the connector (the default)
-    fn on_cb_open(&mut self, _ctx: &mut SourceContext) {}
+    fn on_cb_open(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
+        NoPanic(())
+    }
 
     // guaranteed delivery callbacks
     /// an event has been acknowledged and can be considered delivered
     /// multiple acks for the same set of ids are always possible
-    fn ack(&mut self, _stream_id: u64, _pull_id: u64) {}
+    fn ack(&mut self, _stream_id: u64, _pull_id: u64) -> MayPanic<()> {
+        NoPanic(())
+    }
     /// an event has failed along its way and can be considered failed
     /// multiple fails for the same set of ids are always possible
-    fn fail(&mut self, _stream_id: u64, _pull_id: u64) {}
+    fn fail(&mut self, _stream_id: u64, _pull_id: u64) -> MayPanic<()> {
+        NoPanic(())
+    }
 
     // connectivity stuff
     /// called when connector lost connectivity
-    fn on_connection_lost(&mut self, _ctx: &mut SourceContext) {}
+    fn on_connection_lost(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
+        NoPanic(())
+    }
     /// called when connector re-established connectivity
-    fn on_connection_established(&mut self, _ctx: &mut SourceContext) {}
+    fn on_connection_established(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
+        NoPanic(())
+    }
 
     /// Is this source transactional or can acks/fails be ignored
+    // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
+    // otherwise, rather than a function?
     fn is_transactional(&self) -> bool {
         false
     }
 }
 
-/// source part of a connector
-#[async_trait::async_trait]
-pub trait Source: Send {
-    /// Pulls an event from the source if one exists
-    /// `idgen` is passed in so the source can inspect what event id it would get if it was producing 1 event from the pulled data
-    async fn pull_data(&mut self, pull_id: u64, ctx: &SourceContext) -> Result<SourceReply>;
-    /// This callback is called when the data provided from
-    /// pull_event did not create any events, this is needed for
-    /// linked sources that require a 1:1 mapping between requests
-    /// and responses, we're looking at you REST
-    async fn on_no_events(
+/// Source part of a connector.
+///
+/// Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
+/// types so that it's easier to use with `std`. This may be removed in the
+/// future for performance reasons.
+pub struct Source(pub RawSource_TO<'static, RBox<()>>);
+impl Source {
+    pub async fn pull_data(&mut self, pull_id: u64, ctx: &SourceContext) -> Result<SourceReply> {
+        self.0
+            .pull_data(pull_id, ctx)
+            .unwrap()
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
+    }
+    pub async fn on_no_events(
         &mut self,
-        _pull_id: u64,
-        _stream: u64,
-        _ctx: &SourceContext,
+        pull_id: u64,
+        stream: u64,
+        ctx: &SourceContext,
     ) -> Result<()> {
-        Ok(())
+        self.0
+            .on_no_events(pull_id, stream, ctx)
+            .unwrap()
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     /// Pulls custom metrics from the source
-    fn metrics(&mut self, _timestamp: u64) -> Vec<EventPayload> {
-        vec![]
+    pub fn metrics(&mut self, timestamp: u64) -> Vec<EventPayload> {
+        self.0.metrics(timestamp).unwrap().into()
     }
 
     ///////////////////////////
@@ -217,43 +255,63 @@ pub trait Source: Send {
     ///////////////////////////
 
     /// called when the source is started. This happens only once in the whole source lifecycle, before any other callbacks
-    async fn on_start(&mut self, _ctx: &mut SourceContext) {}
+    pub async fn on_start(&mut self, ctx: &mut SourceContext) {
+        self.0.on_start(ctx).unwrap()
+    }
     /// called when the source is explicitly paused as result of a user/operator interaction
     /// in contrast to `on_cb_close` which happens automatically depending on downstream pipeline or sink connector logic.
-    async fn on_pause(&mut self, _ctx: &mut SourceContext) {}
+    pub async fn on_pause(&mut self, ctx: &mut SourceContext) {
+        self.0.on_pause(ctx).unwrap()
+    }
     /// called when the source is explicitly resumed from being paused
-    async fn on_resume(&mut self, _ctx: &mut SourceContext) {}
+    pub async fn on_resume(&mut self, ctx: &mut SourceContext) {
+        self.0.on_resume(ctx).unwrap()
+    }
     /// called when the source is stopped. This happens only once in the whole source lifecycle, as the very last callback
-    async fn on_stop(&mut self, _ctx: &mut SourceContext) {}
+    pub async fn on_stop(&mut self, ctx: &mut SourceContext) {
+        self.0.on_stop(ctx).unwrap()
+    }
 
     // circuit breaker callbacks
     /// called when we receive a `close` Circuit breaker event from any connected pipeline
     /// Expected reaction is to pause receiving messages, which is handled automatically by the runtime
     /// Source implementations might want to close connections or signal a pause to the upstream entity it connects to if not done in the connector (the default)
     // TODO: add info of Cb event origin (port, origin_uri)?
-    async fn on_cb_close(&mut self, _ctx: &mut SourceContext) {}
+    pub async fn on_cb_close(&mut self, ctx: &mut SourceContext) {
+        self.0.on_cb_close(ctx).unwrap()
+    }
     /// Called when we receive a `open` Circuit breaker event from any connected pipeline
     /// This means we can start/continue polling this source for messages
     /// Source implementations might want to start establishing connections if not done in the connector (the default)
-    async fn on_cb_open(&mut self, _ctx: &mut SourceContext) {}
+    pub async fn on_cb_open(&mut self, ctx: &mut SourceContext) {
+        self.0.on_cb_open(ctx).unwrap()
+    }
 
     // guaranteed delivery callbacks
     /// an event has been acknowledged and can be considered delivered
     /// multiple acks for the same set of ids are always possible
-    async fn ack(&mut self, _stream_id: u64, _pull_id: u64) {}
+    pub async fn ack(&mut self, stream_id: u64, pull_id: u64) {
+        self.0.ack(stream_id, pull_id).unwrap()
+    }
     /// an event has failed along its way and can be considered failed
     /// multiple fails for the same set of ids are always possible
-    async fn fail(&mut self, _stream_id: u64, _pull_id: u64) {}
+    pub async fn fail(&mut self, stream_id: u64, pull_id: u64) {
+        self.0.fail(stream_id, pull_id).unwrap()
+    }
 
     // connectivity stuff
     /// called when connector lost connectivity
-    async fn on_connection_lost(&mut self, _ctx: &mut SourceContext) {}
+    pub async fn on_connection_lost(&mut self, ctx: &mut SourceContext) {
+        self.0.on_connection_lost(ctx).unwrap()
+    }
     /// called when connector re-established connectivity
-    async fn on_connection_established(&mut self, _ctx: &mut SourceContext) {}
+    pub async fn on_connection_established(&mut self, ctx: &mut SourceContext) {
+        self.0.on_connection_established(ctx).unwrap()
+    }
 
     /// Is this source transactional or can acks/fails be ignored
-    fn is_transactional(&self) -> bool {
-        false
+    pub fn is_transactional(&self) -> bool {
+        self.0.is_transactional()
     }
 }
 

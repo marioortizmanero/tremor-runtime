@@ -1335,7 +1335,8 @@ mod test {
             |inner| {
                 prop_oneof![
                     // Take the inner strategy and make the two recursive cases.
-                    prop::collection::vec(inner.clone(), 0..10).prop_map(|a| Value::Array(a.into())),
+                    prop::collection::vec(inner.clone(), 0..10)
+                        .prop_map(|a| Value::Array(a.into())),
                     prop::collection::hash_map(".*".prop_map(RCow::from), inner, 0..10)
                         .prop_map(|m| m.into_iter().collect()),
                 ]
@@ -1368,7 +1369,8 @@ mod test {
             |inner| {
                 prop_oneof![
                     // Take the inner strategy and make the two recursive cases.
-                    prop::collection::vec(inner.clone(), 0..10).prop_map(|a| Value::Array(a.into())),
+                    prop::collection::vec(inner.clone(), 0..10)
+                        .prop_map(|a| Value::Array(a.into())),
                     prop::collection::hash_map(".*".prop_map(RCow::from), inner, 0..10)
                         .prop_map(|m| m.into_iter().collect()),
                 ]
