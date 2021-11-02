@@ -23,7 +23,6 @@
 //  '{}' -> json|| => Ok({})
 //  Predicate for json||: "is valid json"
 //  '{blarg' -> json|| =>
-use halfbrown::{hashmap, HashMap};
 
 use crate::prelude::*;
 use crate::{datetime, grok::Pattern as GrokPattern, EventContext, Object, Value};
@@ -682,18 +681,22 @@ impl std::ops::Deref for Cidr {
 }
 
 impl<'cidr> From<Cidr>
-    for HashMap<Cow<'cidr, str>, Value<'cidr>, BuildHasherDefault<fxhash::FxHasher>>
+    for RHashMap<RCow<'cidr, str>, Value<'cidr>>
 {
     fn from(x: Cidr) -> Self {
         match x.0 {
-            IpCidr::V4(y) => hashmap!(
-                       "prefix".into() => Value::from(y.get_prefix_as_u8_array().to_vec()),
-                       "mask".into() => Value::from(y.get_mask_as_u8_array().to_vec()),
-            ),
-            IpCidr::V6(y) => hashmap!(
-                       "prefix".into() => Value::from(y.get_prefix_as_u16_array().to_vec()),
-                       "mask".into() => Value::from(y.get_mask_as_u16_array().to_vec()),
-            ),
+            IpCidr::V4(y) => {
+                let mut map = RHashMap::with_capacity(2);
+                map.insert("prefix".into(), Value::from(y.get_prefix_as_u8_array().to_vec()));
+                map.insert("mask".into(), Value::from(y.get_mask_as_u8_array().to_vec()));
+                map
+            },
+            IpCidr::V6(y) => {
+                let mut map = RHashMap::with_capacity(2);
+                map.insert("prefix".into(), Value::from(y.get_prefix_as_u16_array().to_vec()));
+                map.insert("mask".into(), Value::from(y.get_mask_as_u16_array().to_vec()));
+                map
+            },
         }
     }
 }

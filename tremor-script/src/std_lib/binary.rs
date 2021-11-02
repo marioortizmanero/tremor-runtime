@@ -15,6 +15,7 @@
 use crate::prelude::*;
 use crate::registry::Registry;
 use crate::{tremor_const_fn, tremor_fn_};
+use abi_stable::std_types::RCow;
 
 pub fn load(registry: &mut Registry) {
     registry
@@ -23,7 +24,7 @@ pub fn load(registry: &mut Registry) {
         }))
         .insert(
             tremor_const_fn! (binary|from_bytes(_context, _input: Array) {
-                _input.iter().map(|v| v.as_u8().ok_or_else(||to_runtime_error("array contains non bytes"))).collect::<FResult<Vec<u8>>>().map(beef::Cow::from).map(Value::Bytes)
+                _input.iter().map(|v| v.as_u8().ok_or_else(||to_runtime_error("array contains non bytes"))).collect::<FResult<Vec<u8>>>().map(RCow::from).map(Value::Bytes)
             }),
         ).insert(
             tremor_const_fn! (binary|into_bytes(_context, input) {

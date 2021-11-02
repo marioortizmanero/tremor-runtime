@@ -163,7 +163,7 @@ impl TremorAggrFn for CollectNested {
     //     Ok(())
     // }
     fn emit<'event>(&mut self) -> FResult<Value<'event>> {
-        Ok(Value::Array(self.0.clone()))
+        Ok(Value::Array(self.0.clone().into()))
     }
     fn emit_and_init<'event>(&mut self) -> FResult<Value<'event>> {
         let mut r = Vec::with_capacity(self.0.len());
@@ -178,7 +178,8 @@ impl TremorAggrFn for CollectNested {
         if let Some(other) = src.downcast_ref::<Self>() {
             // On self is earlier then other, so as long
             // as other has a value we take it
-            self.0.push(Value::from(other.0.clone()));
+            let other: RVec<_> = other.0.clone().into();
+            self.0.push(Value::from(other));
         }
         Ok(())
     }

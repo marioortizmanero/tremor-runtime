@@ -747,32 +747,32 @@ where
 ///
 enum PreEvaluatedPatchOperation<'event, 'run> {
     Insert {
-        ident: beef::Cow<'event, str>,
+        ident: RCow<'event, str>,
         ident_expr: &'run StringLit<'event>,
         value: Value<'event>,
     },
     Update {
-        ident: beef::Cow<'event, str>,
+        ident: RCow<'event, str>,
         ident_expr: &'run StringLit<'event>,
         value: Value<'event>,
     },
     Upsert {
-        ident: beef::Cow<'event, str>,
+        ident: RCow<'event, str>,
         value: Value<'event>,
     },
     Erase {
-        ident: beef::Cow<'event, str>,
+        ident: RCow<'event, str>,
     },
     Copy {
-        from: beef::Cow<'event, str>,
-        to: beef::Cow<'event, str>,
+        from: RCow<'event, str>,
+        to: RCow<'event, str>,
     },
     Move {
-        from: beef::Cow<'event, str>,
-        to: beef::Cow<'event, str>,
+        from: RCow<'event, str>,
+        to: RCow<'event, str>,
     },
     Merge {
-        ident: beef::Cow<'event, str>,
+        ident: RCow<'event, str>,
         ident_expr: &'run StringLit<'event>,
         merge_value: Value<'event>,
     },
@@ -780,7 +780,7 @@ enum PreEvaluatedPatchOperation<'event, 'run> {
         merge_value: Value<'event>,
     },
     Default {
-        ident: beef::Cow<'event, str>,
+        ident: RCow<'event, str>,
         expr: &'run ImutExprInt<'event>,
     },
     DefaultRecord {

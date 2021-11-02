@@ -35,6 +35,7 @@ use std::{
     borrow::{Borrow, Cow},
     iter, mem,
 };
+use abi_stable::std_types::Tuple2;
 
 impl<'script> ImutExpr<'script> {
     /// Evaluates the expression
@@ -293,7 +294,7 @@ impl<'script> ImutExprInt<'script> {
             |t| {
                 (
                     t.len(),
-                    Box::new(t.iter().map(|(k, v)| (k.clone().into(), v.clone()))),
+                    Box::new(t.iter().map(|Tuple2(k, v)| (k.clone().into(), v.clone()))),
                 )
             },
         );

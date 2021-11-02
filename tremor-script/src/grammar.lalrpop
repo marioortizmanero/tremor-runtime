@@ -19,7 +19,7 @@ use crate::lexer::Token;
 use crate::pos::Location;
 use crate::Value;
 use crate::prelude::*;
-use beef::Cow;
+use abi_stable::std_types::RCow;
 
 grammar<'input>;
 
@@ -263,11 +263,11 @@ pub(crate) Script : ScriptRaw<'input> = {
   <doc:ModComment> <exprs:Exprs> "<end-of-stream>"? => ScriptRaw::new(exprs, doc),
 }
 
-ModComment: Option<Vec<Cow<'input, str>>> = {
+ModComment: Option<Vec<RCow<'input, str>>> = {
     (<ModComment_>)? => <>
 }
 
-ModComment_: Vec<Cow<'input, str>> = {
+ModComment_: Vec<RCow<'input, str>> = {
     <c:"<mod-comment>"> => vec![c.into()],
     <v:ModComment_> <c:"<mod-comment>"> => {
         let mut v = v;
@@ -299,10 +299,10 @@ Const: ExprRaw<'input> = {
     <comment:DocComment> <start:@L> "const" <name:Ident> @L "=" @R <expr:SimpleExprImut> <end:@L> => ExprRaw::Const{name: name.id, expr: expr, start, end, comment},
 }
 
-DocComment: Option<Vec<Cow<'input, str>>> = {
+DocComment: Option<Vec<RCow<'input, str>>> = {
     (<DocComment_>)? => <>
 }
-DocComment_: Vec<Cow<'input, str>> = {
+DocComment_: Vec<RCow<'input, str>> = {
     <c:"<doc-comment>"> => vec![c.into()],
     <v:DocComment_> <c:"<doc-comment>"> => {
         let mut v = v;
@@ -690,7 +690,7 @@ StrLitElements: StrLitElementsRaw<'input> = {
     "#{" <expr:ExprImut> "}" => vec![expr.into()],
 }
 
-StringPart: Cow<'input, str> = {
+StringPart: RCow<'input, str> = {
     "string" => <>,
     "heredoc" => <>
 }
@@ -1387,12 +1387,12 @@ extern {
         "bool" => Token::BoolLiteral(<bool>),
         "int" => Token::IntLiteral(<i64>),
         "float" => Token::FloatLiteral(<f64>, <String>),
-        "string" => Token::StringLiteral(<Cow<'input, str>>),
+        "string" => Token::StringLiteral(<RCow<'input, str>>),
         "heredoc_start" => Token::HereDocStart,
         "heredoc_end" => Token::HereDocEnd,
-        "heredoc" => Token::HereDocLiteral(<Cow<'input, str>>),
+        "heredoc" => Token::HereDocLiteral(<RCow<'input, str>>),
         "<extractor>" => Token::TestLiteral(_, <Vec<String>>),
-        "<ident>" => Token::Ident(<Cow<'input, str>>, <bool>),
+        "<ident>" => Token::Ident(<RCow<'input, str>>, <bool>),
         "<error>" => Token::Bad(<String>),
         "<end-of-stream>" => Token::EndOfStream,
         "<newline>" => Token::NewLine,

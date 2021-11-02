@@ -38,10 +38,10 @@ use crate::{
     KnownKey, Value,
 };
 pub use base_expr::BaseExpr;
-use beef::Cow;
 use halfbrown::HashMap;
 pub use query::*;
 use serde::Serialize;
+use abi_stable::std_types::RCow;
 
 /// A raw script we got to put this here because of silly lalrpoop focing it to be public
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -338,7 +338,7 @@ impl<'script> ModuleRaw<'script> {
 pub struct IdentRaw<'script> {
     pub start: Location,
     pub end: Location,
-    pub id: beef::Cow<'script, str>,
+    pub id: RCow<'script, str>,
 }
 impl_expr!(IdentRaw);
 impl<'script> ToString for IdentRaw<'script> {
@@ -1483,16 +1483,16 @@ pub enum PredicatePatternRaw<'script> {
     /// we're forced to make this pub because of lalrpop
     TildeEq {
         /// we're forced to make this pub because of lalrpop
-        assign: Cow<'script, str>,
+        assign: RCow<'script, str>,
         /// we're forced to make this pub because of lalrpop
-        lhs: Cow<'script, str>,
+        lhs: RCow<'script, str>,
         /// we're forced to make this pub because of lalrpop
         test: TestExprRaw,
     },
     /// we're forced to make this pub because of lalrpop
     Bin {
         /// we're forced to make this pub because of lalrpop
-        lhs: Cow<'script, str>,
+        lhs: RCow<'script, str>,
         /// we're forced to make this pub because of lalrpop
         rhs: ImutExprRaw<'script>,
         /// we're forced to make this pub because of lalrpop
@@ -1501,26 +1501,26 @@ pub enum PredicatePatternRaw<'script> {
     /// we're forced to make this pub because of lalrpop
     RecordPatternEq {
         /// we're forced to make this pub because of lalrpop
-        lhs: Cow<'script, str>,
+        lhs: RCow<'script, str>,
         /// we're forced to make this pub because of lalrpop
         pattern: RecordPatternRaw<'script>,
     },
     /// we're forced to make this pub because of lalrpop
     ArrayPatternEq {
         /// we're forced to make this pub because of lalrpop
-        lhs: Cow<'script, str>,
+        lhs: RCow<'script, str>,
         /// we're forced to make this pub because of lalrpop
         pattern: ArrayPatternRaw<'script>,
     },
     /// we're forced to make this pub because of lalrpop
     FieldPresent {
         /// we're forced to make this pub because of lalrpop
-        lhs: Cow<'script, str>,
+        lhs: RCow<'script, str>,
     },
     /// we're forced to make this pub because of lalrpop
     FieldAbsent {
         /// we're forced to make this pub because of lalrpop
-        lhs: Cow<'script, str>,
+        lhs: RCow<'script, str>,
     },
 }
 

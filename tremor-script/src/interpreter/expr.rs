@@ -36,6 +36,7 @@ use std::{
     borrow::{Borrow, Cow},
     iter,
 };
+use abi_stable::std_types::{RBox, Tuple2};
 #[derive(Debug)]
 /// Continuation context to control program flow
 pub enum Cont<'run, 'event>
@@ -345,11 +346,11 @@ impl<'script> Expr<'script> {
         let (l, items): Bi = t.as_object().map_or_else(
             || {
                 t.as_array().map_or_else::<Bi, _, _>(
-                    || (0, Box::new(iter::empty())),
-                    |t| (t.len(), Box::new(t.clone().into_iter().enumerate().map(kv))),
+                    || Tuple2(0, RBox::new(iter::empty())),
+                    |t| Tuple2(t.len(), RBox::new(t.clone().into_iter().enumerate().map(kv))),
                 )
             },
-            |t| (t.len(), Box::new(t.clone().into_iter().map(kv))),
+            |t| Tuple2(t.len(), RBox::new(t.clone().into_iter().map(kv))),
         );
 
         if opts.result_needed {
@@ -497,7 +498,7 @@ impl<'script> Expr<'script> {
                     current = match map.get_mut(&id) {
                         Some(v) => v,
                         None => map
-                            .entry(id)
+                            .entry(id.into())
                             .or_insert_with(|| Value::object_with_capacity(32)),
                     };
                 }
