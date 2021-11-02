@@ -40,6 +40,7 @@ use std::iter::{Iterator, Peekable};
 use std::net::{IpAddr, Ipv4Addr};
 use std::slice::Iter;
 use std::str::FromStr;
+use abi_stable::std_types::{RHashMap, RCow};
 use tremor_influx as influx;
 use tremor_kv as kv;
 
@@ -594,7 +595,7 @@ impl Extractor {
 
                 Self::Re { compiled, .. } => compiled.captures(s).map_or(NoMatch, |caps| {
                     if result_needed {
-                        let matches: HashMap<beef::Cow<str>, Value> = compiled
+                        let matches: RHashMap<RCow<str>, Value> = compiled
                             .capture_names()
                             .flatten()
                             .filter_map(|n| {

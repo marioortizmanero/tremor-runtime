@@ -21,6 +21,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "tremor_script"
 
 [dependencies]
+abi_stable = { version = "0.10.3", default-features = false }
 atty = "0.2"
 base64 = "0.13"
 beef = { version="0.5", features=["impl_serde"] }
@@ -58,7 +59,7 @@ tremor-kv = "0.2"
 tremor-value = { version="0.3", path="../tremor-value" }
 unicode-xid = "0.2"
 url = "2"
-value-trait = "0.2"
+value-trait = { version = "0.2.9", features = ["c-abi"] }
 xz2 = "0.1"
 
 [build-dependencies]

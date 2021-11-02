@@ -6804,6 +6804,7 @@ dependencies = [
 name = "tremor-script"
 version = "0.11.4"
 dependencies = [
+ "abi_stable",
  "atty",
  "base64 0.13.0",
  "beef",

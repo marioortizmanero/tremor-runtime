@@ -50,7 +50,6 @@ use crate::{
 };
 pub(crate) use analyzer::*;
 pub use base_expr::BaseExpr;
-use beef::Cow;
 use halfbrown::HashMap;
 pub use query::*;
 use serde::Serialize;
