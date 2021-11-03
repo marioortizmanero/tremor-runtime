@@ -42,8 +42,9 @@ use beef::Cow;
 
 use crate::config::Connector as ConnectorConfig;
 use crate::connectors::metrics::{MetricsSinkReporter, SourceReporter};
-use crate::connectors::sink::{BoxedRawSink, Sink, SinkAddr, SinkContext, SinkMsg};
-use crate::connectors::source::{BoxedRawSource, Source, SourceAddr, SourceContext, SourceMsg};
+use crate::connectors::sink::{SinkAddr, SinkContext, SinkMsg};
+use crate::connectors::source::{SourceAddr, SourceContext, SourceMsg};
+use crate::pdk::{RResult, MayPanic};
 use crate::errors::{Error, ErrorKind, Result};
 use crate::pdk::RResult;
 use crate::pipeline;
@@ -1136,9 +1137,11 @@ pub enum Connectivity {
 /// This trait specifically is the low-level connector interface used for the
 /// plugin system. The `Connector` type wraps it up for ease of use.
 #[abi_stable::sabi_trait]
-pub trait Connector: Send {
+pub trait RawConnector: Send {
     /// This connector works with structured data and does not allow the use
     /// of codecs.
+    // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
+    // otherwise, rather than a function?
     fn is_structured(&self) -> bool {
         false
     }
@@ -1203,92 +1206,9 @@ pub trait Connector: Send {
     /* async */ fn on_stop(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {NoPanic(())}
 
     /// returns the default codec for this connector
-    fn default_codec(&self) -> RStr<'_>;
-}
-/// Alias for the FFI-safe dynamic connector type
-pub type BoxedRawConnector = RawConnector_TO<'static, RBox<()>>;
-
-// The higher level connector interface, which wraps the raw connector from the
-// plugin.
-pub struct Connector(pub BoxedRawConnector);
-impl Connector {
-    #[inline]
-    fn is_structured(&self) -> bool {
-        self.0.is_structured()
-    }
-
-    #[inline]
-    pub async fn create_source(
-        &mut self,
-        source_context: SourceContext,
-        builder: source::SourceManagerBuilder,
-    ) -> Result<Option<source::SourceAddr>> {
-        match self.0.create_source(source_context.clone()) {
-            ROk(RSome(raw_source)) => {
-                let wrapper = Source(raw_source);
-                builder.spawn(wrapper, source_context).map(Some)
-            }
-            ROk(RNone) => Ok(None),
-            RErr(err) => Err(err.into()),
-        }
-    }
-
-    #[inline]
-    pub async fn create_sink(
-        &mut self,
-        sink_context: SinkContext,
-        builder: sink::SinkManagerBuilder,
-    ) -> Result<Option<sink::SinkAddr>> {
-        match self.0.create_sink(sink_context.clone()) {
-            ROk(RSome(raw_sink)) => {
-                let wrapper = Sink(raw_sink);
-                builder.spawn(wrapper, sink_context).map(Some)
-            }
-            ROk(RNone) => Ok(None),
-            RErr(err) => Err(err.into()),
-        }
-    }
-
-    #[inline]
-    pub async fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> Result<bool> {
-        self.0
-            .connect(ctx, attempt)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-
-    #[inline]
-    pub async fn on_start(&mut self, ctx: &ConnectorContext) -> Result<ConnectorState> {
-        self.0
-            .on_start(ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-
-    #[inline]
-    pub async fn on_pause(&mut self, ctx: &ConnectorContext) {
-        self.0.on_pause(ctx)
-    }
-
-    #[inline]
-    pub async fn on_resume(&mut self, ctx: &ConnectorContext) {
-        self.0.on_resume(ctx)
-    }
-
-    #[inline]
-    pub async fn on_drain(&mut self, ctx: &ConnectorContext) {
-        self.0.on_drain(ctx)
-    }
-
-    #[inline]
-    pub async fn on_stop(&mut self, ctx: &ConnectorContext) {
-        self.0.on_stop(ctx)
-    }
-
-    #[inline]
-    pub fn default_codec(&self) -> &str {
-        self.0.default_codec().into()
-    }
+    // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
+    // otherwise, rather than a function?
+    fn default_codec(&self) -> &str;
 }
 
 // The higher level connector interface, which wraps the raw connector from the
