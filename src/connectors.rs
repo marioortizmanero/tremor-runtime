@@ -42,8 +42,8 @@ use beef::Cow;
 
 use crate::config::Connector as ConnectorConfig;
 use crate::connectors::metrics::{MetricsSinkReporter, SourceReporter};
-use crate::connectors::sink::{SinkAddr, SinkContext, SinkMsg, RawSink_TO};
-use crate::connectors::source::{SourceAddr, SourceContext, SourceMsg, RawSource_TO};
+use crate::connectors::sink::{SinkAddr, SinkContext, SinkMsg, RawSink_TO, Sink};
+use crate::connectors::source::{SourceAddr, SourceContext, SourceMsg, RawSource_TO, Source};
 use crate::errors::{Error, ErrorKind, Result};
 use crate::pdk::{MayPanic::{self, NoPanic}, RResult};
 use crate::pipeline;
@@ -1164,7 +1164,6 @@ pub trait RawConnector: Send {
     fn create_sink(
         &mut self,
         _sink_context: SinkContext,
-        _builder: sink::SinkManagerBuilder,
     ) -> MayPanic<RResult<ROption<RawSink_TO<'static, RBox<()>>>>> {
         NoPanic(ROk(RNone))
     }
@@ -1241,7 +1240,10 @@ impl Connector {
         builder: source::SourceManagerBuilder,
     ) -> Result<Option<source::SourceAddr>> {
         match self.0.create_source(source_context.clone()).unwrap() {
-            ROk(RSome(raw_source)) => builder.spawn(raw_source, source_context).map(Some),
+            ROk(RSome(raw_source)) => {
+                let wrapper = Source(raw_source);
+                builder.spawn(wrapper, source_context).map(Some)
+            }
             ROk(RNone) => Ok(None),
             RErr(err) => Err(err.into()),
         }
@@ -1254,7 +1256,10 @@ impl Connector {
         builder: sink::SinkManagerBuilder,
     ) -> Result<Option<sink::SinkAddr>> {
         match self.0.create_sink(sink_context.clone()).unwrap() {
-            ROk(RSome(raw_sink)) => builder.spawn(raw_sink, sink_context).map(Some),
+            ROk(RSome(raw_sink)) => {
+                let wrapper = Sink(raw_sink);
+                builder.spawn(wrapper, sink_context).map(Some)
+            }
             ROk(RNone) => Ok(None),
             RErr(err) => Err(err.into()),
         }
@@ -1286,6 +1291,11 @@ impl Connector {
     #[inline]
     pub async fn on_resume(&mut self, ctx: &ConnectorContext) {
         self.0.on_resume(ctx).unwrap()
+    }
+
+    #[inline]
+    pub async fn on_drain(&mut self, ctx: &ConnectorContext) {
+        self.0.on_drain(ctx).unwrap()
     }
 
     #[inline]
