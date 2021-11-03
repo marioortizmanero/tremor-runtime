@@ -19,27 +19,8 @@
 
 use beef::Cow;
 use error_chain::error_chain;
-use hdrhistogram::{self, serialization as hdr_s};
 
 use tremor_influx as influx;
-
-// impl Clone for Error {
-//     fn clone(&self) -> Self {
-//         ErrorKind::ClonedError(format!("{}", self)).into()
-//     }
-// }
-
-impl From<sled::transaction::TransactionError<()>> for Error {
-    fn from(e: sled::transaction::TransactionError<()>) -> Self {
-        Self::from(format!("Sled Transaction Error: {:?}", e))
-    }
-}
-
-impl From<hdr_s::DeserializeError> for Error {
-    fn from(e: hdr_s::DeserializeError) -> Self {
-        Self::from(format!("{:?}", e))
-    }
-}
 
 impl From<Box<dyn std::error::Error>> for Error {
     fn from(e: Box<dyn std::error::Error>) -> Self {
@@ -50,30 +31,6 @@ impl From<Box<dyn std::error::Error>> for Error {
 impl From<Box<dyn std::error::Error + Sync + Send>> for Error {
     fn from(e: Box<dyn std::error::Error + Sync + Send>) -> Self {
         Self::from(format!("{:?}", e))
-    }
-}
-
-impl From<hdrhistogram::errors::CreationError> for Error {
-    fn from(e: hdrhistogram::errors::CreationError) -> Self {
-        Self::from(format!("{:?}", e))
-    }
-}
-
-impl From<hdrhistogram::RecordError> for Error {
-    fn from(e: hdrhistogram::RecordError) -> Self {
-        Self::from(format!("{:?}", e))
-    }
-}
-
-impl From<hdrhistogram::serialization::V2SerializeError> for Error {
-    fn from(e: hdrhistogram::serialization::V2SerializeError) -> Self {
-        Self::from(format!("{:?}", e))
-    }
-}
-
-impl From<http_types::Error> for Error {
-    fn from(e: http_types::Error) -> Self {
-        Self::from(format!("{}", e))
     }
 }
 
@@ -147,45 +104,29 @@ error_chain! {
         Base64Error(base64::DecodeError);
         ChannelReceiveError(std::sync::mpsc::RecvError);
         Common(tremor_common::Error);
-        CronError(cron::error::Error);
-        CsvError(csv::Error);
         DateTimeParseError(chrono::ParseError);
-        DnsError(async_std_resolver::ResolveError);
-        ElasticError(elasticsearch::Error);
-        ElasticTransportBuildError(elasticsearch::http::transport::BuildError);
         FromUtf8Error(std::string::FromUtf8Error);
-        GoogleAuthError(gouth::Error);
-        GrokError(grok::Error);
-        Hex(hex::FromHexError);
-        HttpHeaderError(http::header::InvalidHeaderValue);
         InfluxEncoderError(influx::EncoderError);
         Io(std::io::Error);
         JsonAccessError(value_trait::AccessError);
         JsonError(simd_json::Error);
-        KafkaError(rdkafka::error::KafkaError);
-        ModeParseError(file_mode::ModeParseError);
         MsgPackDecoderError(rmp_serde::decode::Error);
         MsgPackEncoderError(rmp_serde::encode::Error);
         ParseIntError(std::num::ParseIntError);
         ParseFloatError(std::num::ParseFloatError);
-        Postgres(postgres::Error);
         RegexError(regex::Error);
-        ReqwestError(reqwest::Error);
-        RustlsError(rustls::TLSError);
-        Sled(sled::Error);
+        SinkDequeueError(async_sink::SinkDequeueError);
+        SinkEnqueueError(async_sink::SinkEnqueueError);
         SnappyError(snap::Error);
         Timeout(async_std::future::TimeoutError);
-        TonicStatusError(tonic::Status);
-        TonicTransportError(tonic::transport::Error);
         TryFromIntError(std::num::TryFromIntError);
         ValueError(tremor_value::Error);
         UrlParserError(url::ParseError);
         UriParserError(http::uri::InvalidUri);
         Utf8Error(std::str::Utf8Error);
-        WsError(async_tungstenite::tungstenite::Error);
-        EnvVarError(std::env::VarError);
         YamlError(serde_yaml::Error) #[doc = "Error during yaml parsing"];
         Wal(qwal::Error);
+        // TODO: plugin error?
     }
 
     errors {

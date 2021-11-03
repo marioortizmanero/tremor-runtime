@@ -27,7 +27,7 @@ use crate::codec::{self, Codec};
 use crate::config::{Codec as CodecConfig, Connector as ConnectorConfig};
 use crate::connectors::{Msg, StreamDone};
 use crate::errors::Result;
-use crate::pdk::{MayPanic, RResult};
+use crate::pdk::{MayPanic::{self, NoPanic}, RResult};
 use crate::permge::PriorityMerge;
 use crate::pipeline;
 use crate::postprocessor::{make_postprocessors, postprocess, Postprocessors};
@@ -256,7 +256,7 @@ impl Sink {
         ctx: &SinkContext,
         serializer: &mut EventSerializer,
         start: u64,
-    ) -> RResultVec {
+    ) -> RResult<SinkReply> {
         self.0
             .on_event(input.into(), event, ctx, serializer, start)
             .unwrap()
@@ -269,7 +269,7 @@ impl Sink {
         signal: Event,
         ctx: &SinkContext,
         serializer: &mut EventSerializer,
-    ) -> RResultVec {
+    ) -> RResult<SinkReply> {
         self.0
             .on_signal(signal, ctx, serializer)
             .unwrap()
