@@ -95,6 +95,7 @@ use halfbrown::{Entry, HashMap};
 use tremor_common::ids::ConnectorIdGen;
 use tremor_value::Value;
 use value_trait::{Builder, Mutable};
+use abi_stable::{StableAbi, std_types::{RBox, RVec, ROption::{self, RNone}, RResult::ROk}};
 
 use self::metrics::MetricsSender;
 use self::quiescence::QuiescenceBeacon;
@@ -1046,7 +1047,7 @@ pub trait RawConnector: Send {
         &mut self,
         _source_context: SourceContext,
     ) -> MayPanic<RResult<ROption<RawSource_TO<'static, RBox<()>>>>> {
-        NoPanic(Ok(None))
+        NoPanic(ROk(RNone))
     }
 
     /// Create a sink part for this connector if applicable
@@ -1058,7 +1059,7 @@ pub trait RawConnector: Send {
         _sink_context: SinkContext,
         _builder: sink::SinkManagerBuilder,
     ) -> MayPanic<RResult<ROption<RawSink_TO<'static, RBox<()>>>>> {
-        NoPanic(Ok(None))
+        NoPanic(ROk(RNone))
     }
 
     /// Attempt to connect to the outside world.
@@ -1080,7 +1081,7 @@ pub trait RawConnector: Send {
     /// called once when the connector is started
     /// `connect` will be called after this for the first time, leave connection attempts in `connect`.
     /* async */ fn on_start(&mut self, _ctx: &ConnectorContext) -> MayPanic<RResult<ConnectorState>> {
-        NoPanic(Ok(ConnectorState::Running))
+        NoPanic(ROk(ConnectorState::Running))
     }
 
     /// called when the connector pauses
