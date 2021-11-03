@@ -35,21 +35,9 @@ use tremor_script::prelude::*;
 
 use self::prelude::OnrampConfig;
 
-pub(crate) mod amqp;
-pub(crate) mod blaster;
-pub(crate) mod cb;
-pub(crate) mod crononome;
-pub(crate) mod discord;
-pub(crate) mod env;
-pub(crate) mod file;
-pub(crate) mod gsub;
-pub(crate) mod kafka;
-pub(crate) mod metronome;
-pub(crate) mod nats;
-pub(crate) mod otel;
-pub(crate) mod postgres;
 /// prelude full of useful stuff
 pub(crate) mod prelude;
+<<<<<<< HEAD
 pub(crate) mod rest;
 pub(crate) mod sse;
 pub(crate) mod stdin;
@@ -58,6 +46,8 @@ pub(crate) mod udp;
 #[cfg(unix)]
 pub mod unix_socket;
 pub(crate) mod ws;
+=======
+>>>>>>> 1b5637ef (Lots of cleaning up)
 
 struct StaticValue(Value<'static>);
 
@@ -666,6 +656,7 @@ where
 /// register builtin source types
 #[cfg(not(tarpaulin_include))]
 pub async fn register_builtin_sources(world: &World) -> Result<()> {
+<<<<<<< HEAD
     world
         .register_builtin_onramp_type("amqp", Box::new(amqp::Builder {}))
         .await?;
@@ -737,6 +728,9 @@ pub async fn register_unix_sources(world: &World) -> Result<()> {
 
 #[cfg(not(unix))]
 pub async fn register_unix_sources(world: &World) -> Result<()> {
+=======
+    // TODO: load dynamically
+>>>>>>> 1b5637ef (Lots of cleaning up)
     Ok(())
 }
 
