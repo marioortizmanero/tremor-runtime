@@ -38,8 +38,11 @@ impl Default for Inner {
     }
 }
 /// use this beacon to check if tasks reading or writing from external connections should stop
+#[repr(C)]
 #[derive(Debug, Clone, Default)]
 #[allow(clippy::module_name_repetitions)]
+// TODO: figure out how to make repr-C compatible. Perhaps make it into an
+// opaque type?
 pub struct QuiescenceBeacon(Arc<Inner>);
 
 impl QuiescenceBeacon {

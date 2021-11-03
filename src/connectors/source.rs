@@ -419,7 +419,8 @@ impl ChannelSourceRuntime {
 
 // TODO make fields private and add some nice methods
 /// context for a source
-#[derive(Clone)]
+#[repr(C)]
+#[derive(Clone, StableAbi)]
 pub struct SourceContext {
     /// connector uid
     pub uid: u64,
