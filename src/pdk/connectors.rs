@@ -3,24 +3,17 @@
 //! similars.
 
 use crate::connectors::BoxedRawConnector;
-use crate::url::TremorUrl;
-use tremor_value::pdk::Value;
 
 use abi_stable::{
-    declare_root_module_statics,
-    library::RootModule,
-    package_version_strings,
-    sabi_types::VersionStrings,
-    std_types::{RBox, ROption},
-    StableAbi,
+    declare_root_module_statics, library::RootModule, package_version_strings,
+    sabi_types::VersionStrings, std_types::RBox, StableAbi,
 };
 
-/// The `new` function basically acts as the connector builder
 #[repr(C)]
 #[derive(StableAbi)]
 #[sabi(kind(Prefix))]
 pub struct ConnectorMod {
-    pub new: extern "C" fn(id: &TremorUrl, config: ROption<Value>) -> BoxedRawConnector,
+    pub new: extern "C" fn() -> BoxedRawConnector,
 }
 
 // Marking `MinMod` as the main module in this plugin. Note that `MinMod_Ref` is

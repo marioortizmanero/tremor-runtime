@@ -255,7 +255,7 @@ pub trait RawSink: Send {
 
 // Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
 // types so that it's easier to use with `std`.
-pub struct Sink(pub RawSink_TO<'static, RBox<()>>);
+pub struct Sink(pub BoxedRawSink);
 impl Sink {
     #[inline]
     pub async fn on_event(

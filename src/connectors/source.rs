@@ -355,7 +355,7 @@ impl Source {
 /// Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
 /// types so that it's easier to use with `std`. This may be removed in the
 /// future for performance reasons.
-pub struct Source(pub RawSource_TO<'static, RBox<()>>);
+pub struct Source(pub BoxedRawSource);
 impl Source {
     #[inline]
     pub async fn pull_data(&mut self, pull_id: u64, ctx: &SourceContext) -> Result<SourceReply> {

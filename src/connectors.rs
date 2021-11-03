@@ -42,8 +42,8 @@ use beef::Cow;
 
 use crate::config::Connector as ConnectorConfig;
 use crate::connectors::metrics::{MetricsSinkReporter, SourceReporter};
-use crate::connectors::sink::{RawSink_TO, Sink, SinkAddr, SinkContext, SinkMsg};
-use crate::connectors::source::{RawSource_TO, Source, SourceAddr, SourceContext, SourceMsg};
+use crate::connectors::sink::{BoxedRawSink, Sink, SinkAddr, SinkContext, SinkMsg};
+use crate::connectors::source::{BoxedRawSource, Source, SourceAddr, SourceContext, SourceMsg};
 use crate::errors::{Error, ErrorKind, Result};
 use crate::pdk::{
     MayPanic::{self, NoPanic},
@@ -1122,6 +1122,9 @@ pub enum Connectivity {
     Disconnected,
 }
 
+/// Alias for the FFI-safe dynamic connector type
+pub type BoxedRawConnector = RawConnector_TO<'static, RBox<()>>;
+
 /// A Connector connects the tremor runtime to the outside world.
 ///
 /// It can be a source of events, as such it is polled for new data.
@@ -1155,7 +1158,7 @@ pub trait RawConnector: Send {
     fn create_source(
         &mut self,
         _source_context: SourceContext,
-    ) -> MayPanic<RResult<ROption<RawSource_TO<'static, RBox<()>>>>> {
+    ) -> MayPanic<RResult<ROption<BoxedRawSource>>> {
         NoPanic(ROk(RNone))
     }
 
@@ -1167,7 +1170,7 @@ pub trait RawConnector: Send {
     fn create_sink(
         &mut self,
         _sink_context: SinkContext,
-    ) -> MayPanic<RResult<ROption<RawSink_TO<'static, RBox<()>>>>> {
+    ) -> MayPanic<RResult<ROption<BoxedRawSink>>> {
         NoPanic(ROk(RNone))
     }
 
@@ -1229,7 +1232,7 @@ pub trait RawConnector: Send {
 
 // The higher level connector interface, which wraps the raw connector from the
 // plugin.
-pub struct Connector(pub RawConnector_TO<'static, RBox<()>>);
+pub struct Connector(pub BoxedRawConnector);
 impl Connector {
     #[inline]
     fn is_structured(&self) -> bool {
