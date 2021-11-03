@@ -452,34 +452,10 @@ impl SourceManagerBuilder {
         self.qsize
     }
 
-    /// spawn a Manager with the given source implementation
-    pub fn spawn<S>(self, source: S, ctx: SourceContext) -> Result<SourceAddr>
-    where
-        S: Source + Send + 'static,
-    {
-        // We use a unbounded channel for counterflow, while an unbounded channel seems dangerous
-        // there is soundness to this.
-        // The unbounded channel ensures that on counterflow we never have to block, or in other
-        // words that sinks or pipelines sending data backwards always can progress past
-        // the sending.
-        // This prevents a deadlock where the pipeline is waiting for a full channel to send data to
-        // the source and the source is waiting for a full channel to send data to the pipeline.
-        // We prevent unbounded growth by two mechanisms:
-        // 1) counterflow is ALWAYS and ONLY created in response to a message
-        // 2) we always process counterflow prior to forward flow
-        //
-        // As long as we have counterflow messages to process, and channel size is growing we do
-        // not process any forward flow. Without forward flow we stave the counterflow ensuring that
-        // the counterflow channel is always bounded by the forward flow in a 1:N relationship where
-        // N is the maximum number of counterflow events a single event can trigger.
-        // N is normally < 1.
-        //
-        // In other words, DO NOT REMOVE THE UNBOUNDED QUEUE, it will lead to deadlocks where
-        // the pipeline is waiting for the source to process contraflow and the source waits for
-        // the pipeline to process forward flow.
-
-        let name = format!("{}-src", ctx.alias);
-        let (source_tx, source_rx) = unbounded();
+    pub fn spawn<S>(self, source: Source, ctx: SourceContext) -> Result<SourceAddr> {
+        let qsize = self.qsize;
+        let name = ctx.url.short_id("c-src"); // connector source
+        let (source_tx, source_rx) = bounded(qsize);
         let source_addr = SourceAddr { addr: source_tx };
         let manager = SourceManager::new(source, ctx, self, source_rx, source_addr.clone());
         // spawn manager task
@@ -611,11 +587,8 @@ enum SourceState {
 
 /// entity driving the source task
 /// and keeping the source state around
-pub(crate) struct SourceManager<S>
-where
-    S: Source,
-{
-    source: S,
+pub(crate) struct SourceManager {
+    source: Source,
     ctx: SourceContext,
     rx: Receiver<SourceMsg>,
     addr: SourceAddr,
@@ -645,13 +618,9 @@ enum Control {
     Terminate,
 }
 
-impl<S> SourceManager<S>
-where
-    S: Source,
-{
-    /// constructor
+impl SourceManager {
     fn new(
-        source: S,
+        source: Source,
         ctx: SourceContext,
         builder: SourceManagerBuilder,
         rx: Receiver<SourceMsg>,
