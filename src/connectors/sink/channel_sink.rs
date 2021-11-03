@@ -1,0 +1,166 @@
+// Copyright 2021, The Tremor Team
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Sink implementation that keeps track of multiple streams and keeps channels to send to each stream
+
+use crate::connectors::sink::{
+    AsyncSinkReply, EventCfData, EventSerializer, SinkReply, StreamWriter,
+};
+use crate::connectors::{ConnectorContext, StreamDone};
+use crate::errors::Result;
+use crate::QSIZE;
+use async_std::channel::{bounded, Receiver, Sender};
+use async_std::task;
+use beef::Cow;
+use bimap::BiMap;
+use either::Either;
+use hashbrown::HashMap;
+use std::hash::Hash;
+use std::sync::atomic::Ordering;
+use tremor_common::time::nanotime;
+use tremor_pipeline::{CbAction, Event, SignalKind};
+use tremor_value::Value;
+use value_trait::ValueAccess;
+
+use super::{ResultVec, Sink, SinkContext};
+
+/// messages a channel sink can receive
+pub enum ChannelSinkMsg<T>
+where
+    T: Hash + Eq + Send + 'static,
+{
+    /// add a new stream
+    NewStream {
+        /// the id of the stream
+        stream_id: u64,
+        /// stream metadata used for resolving a stream
+        meta: Option<T>,
+        /// sender to the actual stream handling data
+        sender: Sender<SinkData>,
+    },
+    /// remove the stream
+    RemoveStream(u64),
+}
+
+/// some data for a `ChannelSink` stream
+#[derive(Clone, Debug)]
+pub struct SinkData {
+    /// data to send
+    pub data: Vec<Vec<u8>>,
+    /// async reply utils (if required)
+    pub contraflow: Option<(EventCfData, Sender<AsyncSinkReply>)>,
+    /// timestamp of processing start
+    pub start: u64,
+}
+
+#[derive(Clone)]
+pub struct ChannelSinkRuntime<T>
+where
+    T: Hash + Eq + Send + 'static,
+{
+    tx: Sender<ChannelSinkMsg<T>>,
+}
+
+impl<T> ChannelSinkRuntime<T>
+where
+    T: Hash + Eq + Send + 'static,
+{
+    pub(crate) fn register_stream_writer<W>(
+        &self,
+        stream: u64,
+        connection_meta: Option<T>,
+        ctx: &ConnectorContext,
+        mut writer: W,
+    ) where
+        W: StreamWriter + 'static,
+    {
+        let (stream_tx, stream_rx) = bounded::<SinkData>(QSIZE.load(Ordering::Relaxed));
+        let stream_sink_tx = self.tx.clone();
+        let ctx = ctx.clone();
+        let tx = self.tx.clone();
+        task::spawn(async move {
+            tx.send(ChannelSinkMsg::NewStream {
+                stream_id: stream,
+                meta: connection_meta,
+                sender: stream_tx,
+            })
+            .await?;
+            // receive loop from channel sink
+            while let (
+                true,
+                Ok(SinkData {
+                    data,
+                    contraflow,
+                    start,
+                }),
+            ) = (
+                ctx.quiescence_beacon.continue_writing().await,
+                stream_rx.recv().await,
+            ) {
+                let failed = writer.write(data).await.is_err();
+
+                // send asyn contraflow insights if requested (only if event.transactional)
+                if let Some((cf_data, sender)) = contraflow {
+                    let reply = if failed {
+                        AsyncSinkReply::Fail(cf_data)
+                    } else {
+                        AsyncSinkReply::Ack(cf_data, nanotime() - start)
+                    };
+                    if let Err(e) = sender.send(reply).await {
+                        error!(
+                            "[Connector::{}] Error sending async sink reply: {}",
+                            ctx.url, e
+                        );
+                    }
+                }
+                if failed {
+                    break;
+                }
+            }
+            let error = match writer.on_done(stream).await {
+                Err(e) => Some(e),
+                Ok(StreamDone::ConnectorClosed) => ctx.notifier.notify().await.err(),
+                Ok(_) => None,
+            };
+            if let Some(e) = error {
+                error!(
+                    "[Connector::{}] Error shutting down write half of stream {}: {}",
+                    ctx.url, stream, e
+                );
+            }
+            stream_sink_tx
+                .send(ChannelSinkMsg::RemoveStream(stream))
+                .await?;
+            Result::Ok(())
+        });
+    }
+}
+
+/// Extract sink specific metadata from event metadata
+///
+/// The general path is `$<RESOURCE_TYPE>.<ARTEFACT>`
+/// Example: `$connector.tcp_server`
+fn get_sink_meta<'lt, 'value>(
+    meta: &'lt Value<'value>,
+    ctx: &SinkContext,
+) -> Option<&'lt Value<'value>> {
+    ctx.url
+        .resource_type()
+        .and_then(|rt| meta.get(&Cow::owned(rt.to_string())))
+        .and_then(|rt_meta| {
+            ctx.url
+                .artefact()
+                .and_then(|artefact| rt_meta.get(artefact))
+        })
+}

@@ -14,6 +14,7 @@
 
 #![allow(clippy::module_name_repetitions)]
 
+use async_std::future::timeout;
 use async_std::task;
 use either::Either;
 use std::collections::btree_map::Entry;
@@ -24,11 +25,22 @@ use tremor_script::{EventPayload, ValueAndMeta};
 
 use crate::codec::{self, Codec};
 use crate::config::{Codec as CodecConfig, Connector as ConnectorConfig};
+use crate::connectors::Msg;
 use crate::errors::{Error, Result};
+use crate::pdk::{
+    self,
+    MayPanic::{self, NoPanic},
+    RResult,
+};
 use crate::pipeline;
 use crate::preprocessor::{make_preprocessors, preprocess, Preprocessors};
 use crate::url::ports::{ERR, OUT};
 use crate::url::TremorUrl;
+use abi_stable::{
+    rvec,
+    std_types::{RBox, ROption, RResult::ROk, RString, RVec, Tuple2},
+    StableAbi,
+};
 use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
 use beef::Cow;
 use tremor_pipeline::{
@@ -38,18 +50,22 @@ use tremor_value::{literal, Value};
 use value_trait::Builder;
 
 use super::metrics::SourceReporter;
+use super::quiescence::QuiescenceBeacon;
+use super::{ConnectorContext, StreamDone};
+
+const DEFAULT_POLL_INTERVAL: u64 = 10;
 
 /// Messages a Source can receive
 pub enum SourceMsg {
     /// connect a pipeline
-    Connect {
+    Link {
         /// port
         port: Cow<'static, str>,
         /// pipelines to connect
         pipelines: Vec<(TremorUrl, pipeline::Addr)>,
     },
     /// disconnect a pipeline from a port
-    Disconnect {
+    Unlink {
         /// port
         port: Cow<'static, str>,
         /// url of the pipeline
@@ -61,7 +77,6 @@ pub enum SourceMsg {
     ConnectionEstablished,
     /// Circuit Breaker Contraflow Event
     Cb(CbAction, EventId),
-    // TODO: fill those
     /// start the source
     Start,
     /// pause the source
@@ -70,19 +85,22 @@ pub enum SourceMsg {
     Resume,
     /// stop the source
     Stop,
+    /// drain the source - bears a sender for sending out a SourceDrained status notification
+    Drain(Sender<Msg>),
 }
 
 /// reply from `Source::on_event`
-#[derive(Debug)]
+#[repr(C)]
+#[derive(Debug, StableAbi)]
 pub enum SourceReply {
     /// A normal data event with a `Vec<u8>` for data
     Data {
         /// origin uri
         origin_uri: EventOriginUri,
         /// the data
-        data: Vec<u8>,
+        data: RVec<u8>,
         /// metadata associated with this data
-        meta: Option<Value<'static>>,
+        meta: ROption<pdk::Value<'static>>,
         /// stream id of the data
         stream: u64,
     },
@@ -96,7 +114,7 @@ pub enum SourceReply {
     // for when the source knows where boundaries are, maybe because it receives chunks already
     BatchData {
         origin_uri: EventOriginUri,
-        batch_data: Vec<(Vec<u8>, Option<Value<'static>>)>,
+        batch_data: RVec<Tuple2<RVec<u8>, ROption<pdk::Value<'static>>>>,
         stream: u64,
     },
     /// A stream is opened
@@ -107,28 +125,31 @@ pub enum SourceReply {
     Empty(u64),
 }
 
+// sender for source reply
+pub type SourceReplySender = Sender<SourceReply>;
+
 /// source part of a connector
-#[async_trait::async_trait]
-pub trait Source: Send {
+#[abi_stable::sabi_trait]
+pub trait RawSource: Send {
     /// Pulls an event from the source if one exists
     /// `idgen` is passed in so the source can inspect what event id it would get if it was producing 1 event from the pulled data
-    async fn pull_data(&mut self, pull_id: u64, ctx: &SourceContext) -> Result<SourceReply>;
+    fn pull_data(&mut self, pull_id: u64, ctx: &SourceContext) -> MayPanic<RResult<SourceReply>>;
     /// This callback is called when the data provided from
     /// pull_event did not create any events, this is needed for
     /// linked sources that require a 1:1 mapping between requests
     /// and responses, we're looking at you REST
-    async fn on_no_events(
+    fn on_no_events(
         &mut self,
         _pull_id: u64,
         _stream: u64,
         _ctx: &SourceContext,
-    ) -> Result<()> {
-        Ok(())
+    ) -> MayPanic<RResult<()>> {
+        NoPanic(ROk(()))
     }
 
     /// Pulls custom metrics from the source
-    fn metrics(&mut self, _timestamp: u64) -> Vec<EventPayload> {
-        vec![]
+    fn metrics(&mut self, _timestamp: u64) -> MayPanic<RVec<EventPayload>> {
+        NoPanic(rvec![])
     }
 
     ///////////////////////////
@@ -136,101 +157,236 @@ pub trait Source: Send {
     ///////////////////////////
 
     /// called when the source is started. This happens only once in the whole source lifecycle, before any other callbacks
-    async fn on_start(&mut self, _ctx: &mut SourceContext) {}
+    fn on_start(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
+        NoPanic(())
+    }
     /// called when the source is explicitly paused as result of a user/operator interaction
     /// in contrast to `on_cb_close` which happens automatically depending on downstream pipeline or sink connector logic.
-    async fn on_pause(&mut self, _ctx: &mut SourceContext) {}
+    fn on_pause(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
+        NoPanic(())
+    }
     /// called when the source is explicitly resumed from being paused
-    async fn on_resume(&mut self, _ctx: &mut SourceContext) {}
+    fn on_resume(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
+        NoPanic(())
+    }
     /// called when the source is stopped. This happens only once in the whole source lifecycle, as the very last callback
-    async fn on_stop(&mut self, _ctx: &mut SourceContext) {}
+    fn on_stop(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
+        NoPanic(())
+    }
 
     // circuit breaker callbacks
     /// called when we receive a `close` Circuit breaker event from any connected pipeline
     /// Expected reaction is to pause receiving messages, which is handled automatically by the runtime
     /// Source implementations might want to close connections or signal a pause to the upstream entity it connects to if not done in the connector (the default)
     // TODO: add info of Cb event origin (port, origin_uri)?
-    async fn on_cb_close(&mut self, _ctx: &mut SourceContext) {}
+    fn on_cb_close(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
+        NoPanic(())
+    }
     /// Called when we receive a `open` Circuit breaker event from any connected pipeline
     /// This means we can start/continue polling this source for messages
     /// Source implementations might want to start establishing connections if not done in the connector (the default)
-    async fn on_cb_open(&mut self, _ctx: &mut SourceContext) {}
+    fn on_cb_open(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
+        NoPanic(())
+    }
 
     // guaranteed delivery callbacks
     /// an event has been acknowledged and can be considered delivered
     /// multiple acks for the same set of ids are always possible
-    async fn ack(&mut self, _stream_id: u64, _pull_id: u64) {}
+    fn ack(&mut self, _stream_id: u64, _pull_id: u64) -> MayPanic<()> {
+        NoPanic(())
+    }
     /// an event has failed along its way and can be considered failed
     /// multiple fails for the same set of ids are always possible
-    async fn fail(&mut self, _stream_id: u64, _pull_id: u64) {}
+    fn fail(&mut self, _stream_id: u64, _pull_id: u64) -> MayPanic<()> {
+        NoPanic(())
+    }
 
     // connectivity stuff
     /// called when connector lost connectivity
-    async fn on_connection_lost(&mut self, _ctx: &mut SourceContext) {}
+    fn on_connection_lost(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
+        NoPanic(())
+    }
     /// called when connector re-established connectivity
-    async fn on_connection_established(&mut self, _ctx: &mut SourceContext) {}
+    fn on_connection_established(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
+        NoPanic(())
+    }
 
     /// Is this source transactional or can acks/fails be ignored
+    // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
+    // otherwise, rather than a function?
     fn is_transactional(&self) -> bool {
-        false
-    }
-
-    /// if `true` this source is polled for data even if it is not connected to
-    /// any pipeline and is not terminated if it is completely disconnected.
-    fn keep_alive(&self) -> bool {
         false
     }
 }
 
-/// A source that receives `SourceReply` messages via a channel.
-/// It does not handle acks/fails.
+/// Source part of a connector.
 ///
-/// Connector implementations handling their stuff in a separate task can use the
-/// channel obtained by `ChannelSource::sender()` to send `SourceReply`s to the
-/// runtime.
-pub struct ChannelSource {
-    rx: Receiver<SourceReply>,
-    tx: Sender<SourceReply>,
-}
-
-impl ChannelSource {
-    /// constructor
-    pub fn new(qsize: usize) -> Self {
-        let (tx, rx) = bounded(qsize);
-        Self { rx, tx }
+/// Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
+/// types so that it's easier to use with `std`. This may be removed in the
+/// future for performance reasons.
+pub struct Source(pub RawSource_TO<'static, RBox<()>>);
+impl Source {
+    pub async fn pull_data(&mut self, pull_id: u64, ctx: &SourceContext) -> Result<SourceReply> {
+        self.0
+            .pull_data(pull_id, ctx)
+            .unwrap()
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
+    }
+    pub async fn on_no_events(
+        &mut self,
+        pull_id: u64,
+        stream: u64,
+        ctx: &SourceContext,
+    ) -> Result<()> {
+        self.0
+            .on_no_events(pull_id, stream, ctx)
+            .unwrap()
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
-    /// get the sender for the source
-    pub fn sender(&self) -> Sender<SourceReply> {
-        self.tx.clone()
+    /// Pulls custom metrics from the source
+    pub fn metrics(&mut self, timestamp: u64) -> Vec<EventPayload> {
+        self.0.metrics(timestamp).unwrap().into()
+    }
+
+    ///////////////////////////
+    /// lifecycle callbacks ///
+    ///////////////////////////
+
+    /// called when the source is started. This happens only once in the whole source lifecycle, before any other callbacks
+    pub async fn on_start(&mut self, ctx: &mut SourceContext) {
+        self.0.on_start(ctx).unwrap()
+    }
+    /// called when the source is explicitly paused as result of a user/operator interaction
+    /// in contrast to `on_cb_close` which happens automatically depending on downstream pipeline or sink connector logic.
+    pub async fn on_pause(&mut self, ctx: &mut SourceContext) {
+        self.0.on_pause(ctx).unwrap()
+    }
+    /// called when the source is explicitly resumed from being paused
+    pub async fn on_resume(&mut self, ctx: &mut SourceContext) {
+        self.0.on_resume(ctx).unwrap()
+    }
+    /// called when the source is stopped. This happens only once in the whole source lifecycle, as the very last callback
+    pub async fn on_stop(&mut self, ctx: &mut SourceContext) {
+        self.0.on_stop(ctx).unwrap()
+    }
+
+    // circuit breaker callbacks
+    /// called when we receive a `close` Circuit breaker event from any connected pipeline
+    /// Expected reaction is to pause receiving messages, which is handled automatically by the runtime
+    /// Source implementations might want to close connections or signal a pause to the upstream entity it connects to if not done in the connector (the default)
+    // TODO: add info of Cb event origin (port, origin_uri)?
+    pub async fn on_cb_close(&mut self, ctx: &mut SourceContext) {
+        self.0.on_cb_close(ctx).unwrap()
+    }
+    /// Called when we receive a `open` Circuit breaker event from any connected pipeline
+    /// This means we can start/continue polling this source for messages
+    /// Source implementations might want to start establishing connections if not done in the connector (the default)
+    pub async fn on_cb_open(&mut self, ctx: &mut SourceContext) {
+        self.0.on_cb_open(ctx).unwrap()
+    }
+
+    // guaranteed delivery callbacks
+    /// an event has been acknowledged and can be considered delivered
+    /// multiple acks for the same set of ids are always possible
+    pub async fn ack(&mut self, stream_id: u64, pull_id: u64) {
+        self.0.ack(stream_id, pull_id).unwrap()
+    }
+    /// an event has failed along its way and can be considered failed
+    /// multiple fails for the same set of ids are always possible
+    pub async fn fail(&mut self, stream_id: u64, pull_id: u64) {
+        self.0.fail(stream_id, pull_id).unwrap()
+    }
+
+    // connectivity stuff
+    /// called when connector lost connectivity
+    pub async fn on_connection_lost(&mut self, ctx: &mut SourceContext) {
+        self.0.on_connection_lost(ctx).unwrap()
+    }
+    /// called when connector re-established connectivity
+    pub async fn on_connection_established(&mut self, ctx: &mut SourceContext) {
+        self.0.on_connection_established(ctx).unwrap()
+    }
+
+    /// Is this source transactional or can acks/fails be ignored
+    pub fn is_transactional(&self) -> bool {
+        self.0.is_transactional()
     }
 }
 
-#[async_trait::async_trait()]
-impl Source for ChannelSource {
-    async fn pull_data(&mut self, _pull_id: u64, _ctx: &SourceContext) -> Result<SourceReply> {
-        match self.rx.try_recv() {
-            Ok(reply) => Ok(reply),
-            Err(TryRecvError::Empty) => {
-                // TODO: configure pull interval in connector config?
-                Ok(SourceReply::Empty(10))
+///
+#[async_trait::async_trait]
+pub trait StreamReader: Send {
+    /// reads from the source reader
+    async fn read(&mut self, stream: u64) -> Result<SourceReply>;
+    async fn on_done(&mut self, _stream: u64) -> StreamDone {
+        StreamDone::StreamClosed
+    }
+}
+
+/// FIXME: this needs renaming and docs
+#[derive(Clone)]
+pub struct ChannelSourceRuntime {
+    sender: Sender<SourceReply>,
+    ctx: SourceContext,
+}
+
+impl ChannelSourceRuntime {
+    const READ_TIMEOUT_MS: Duration = Duration::from_millis(100);
+    pub(crate) fn register_stream_reader<R>(
+        &self,
+        stream: u64,
+        ctx: &ConnectorContext,
+        mut reader: R,
+    ) where
+        R: StreamReader + 'static + std::marker::Sync,
+    {
+        let ctx = ctx.clone();
+        let tx = self.sender.clone();
+        task::spawn(async move {
+            if tx.send(SourceReply::StartStream(stream)).await.is_err() {
+                error!("[Connector::{}] Failed to start stream", ctx.url);
+                return;
+            };
+
+            while ctx.quiescence_beacon.continue_reading().await {
+                let sc_data = timeout(Self::READ_TIMEOUT_MS, reader.read(stream)).await;
+
+                let sc_data = match sc_data {
+                    Err(_) => continue,
+                    Ok(Ok(d)) => d,
+                    Ok(Err(e)) => {
+                        error!("[Connector::{}] reader error: {}", ctx.url, e);
+                        break;
+                    }
+                };
+                let last = matches!(&sc_data, SourceReply::EndStream(_));
+                if tx.send(sc_data).await.is_err() || last {
+                    break;
+                };
             }
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    fn is_transactional(&self) -> bool {
-        false
+            if reader.on_done(stream).await == StreamDone::ConnectorClosed {
+                if let Err(e) = ctx.notifier.notify().await {
+                    error!("[Connector::{}] Failed to notify connector: {}", ctx.url, e);
+                };
+            }
+        });
     }
 }
 
 // TODO make fields private and add some nice methods
 /// context for a source
+#[repr(C)]
+#[derive(Clone, StableAbi)]
 pub struct SourceContext {
     /// connector uid
     pub uid: u64,
     /// connector url
     pub url: TremorUrl,
+    /// The Quiescence Beacon
+    pub quiescence_beacon: QuiescenceBeacon,
 }
 
 /// address of a source
@@ -252,10 +408,7 @@ impl SourceManagerBuilder {
         self.qsize
     }
 
-    pub fn spawn<S>(self, source: S, ctx: SourceContext) -> Result<SourceAddr>
-    where
-        S: Source + Send + 'static,
-    {
+    pub fn spawn(self, source: Source, ctx: SourceContext) -> Result<SourceAddr> {
         let qsize = self.qsize;
         let name = ctx.url.short_id("c-src"); // connector source
         let (source_tx, source_rx) = bounded(qsize);
@@ -386,35 +539,44 @@ struct StreamState {
     preprocessors: Preprocessors,
 }
 
+#[derive(Debug, PartialEq)]
+enum SourceState {
+    Initialized,
+    Running,
+    Paused,
+    Draining,
+    Drained,
+    Stopped,
+}
+
+impl SourceState {
+    fn should_pull_data(&self) -> bool {
+        *self == SourceState::Running || *self == SourceState::Draining
+    }
+}
+
 /// entity driving the source task
 /// and keeping the source state around
-pub(crate) struct SourceManager<S>
-where
-    S: Source,
-{
-    source: S,
+pub(crate) struct SourceManager {
+    source: Source,
     ctx: SourceContext,
     rx: Receiver<SourceMsg>,
     pipelines_out: Vec<(TremorUrl, pipeline::Addr)>,
     pipelines_err: Vec<(TremorUrl, pipeline::Addr)>,
     streams: Streams,
     metrics_reporter: SourceReporter,
-    // used for both explicitly pausing and CB close/open
+    // `Paused` is used for both explicitly pausing and CB close/open
     // this way we can explicitly resume a Cb triggered source if need be
     // but also an explicitly paused source might receive a Cb open and continue sending data :scream:
-    paused: bool,
-    is_transactional: bool, // TODO: add metrics reporter
-    /// keep the source alive if not connected to any pipeline
-    /// and pull data even if not connected to any pipeline
-    keep_alive: bool,
+    state: SourceState,
+    is_transactional: bool,
+    connector_channel: Option<Sender<Msg>>,
+    expected_drained: usize,
 }
 
-impl<S> SourceManager<S>
-where
-    S: Source,
-{
+impl SourceManager {
     fn new(
-        source: S,
+        source: Source,
         ctx: SourceContext,
         builder: SourceManagerBuilder,
         rx: Receiver<SourceMsg>,
@@ -426,8 +588,6 @@ where
         } = builder;
         let is_transactional = source.is_transactional();
 
-        // if true pull data even if nothing is connected and not terminate if completely disconnected
-        let keep_alive = source.keep_alive();
         Self {
             source,
             ctx,
@@ -436,9 +596,10 @@ where
             metrics_reporter: source_metrics_reporter,
             pipelines_out: Vec::with_capacity(1),
             pipelines_err: Vec::with_capacity(1),
-            paused: false,
+            state: SourceState::Initialized,
             is_transactional,
-            keep_alive,
+            connector_channel: None,
+            expected_drained: 0,
         }
     }
 
@@ -446,21 +607,23 @@ where
     ///
     /// - we are paused
     /// - we have some control plane messages (here we don't need to wait)
-    /// - if we have no pipelines connected and the managed source is not marked as `keep_alive`
+    /// - if we have no pipelines connected
     fn needs_control_plane_msg(&self) -> bool {
-        self.paused || !self.rx.is_empty() || (self.pipelines_out.is_empty() && !self.keep_alive)
+        self.state == SourceState::Paused || !self.rx.is_empty() || self.pipelines_out.is_empty()
     }
 
     /// returns `Ok(true)` if this source should be terminated
     // FIXME: return meaningful enum
+    #[allow(clippy::too_many_lines)]
     async fn control_plane(&mut self) -> Result<bool> {
+        use SourceState::{Drained, Draining, Initialized, Paused, Running, Stopped};
         loop {
             if !self.needs_control_plane_msg() {
                 return Ok(false);
             }
             if let Ok(source_msg) = self.rx.recv().await {
                 match source_msg {
-                    SourceMsg::Connect {
+                    SourceMsg::Link {
                         port,
                         mut pipelines,
                     } => {
@@ -477,7 +640,7 @@ where
                         };
                         pipes.append(&mut pipelines);
                     }
-                    SourceMsg::Disconnect { id, port } => {
+                    SourceMsg::Unlink { id, port } => {
                         let pipelines = if port.eq_ignore_ascii_case(OUT.as_ref()) {
                             &mut self.pipelines_out
                         } else if port.eq_ignore_ascii_case(ERR.as_ref()) {
@@ -495,22 +658,69 @@ where
                             return Ok(true);
                         }
                     }
-                    SourceMsg::Start => {
-                        self.paused = false;
+                    SourceMsg::Start if self.state == Initialized => {
+                        self.state = Running;
                         self.source.on_start(&mut self.ctx).await;
+
+                        if let Err(e) = self.send_signal(Event::signal_start(self.ctx.uid)).await {
+                            error!(
+                                "[Source::{}] Error sending start signal: {}",
+                                &self.ctx.url, e
+                            );
+                        }
                     }
-                    SourceMsg::Resume => {
-                        self.paused = false;
+                    SourceMsg::Start => {
+                        info!(
+                            "[Source::{}] Ignoring Start msg in {:?} state",
+                            &self.ctx.url, &self.state
+                        );
+                    }
+                    SourceMsg::Resume if self.state == Paused => {
+                        self.state = Running;
                         self.source.on_resume(&mut self.ctx).await;
                     }
-                    SourceMsg::Pause => {
+                    SourceMsg::Resume => {
+                        info!(
+                            "[Source::{}] Ignoring Resume msg in {:?} state",
+                            &self.ctx.url, &self.state
+                        );
+                    }
+                    SourceMsg::Pause if self.state == Running => {
                         // TODO: execute pause strategy chosen by source / connector / configured by user
-                        self.paused = true;
+                        self.state = Paused;
                         self.source.on_pause(&mut self.ctx).await;
                     }
+                    SourceMsg::Pause => {
+                        info!(
+                            "[Source::{}] Ignoring Pause msg in {:?} state",
+                            &self.ctx.url, &self.state
+                        );
+                    }
                     SourceMsg::Stop => {
+                        self.state = Stopped;
                         self.source.on_stop(&mut self.ctx).await;
                         return Ok(true);
+                    }
+                    SourceMsg::Drain(_sender) if self.state == Draining => {
+                        info!(
+                            "[Source::{}] Ignoring incoming Drain message in {:?} state",
+                            &self.ctx.url, &self.state
+                        );
+                    }
+                    SourceMsg::Drain(sender) if self.state == Drained => {
+                        if sender.send(Msg::SourceDrained).await.is_err() {
+                            error!(
+                                "[Source::{}] Error sending SourceDrained message",
+                                &self.ctx.url
+                            );
+                        }
+                    }
+                    SourceMsg::Drain(drained_sender) => {
+                        // At this point the connector has advised all reading from external connections to stop via the `QuiescenceBeacon`
+                        // We change the source state to `Draining` and wait for `SourceReply::Empty` as we drain out everything that might be in flight
+                        // when reached the `Empty` point, we emit the `Drain` signal and wait for the CB answer (one for each connected pipeline)
+                        self.connector_channel = Some(drained_sender);
+                        self.state = Draining;
                     }
                     SourceMsg::ConnectionLost => {
                         self.source.on_connection_lost(&mut self.ctx).await;
@@ -531,16 +741,39 @@ where
                     SourceMsg::Cb(CbAction::Close, _id) => {
                         // TODO: execute pause strategy chosen by source / connector / configured by user
                         self.source.on_cb_close(&mut self.ctx).await;
-                        self.paused = true; // handling
+                        self.state = Paused;
                     }
                     SourceMsg::Cb(CbAction::Open, _id) => {
                         self.source.on_cb_open(&mut self.ctx).await;
-                        self.paused = false;
+                        self.state = Running;
+                    }
+                    SourceMsg::Cb(CbAction::Drained(uid), _id) => {
+                        // only account for Drained CF which we caused
+                        // as CF is sent back the DAG to all destinations
+                        if uid == self.ctx.uid {
+                            self.expected_drained -= 1;
+                            if self.expected_drained == 0 {
+                                // we received 1 drain CB event per connected pipeline (hopefully)
+                                if let Some(connector_channel) = self.connector_channel.as_ref() {
+                                    if connector_channel.send(Msg::SourceDrained).await.is_err() {
+                                        error!("[Source::{}] Error sending SourceDrained message to Connector", &self.ctx.url);
+                                    }
+                                }
+                            }
+                        }
                     }
                     SourceMsg::Cb(CbAction::None, _id) => {}
                 }
             }
         }
+    }
+
+    /// send a signal to all connected pipelines
+    async fn send_signal(&mut self, signal: Event) -> Result<()> {
+        for (_url, addr) in self.pipelines_out.iter().chain(self.pipelines_err.iter()) {
+            addr.send(pipeline::Msg::Signal(signal.clone())).await?;
+        }
+        Ok(())
     }
 
     /// send events to pipelines
@@ -645,7 +878,7 @@ where
                 return Ok(());
             }
 
-            if !self.paused && !self.pipelines_out.is_empty() {
+            if self.state.should_pull_data() && !self.pipelines_out.is_empty() {
                 match self.source.pull_data(pull_counter, &self.ctx).await {
                     Ok(SourceReply::Data {
                         origin_uri,
@@ -749,7 +982,27 @@ where
                     } // failing here only due to misconfig, in that case, bail out, #yolo
                     Ok(SourceReply::EndStream(stream_id)) => self.streams.end_stream(stream_id),
                     Ok(SourceReply::Empty(wait_ms)) => {
-                        task::sleep(Duration::from_millis(wait_ms)).await;
+                        if self.state == SourceState::Draining {
+                            // this source has been fully drained
+                            self.state = SourceState::Drained;
+                            // send Drain signal
+                            let signal = Event::signal_drain(self.ctx.uid);
+                            if let Err(e) = self.send_signal(signal).await {
+                                error!(
+                                    "[Source::{}] Error sending DRAIN signal: {}",
+                                    &self.ctx.url, e
+                                );
+                            }
+                            // if we get a disconnect in between we might never receive every drain CB
+                            // but we will stop everything forcefully after a certain timeout at some point anyways
+                            // TODO: account for all connector uids that sent some Cb to us upon startup or so, to get the real number to wait for
+                            // otherwise there are cases (branching etc. where quiescence also would be to quick)
+                            self.expected_drained =
+                                self.pipelines_err.len() + self.pipelines_out.len();
+                        } else {
+                            // wait for the given ms
+                            task::sleep(Duration::from_millis(wait_ms)).await;
+                        }
                     }
                     Err(e) => {
                         warn!("[Source::{}] Error pulling data: {}", &self.ctx.url, e);

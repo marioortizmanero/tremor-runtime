@@ -1,3 +1,5 @@
+// FIXME: temporary while PDK is WIP
+#![allow(unused_imports)]
 // Copyright 2020-2021, The Tremor Team
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,9 +37,6 @@ extern crate log;
 #[macro_use]
 extern crate lazy_static;
 
-#[macro_use]
-extern crate rental;
-
 #[cfg(test)]
 #[macro_use]
 extern crate pretty_assertions;
@@ -56,7 +55,9 @@ pub mod config;
 pub mod errors;
 /// Tremor function library
 pub mod functions;
-pub(crate) mod lifecycle;
+
+/// entities capturing artefact instance lifecycle
+pub mod lifecycle;
 /// Runtime metrics helper
 pub mod metrics;
 /// offramp stuff
@@ -64,7 +65,9 @@ pub(crate) mod offramp;
 /// onramp stuff
 pub(crate) mod onramp;
 pub(crate) mod permge;
-pub(crate) mod pipeline;
+
+/// pipelines
+pub mod pipeline;
 /// Onramp Preprocessors
 pub mod postprocessor;
 /// Offramp Postprocessors
@@ -89,7 +92,7 @@ pub mod version;
 /// Tremor connector extensions
 pub mod connectors;
 
-/// For the Plugin Development Kit
+/// The plugin development kit
 pub mod pdk;
 
 pub(crate) mod common;
@@ -109,9 +112,10 @@ use tremor_pipeline::{query::Query, FN_REGISTRY};
 use tremor_script::highlighter::Term as TermHighlighter;
 use tremor_script::Script;
 
-/// Default Q Size
-pub const QSIZE: AtomicUsize = AtomicUsize::new(128);
-
+lazy_static! {
+    /// Default Q Size
+    pub static ref QSIZE: AtomicUsize = AtomicUsize::new(128);
+}
 /// Loads a tremor query file
 /// # Errors
 /// Fails if the file can not be loaded

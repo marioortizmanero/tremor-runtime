@@ -44,7 +44,8 @@ pub struct Addr {
 
 impl Addr {
     /// creates a new address
-    pub(crate) fn new(
+    #[must_use]
+    pub fn new(
         addr: Sender<Msg>,
         cf_addr: Sender<CfMsg>,
         mgmt_addr: Sender<MgmtMsg>,
@@ -57,11 +58,23 @@ impl Addr {
             id,
         }
     }
+
+    /// number of events in the pipelines channel
     #[cfg(not(tarpaulin_include))]
+    #[must_use]
     pub fn len(&self) -> usize {
         self.addr.len()
     }
+
+    /// true, if there are no events to be received at the moment
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.addr.is_empty()
+    }
+
+    /// pipeline instance id
     #[cfg(not(tarpaulin_include))]
+    #[must_use]
     pub fn id(&self) -> &ServantId {
         &self.id
     }
@@ -91,57 +104,88 @@ impl fmt::Debug for Addr {
     }
 }
 
+/// contraflow message
 #[derive(Debug)]
-pub(crate) enum CfMsg {
+pub enum CfMsg {
+    /// insight
     Insight(Event),
 }
 
+/// possible targets to connect a pipeline to
 #[derive(Debug)]
-pub(crate) enum ConnectTarget {
+pub enum ConnectTarget {
+    /// an onramp
     Onramp(onramp::Addr),
+    /// an offramp
     Offramp(offramp::Addr),
+    /// another pipeline
     Pipeline(Box<Addr>),
+    /// a connector
     Connector(connectors::Addr),
 }
 
+/// control plane message
 #[derive(Debug)]
-pub(crate) enum MgmtMsg {
+pub enum MgmtMsg {
     /// input can only ever be connected to the `in` port, so no need to include it here
     ConnectInput {
+        /// url of the input to connect
         input_url: TremorUrl,
+        /// the target that connects to the `in` port
         target: ConnectTarget,
         /// should we send insights to this input
         transactional: bool,
     },
+    /// connect a target to an output port
     ConnectOutput {
+        /// the port to connect to
         port: Cow<'static, str>,
+        /// the url of the output instance
         output_url: TremorUrl,
+        /// the actual target addr
         target: ConnectTarget,
     },
+    /// disconnect an output
     DisconnectOutput(Cow<'static, str>, TremorUrl),
+    /// disconnect an input
     DisconnectInput(TremorUrl),
+    /// for testing - ensures we drain the channel up to this message
     #[cfg(test)]
     Echo(Sender<()>),
 }
 
+/// an input dataplane message for this pipeline
 #[derive(Debug)]
-pub(crate) enum Msg {
+pub enum Msg {
+    /// an event
     Event {
+        /// the event
         event: Event,
+        /// the port the event came in from
         input: Cow<'static, str>,
     },
+    /// a signal
     Signal(Event),
 }
 
+/// an output destination to send events to
 #[derive(Debug)]
 pub enum Dest {
+    /// an offramp
     Offramp(offramp::Addr),
+    /// another pipeline
     Pipeline(Addr),
+    /// a linked onramp
     LinkedOnramp(onramp::Addr),
+    /// a connector
     Connector(connectors::Addr),
 }
 
 impl Dest {
+    /// send an event out to this destination
+    ///
+    /// # Errors
+    ///  * when sending the event via the dest channel fails
     pub async fn send_event(&mut self, input: Cow<'static, str>, event: Event) -> Result<()> {
         match self {
             Self::Offramp(addr) => addr.send(offramp::Msg::Event { input, event }).await?,
@@ -154,6 +198,10 @@ impl Dest {
         }
         Ok(())
     }
+    /// send a signal out to this destination
+    ///
+    /// # Errors
+    ///  * when sending the signal via the dest channel fails
     pub async fn send_signal(&mut self, signal: Event) -> Result<()> {
         match self {
             Self::Offramp(addr) => addr.send(offramp::Msg::Signal(signal)).await?,
@@ -165,7 +213,6 @@ impl Dest {
                 }
             }
             Self::LinkedOnramp(_addr) => {
-                // TODO implement!
                 //addr.send(onramp::Msg::Signal(signal)).await?
             }
             Self::Connector(addr) => {
@@ -193,9 +240,13 @@ impl From<ConnectTarget> for Dest {
 /// These are the same as Dest, but kept separately for clarity
 #[derive(Debug)]
 pub enum Input {
+    /// a linked offramp
     LinkedOfframp(offramp::Addr),
+    /// another pipeline
     Pipeline(Addr),
+    /// an onramp
     Onramp(onramp::Addr),
+    /// a connector
     Connector(connectors::Addr),
 }
 
@@ -211,13 +262,19 @@ impl From<ConnectTarget> for Input {
     }
 }
 
+/// all the info for creating a pipeline
 pub struct Create {
+    /// the pipeline config
     pub config: PipelineArtefact,
+    /// the pipeline id
     pub id: ServantId,
 }
 
-pub(crate) enum ManagerMsg {
+/// control plane message for pipeline manager
+pub enum ManagerMsg {
+    /// stop the manager
     Stop,
+    /// create a new pipeline
     Create(Sender<Result<Addr>>, Box<Create>),
 }
 
@@ -230,11 +287,11 @@ pub(crate) struct Manager {
 #[inline]
 async fn send_events(eventset: &mut Eventset, dests: &mut Dests) -> Result<()> {
     for (output, event) in eventset.drain(..) {
-        if let Some(dest) = dests.get_mut(&output) {
-            if let Some((last, rest)) = dest.split_last_mut() {
-                for (id, offramp) in rest {
+        if let Some(destinations) = dests.get_mut(&output) {
+            if let Some((last, rest)) = destinations.split_last_mut() {
+                for (id, dest) in rest {
                     let port = id.instance_port_required()?.to_string().into();
-                    offramp.send_event(port, event.clone()).await?;
+                    dest.send_event(port, event.clone()).await?;
                 }
                 let last_port = last.0.instance_port_required()?.to_string().into();
                 last.1.send_event(last_port, event).await?;
@@ -246,16 +303,16 @@ async fn send_events(eventset: &mut Eventset, dests: &mut Dests) -> Result<()> {
 
 #[inline]
 async fn send_signal(own_id: &TremorUrl, signal: Event, dests: &mut Dests) -> Result<()> {
-    let mut offramps = dests.values_mut().flatten();
-    let first = offramps.next();
-    for (id, offramp) in offramps {
+    let mut destinations = dests.values_mut().flatten();
+    let first = destinations.next();
+    for (id, dest) in destinations {
         if id != own_id {
-            offramp.send_signal(signal.clone()).await?;
+            dest.send_signal(signal.clone()).await?;
         }
     }
-    if let Some((id, offramp)) = first {
+    if let Some((id, dest)) = first {
         if id != own_id {
-            offramp.send_signal(signal).await?;
+            dest.send_signal(signal).await?;
         }
     }
     Ok(())
@@ -561,7 +618,7 @@ impl Manager {
             loop {
                 match rx.recv().await {
                     Ok(ManagerMsg::Stop) => {
-                        info!("Stopping onramps...");
+                        info!("Stopping Pipeline manager...");
                         break;
                     }
                     Ok(ManagerMsg::Create(r, create)) => {

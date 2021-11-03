@@ -83,28 +83,34 @@ lazy_static! {
     };
 }
 
+/// default graceful shutdown timeout
+pub const DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
+
+#[derive(Debug, PartialEq)]
+/// shutdown mode - controls how we shutdown Tremor
+pub enum ShutdownMode {
+    /// shut down by stopping all binding instances and wait for quiescence
+    /// for the given timeout
+    Graceful {
+        /// How long to wait for graceful shutdown
+        /// Before shutting down the runtime completely.
+        timeout: Duration,
+    },
+    /// Just stop everything and not wait
+    Forceful,
+}
+
 /// This is control plane
-pub(crate) enum ManagerMsg {
+pub enum ManagerMsg {
+    /// msg to the pipeline manager
     Pipeline(pipeline::ManagerMsg),
-    // CreatePipeline(
-    //     async_std::channel::Sender<Result<pipeline::Addr>>,
-    //     pipeline::Create,
-    // ),
+    /// msg to the onramp manager
     Onramp(onramp::ManagerMsg),
-    // CreateOnramp(
-    //     async_std::channel::Sender<Result<onramp::Addr>>,
-    //     Box<onramp::Create>,
-    // ),
+    /// msg to the offramp manager
     Offramp(offramp::ManagerMsg),
-    // CreateOfframp(
-    //     async_std::channel::Sender<Result<offramp::Addr>>,
-    //     Box<offramp::Create>,
-    // ),
+    /// msg to the connector manager
     Connector(connectors::ManagerMsg),
-    // CreateConnector(
-    //     async_std::channel::Sender<Result<connectors::Addr>>,
-    //     connectors::Create,
-    // ),
+    /// stop this manager
     Stop,
 }
 
@@ -134,13 +140,9 @@ impl Manager {
                     ManagerMsg::Offramp(msg) => self.offramp.send(msg).await?,
                     ManagerMsg::Connector(msg) => self.connector.send(msg).await?,
                     ManagerMsg::Stop => {
-                        info!("Stopping offramps...");
                         self.offramp.send(offramp::ManagerMsg::Stop).await?;
-                        info!("Stopping pipelines...");
                         self.pipeline.send(pipeline::ManagerMsg::Stop).await?;
-                        info!("Stopping onramps...");
                         self.onramp.send(onramp::ManagerMsg::Stop).await?;
-                        info!("Stopping connectors...");
                         self.connector
                             .send(connectors::ManagerMsg::Stop {
                                 reason: "Global Manager Stop".to_string(),
@@ -150,7 +152,7 @@ impl Manager {
                     }
                 }
             }
-            info!("Stopping onramps in an odd way...");
+            info!("Manager stopped.");
             Ok(())
         });
         (system_h, tx)
@@ -300,7 +302,7 @@ impl World {
     ///
     /// # Errors
     ///  * If the system is unavailable
-    pub async fn register_builtin_connector_type(
+    pub(crate) async fn register_builtin_connector_type(
         &self,
         type_name: &'static str,
         builder: Box<dyn connectors::ConnectorBuilder>,
@@ -441,7 +443,9 @@ impl World {
                 self.repo.unbind_pipeline(id).await?;
                 Ok(state)
             }
-            (None, _) => Err(ErrorKind::InstanceNotFound(id.to_string()).into()),
+            (None, _) => {
+                Err(ErrorKind::InstanceNotFound("pipeline".to_string(), id.to_string()).into())
+            }
             (_, None) => Err(ErrorKind::InvalidInstanceUrl(id.to_string()).into()),
         }
     }
@@ -576,7 +580,9 @@ impl World {
                 self.repo.unbind_onramp(id).await?;
                 Ok(state)
             }
-            (None, _) => Err(ErrorKind::InstanceNotFound(id.to_string()).into()),
+            (None, _) => {
+                Err(ErrorKind::InstanceNotFound("onramp".to_string(), id.to_string()).into())
+            }
             (_, None) => Err(ErrorKind::InvalidInstanceUrl(id.to_string()).into()),
         }
     }
@@ -684,7 +690,9 @@ impl World {
                 self.repo.unbind_offramp(id).await?;
                 Ok(state)
             }
-            (None, _) => Err(ErrorKind::InstanceNotFound(id.to_string()).into()),
+            (None, _) => {
+                Err(ErrorKind::InstanceNotFound("offramp".to_string(), id.to_string()).into())
+            }
             (_, None) => Err(ErrorKind::InvalidInstanceUrl(id.to_string()).into()),
         }
     }
@@ -778,14 +786,16 @@ impl World {
         match (&self.reg.find_connector(id).await?, id.instance()) {
             (Some(_instance), Some(_instance_id)) => {
                 // remove from registry
-                let mut fsm = self.reg.unpublish_offramp(id).await?;
+                let mut fsm = self.reg.unpublish_connector(id).await?;
                 // stop instance
                 let state = fsm.stop().await?.state;
                 // remove instance from repo
-                self.repo.unbind_offramp(id).await?;
+                self.repo.unbind_connector(id).await?;
                 Ok(state)
             }
-            (None, _) => Err(ErrorKind::InstanceNotFound(id.to_string()).into()),
+            (None, _) => {
+                Err(ErrorKind::InstanceNotFound("connector".to_string(), id.to_string()).into())
+            }
             (_, None) => Err(ErrorKind::InvalidInstanceUrl(id.to_string()).into()),
         }
     }
@@ -850,6 +860,16 @@ impl World {
             Ok(fully_disconnected)
         } else {
             Err(ErrorKind::ArtefactNotFound(id.to_string()).into())
+        }
+    }
+
+    pub(crate) async fn drain_connector(&self, id: &TremorUrl) -> Result<()> {
+        if let Some(instance) = self.reg.find_connector(id).await? {
+            let (tx, rx) = async_std::channel::bounded(1);
+            instance.send(connectors::Msg::Drain(tx)).await?;
+            rx.recv().await?
+        } else {
+            Err(ErrorKind::InstanceNotFound("connector".to_string(), id.to_string()).into())
         }
     }
 
@@ -952,7 +972,7 @@ impl World {
 
             Ok(())
         } else {
-            Err(ErrorKind::InstanceNotFound(id.to_string()).into())
+            Err(ErrorKind::InstanceNotFound("binding".to_string(), id.to_string()).into())
         }
     }
 
@@ -1112,8 +1132,18 @@ impl World {
     ///
     /// # Errors
     ///  * if the system failed to stop
-    pub async fn stop(&self) -> Result<()> {
-        // TODO: properly stop all the
+    pub async fn stop(&self, mode: ShutdownMode) -> Result<()> {
+        match mode {
+            ShutdownMode::Graceful { timeout } => {
+                // quiesce and stop all the bindings
+                if let Err(_err) =
+                    async_std::future::timeout(timeout, self.reg.stop_all_bindings()).await
+                {
+                    warn!("Timeout waiting for all bindings to stop.");
+                }
+            }
+            ShutdownMode::Forceful => {}
+        }
         Ok(self.system.send(ManagerMsg::Stop).await?)
     }
 

@@ -118,41 +118,32 @@ pub struct OffRamp {
     pub(crate) config: tremor_pipeline::ConfigMap,
 }
 
-/// reconnect configuration, controlling the intervals and amound of retries
-/// if a connection attempt fails
+/// possible reconnect strategies for controlling if and how to reconnect
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Reconnect {
-    #[serde(default = "Reconnect::default_interval_ms")]
-    pub(crate) interval_ms: u64,
-    #[serde(default = "Reconnect::default_growth_rate")]
-    pub(crate) growth_rate: f64,
-    #[serde(default = "Default::default", skip_serializing_if = "Option::is_none")]
-    pub(crate) max_retry: Option<u64>,
-}
-
-impl Reconnect {
-    const DEFAULT_INTERVAL_MS: u64 = 1000;
-    const DEFAULT_GROWTH_RATE: f64 = 1.2;
-
-    fn default_interval_ms() -> u64 {
-        Self::DEFAULT_INTERVAL_MS
-    }
-
-    fn default_growth_rate() -> f64 {
-        Self::DEFAULT_GROWTH_RATE
-    }
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
+pub enum Reconnect {
+    /// do not reconnect
+    None,
+    // TODO: RandomizedBackoff
+    /// custom reconnect strategy
+    Custom {
+        /// start interval to wait after a failing connect attempt
+        interval_ms: u64,
+        /// growth rate for consecutive connect attempts, will be added to interval_ms
+        growth_rate: f64,
+        //TODO: randomized: bool
+        /// maximum number of retries to execute
+        max_retries: Option<u64>,
+    },
 }
 
 impl Default for Reconnect {
     fn default() -> Self {
-        Self {
-            interval_ms: Self::DEFAULT_INTERVAL_MS,
-            growth_rate: Self::DEFAULT_GROWTH_RATE,
-            max_retry: None,
-        }
+        Self::None
     }
 }
+
+/* TODO: currently this is implemented differently in every connector
 
 /// how a connector behaves upon Pause or CB trigger events
 /// w.r.t maintaining its connection to the outside world (e.g. TCP connection, database connection)
@@ -171,6 +162,7 @@ impl Default for PauseBehaviour {
         Self::KeepOpen
     }
 }
+*/
 
 /// Codec name and configuration
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -236,9 +228,8 @@ pub struct Connector {
     #[serde(default)]
     pub(crate) reconnect: Reconnect,
 
-    #[serde(default)]
-    pub(crate) on_pause: PauseBehaviour,
-
+    //#[serde(default)]
+    //pub(crate) on_pause: PauseBehaviour,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) metrics_interval_s: Option<u64>,
 }
@@ -252,4 +243,39 @@ pub struct Binding {
     #[serde(default = "Default::default")]
     pub(crate) description: String,
     pub(crate) links: BindingMap, // is this right? this should be url to url?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::errors::Result;
+
+    #[test]
+    fn test_reconnect_serde() -> Result<()> {
+        assert_eq!(
+            "---\n\
+            none\n",
+            serde_yaml::to_string(&Reconnect::None)?
+        );
+        let none_strategy = r#"
+        none
+        "#;
+        let reconnect = serde_yaml::from_str::<Reconnect>(none_strategy)?;
+        assert!(matches!(reconnect, Reconnect::None));
+        let custom = r#"
+        custom:
+          interval_ms: 123
+          growth_rate: 1.234567
+        "#;
+        let reconnect = serde_yaml::from_str::<Reconnect>(custom)?;
+        assert!(matches!(
+            reconnect,
+            Reconnect::Custom {
+                interval_ms: 123,
+                growth_rate: _,
+                max_retries: None
+            }
+        ));
+        Ok(())
+    }
 }

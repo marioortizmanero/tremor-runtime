@@ -148,7 +148,11 @@ impl Artefact for Pipeline {
                         if let Some(offramp) = system.reg.find_offramp(&to).await? {
                             ConnectTarget::Offramp(offramp)
                         } else {
-                            return Err(ErrorKind::InstanceNotFound(to.to_string()).into());
+                            return Err(ErrorKind::InstanceNotFound(
+                                "offramp".to_string(),
+                                to.to_string(),
+                            )
+                            .into());
                         }
                     }
                     Some(ResourceType::Pipeline) => {
@@ -156,21 +160,33 @@ impl Artefact for Pipeline {
                         if let Some(p) = system.reg.find_pipeline(&to).await? {
                             ConnectTarget::Pipeline(Box::new(p))
                         } else {
-                            return Err(ErrorKind::InstanceNotFound(to.to_string()).into());
+                            return Err(ErrorKind::InstanceNotFound(
+                                "pipeline".to_string(),
+                                to.to_string(),
+                            )
+                            .into());
                         }
                     }
                     Some(ResourceType::Onramp) => {
                         if let Some(onramp) = system.reg.find_onramp(&to).await? {
                             ConnectTarget::Onramp(onramp)
                         } else {
-                            return Err(ErrorKind::InstanceNotFound(to.to_string()).into());
+                            return Err(ErrorKind::InstanceNotFound(
+                                "onramp".to_string(),
+                                to.to_string(),
+                            )
+                            .into());
                         }
                     }
                     Some(ResourceType::Connector) => {
                         if let Some(connector) = system.reg.find_connector(&to).await? {
                             ConnectTarget::Connector(connector)
                         } else {
-                            return Err(ErrorKind::InstanceNotFound(to.to_string()).into());
+                            return Err(ErrorKind::InstanceNotFound(
+                                "connector".to_string(),
+                                to.to_string(),
+                            )
+                            .into());
                         }
                     }
                     _ => {
@@ -545,14 +561,18 @@ impl Artefact for ConnectorArtefact {
                 if let Some(ResourceType::Pipeline) = pipeline.resource_type() {
                     match system.reg.find_pipeline(&pipeline).await {
                         Ok(Some(pipeline_addr)) => {
-                            msgs.push(connectors::Msg::Connect {
+                            msgs.push(connectors::Msg::Link {
                                 port: port.into(),
                                 pipelines: vec![(pipeline.clone(), pipeline_addr)],
                                 result_tx: tx.clone(),
                             });
                         }
                         Ok(None) => {
-                            return Err(ErrorKind::InstanceNotFound(pipeline.to_string()).into());
+                            return Err(ErrorKind::InstanceNotFound(
+                                "pipeline".to_string(),
+                                pipeline.to_string(),
+                            )
+                            .into());
                         }
                         Err(e) => {
                             return Err(e);
@@ -580,7 +600,7 @@ impl Artefact for ConnectorArtefact {
             }
             Ok(true)
         } else {
-            Err(ErrorKind::InstanceNotFound(id.to_string()).into())
+            Err(ErrorKind::InstanceNotFound("connector".to_string(), id.to_string()).into())
         }
     }
 
@@ -596,7 +616,7 @@ impl Artefact for ConnectorArtefact {
             let mut msgs = Vec::with_capacity(mappings.len());
             let (tx, rx) = bounded(mappings.len());
             for (port, pipeline_id) in mappings {
-                let msg = connectors::Msg::Disconnect {
+                let msg = connectors::Msg::Unlink {
                     port: port.into(),
                     id: pipeline_id,
                     tx: tx.clone(),
@@ -616,7 +636,7 @@ impl Artefact for ConnectorArtefact {
             }
             Ok(now_empty)
         } else {
-            Err(ErrorKind::InstanceNotFound(id.to_string()).into())
+            Err(ErrorKind::InstanceNotFound("connector".to_string(), id.to_string()).into())
         }
     }
 }
@@ -833,21 +853,8 @@ impl Artefact for Binding {
         _: &TremorUrl,
         _: HashMap<Self::LinkLHS, Self::LinkRHS>,
     ) -> Result<bool> {
-        // TODO Quiescence Protocol ( termination correctness checks )
-        //
-        // We should ensure any in-flight events in a pipeline are flushed
-        // to completion before unlinking *OR* unlink should should block/wait
-        // until the pipeline reaches quiescence before returning
-        //
-        // For now, we let this hang wet - May require an FSM
-        //
-        // For example, once shutdown has been signalled via on_signal
-        // we should follow through with a Quiesce signal, when all outputs
-        // have signalled Quiesce we are guaranteed ( ordering ) that the Quiesce
-        // signal has propagated through all branches in a pipeline. At this point
-        // we can latch a quiescence condition in the pipeline which unlink or other
-        // post-quiescence cleanup logic can hook off / block on etc...
-        //
+        // here we assume quiescence is done if the DRAIN mechanism was executed on all connectors as is
+        // implemented in the Binding instance logic in `Instance::stop()`.
         info!("Unlinking Binding {}", self.binding.id);
 
         let links = self.binding.links.clone();
@@ -900,15 +907,6 @@ impl Artefact for Binding {
             }
         }
 
-        for (from, tos) in &self.binding.links {
-            if let Some(ResourceType::Onramp) = from.resource_type() {
-                let mut mappings = HashMap::new();
-                for p in tos {
-                    mappings.insert(from.instance_port_required()?.to_string(), p.clone());
-                }
-                system.unlink_onramp(from, mappings).await?;
-            }
-        }
         // keep track of already handled pipelines, so we don't unlink twice and run into errors
         let mut unlinked = HashSet::with_capacity(self.binding.links.len());
         for (from, tos) in &self.binding.links {
@@ -921,23 +919,29 @@ impl Artefact for Binding {
                         let mut mappings = HashMap::new();
                         mappings.insert(from.instance_port_required()?.to_string(), to.clone());
                         system.unlink_pipeline(from, mappings).await?;
-                        if let Some(ResourceType::Offramp) = to.resource_type() {
-                            let mut mappings = HashMap::new();
-                            mappings.insert(to.clone(), from.clone());
-                            system.unlink_offramp(to, mappings).await?;
+                        match to.resource_type() {
+                            Some(ResourceType::Offramp) => {
+                                let mut mappings = HashMap::new();
+                                mappings.insert(to.clone(), from.clone());
+                                system.unlink_offramp(to, mappings).await?;
+                            }
+                            Some(ResourceType::Connector) => {
+                                let mut mappings = HashMap::new();
+                                mappings
+                                    .insert(to.instance_port_required()?.to_string(), from.clone());
+                                system.unlink_connector(to, mappings).await?;
+                            }
+                            Some(ResourceType::Onramp) => {
+                                let mut mappings = HashMap::new();
+                                mappings
+                                    .insert(to.instance_port_required()?.to_string(), from.clone());
+                                system.unlink_onramp(to, mappings).await?;
+                            }
+                            _ => {}
                         }
                     }
                     unlinked.insert(from_instance);
                 }
-            }
-        }
-        for (from, tos) in &self.binding.links {
-            if let Some(ResourceType::Offramp) = from.resource_type() {
-                let mut mappings = HashMap::new();
-                for to in tos {
-                    mappings.insert(from.clone(), to.clone());
-                }
-                system.unlink_offramp(from, mappings).await?;
             }
         }
 

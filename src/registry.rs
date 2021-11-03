@@ -42,7 +42,7 @@ use crate::repository::{
     Artefact, ArtefactId, BindingArtefact, ConnectorArtefact, OfframpArtefact, OnrampArtefact,
     PipelineArtefact,
 };
-use crate::url::TremorUrl;
+use crate::url::{ResourceType, TremorUrl};
 use crate::QSIZE;
 use async_std::channel::{bounded, Sender};
 use async_std::future::timeout;
@@ -73,14 +73,16 @@ where
     id: ServantId,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub(crate) struct Registry<A: Artefact> {
+    resource_type: ResourceType,
     map: HashMap<ServantId, InstanceLifecycleFsm<A>>,
 }
 
 impl<A: Artefact> Registry<A> {
-    pub fn new() -> Self {
+    pub fn new(resource_type: ResourceType) -> Self {
         Self {
+            resource_type,
             map: HashMap::new(),
         }
     }
@@ -121,8 +123,14 @@ impl<A: Artefact> Registry<A> {
     pub fn values(&self) -> Vec<A> {
         self.map.values().map(|v| v.artefact.clone()).collect()
     }
+
+    /// returns a list of all ids of all instances currently registered
+    pub fn servant_ids(&self) -> Vec<ServantId> {
+        self.map.values().map(|v| v.id.clone()).collect()
+    }
 }
 pub(crate) enum Msg<A: Artefact> {
+    ListServants(Sender<Vec<ServantId>>),
     SerializeServants(Sender<Vec<A>>),
     FindServant(Sender<Result<Option<A::SpawnResult>>>, ServantId),
     PublishServant(
@@ -145,6 +153,7 @@ where
         task::spawn::<_, Result<()>>(async move {
             loop {
                 match rx.recv().await? {
+                    Msg::ListServants(r) => r.send(self.servant_ids()).await?,
                     Msg::SerializeServants(r) => r.send(self.values()).await?,
                     Msg::FindServant(r, id) => {
                         r.send(
@@ -168,7 +177,11 @@ where
                         let id_str = id.to_string();
                         let res = match self.find_mut(id) {
                             Some(s) => s.transition(new_state).await.map(|s| s.state),
-                            None => Err(ErrorKind::InstanceNotFound(id_str).into()),
+                            None => Err(ErrorKind::InstanceNotFound(
+                                self.resource_type.to_string(),
+                                id_str,
+                            )
+                            .into()),
                         };
 
                         r.send(res).await?;
@@ -232,11 +245,11 @@ impl Registries {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            binding: Registry::new().start(),
-            pipeline: Registry::new().start(),
-            onramp: Registry::new().start(),
-            offramp: Registry::new().start(),
-            connector: Registry::new().start(),
+            binding: Registry::new(ResourceType::Binding).start(),
+            pipeline: Registry::new(ResourceType::Pipeline).start(),
+            onramp: Registry::new(ResourceType::Onramp).start(),
+            offramp: Registry::new(ResourceType::Offramp).start(),
+            connector: Registry::new(ResourceType::Connector).start(),
         }
     }
     /// serialize the mappings of this registry
@@ -321,21 +334,6 @@ impl Registries {
         InstanceState::Stopped
     );
 
-    /// Transitions a pipeline
-    ///
-    /// # Errors
-    ///  * if we can't transition a pipeline
-    pub async fn transition_pipeline(
-        &self,
-        id: &TremorUrl,
-        new_state: InstanceState,
-    ) -> Result<InstanceState> {
-        let (tx, rx) = bounded(1);
-        self.pipeline
-            .send(Msg::Transition(tx, id.clone(), new_state))
-            .await?;
-        rx.recv().await?
-    }
     /// Finds an onramp
     ///
     /// # Errors
@@ -508,19 +506,6 @@ impl Registries {
         InstanceState::Stopped
     );
 
-    #[cfg(test)]
-    pub async fn transition_connector(
-        &self,
-        id: &TremorUrl,
-        new_state: InstanceState,
-    ) -> Result<InstanceState> {
-        let (tx, rx) = bounded(1);
-        self.connector
-            .send(Msg::Transition(tx, id.clone(), new_state))
-            .await?;
-        rx.recv().await?
-    }
-
     /// Finds a binding
     ///
     /// # Errors
@@ -586,16 +571,29 @@ impl Registries {
         InstanceState::Stopped
     );
 
-    #[cfg(test)]
-    pub async fn transition_binding(
-        &self,
-        id: &TremorUrl,
-        new_state: InstanceState,
-    ) -> Result<InstanceState> {
+    /// stop all bindings in the binding registry
+    /// thereby starting the quiescence process
+    ///
+    /// # Errors
+    ///   * If we can't stop all bindings
+    pub async fn stop_all_bindings(&self) -> Result<()> {
         let (tx, rx) = bounded(1);
-        self.binding
-            .send(Msg::Transition(tx, id.clone(), new_state))
-            .await?;
-        wait(rx.recv()).await??
+        self.binding.send(Msg::ListServants(tx)).await?;
+        let ids = rx.recv().await?;
+        if !ids.is_empty() {
+            info!(
+                "Stopping Bindings: {}",
+                ids.iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            let res = futures::future::join_all(ids.iter().map(|id| self.stop_binding(id))).await;
+            for r in res {
+                r?;
+            }
+        }
+
+        Ok(())
     }
 }

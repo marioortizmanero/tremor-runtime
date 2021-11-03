@@ -32,8 +32,10 @@ pub struct Metronome {
 
 #[derive(Debug, Default)]
 pub(crate) struct Builder {}
+
+#[async_trait::async_trait]
 impl ConnectorBuilder for Builder {
-    fn from_config(
+    async fn from_config(
         &self,
         _id: &TremorUrl,
         raw_config: &Option<OpConfig>,
@@ -85,11 +87,7 @@ impl Source for Metronome {
 }
 #[async_trait::async_trait()]
 impl Connector for Metronome {
-    async fn connect(
-        &mut self,
-        _ctx: &ConnectorContext,
-        _notifier: super::reconnect::ConnectionLostNotifier,
-    ) -> Result<bool> {
+    async fn connect(&mut self, _ctx: &ConnectorContext, _attempt: &Attempt) -> Result<bool> {
         Ok(true)
     }
 

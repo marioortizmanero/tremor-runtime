@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// quality of service utilities
-pub(crate) mod qos;
-
 /// prelude with commonly needed stuff imported
 pub(crate) mod prelude;
 /// Sink part of a connector
@@ -28,24 +25,18 @@ pub(crate) mod reconnect;
 /// home for connector specific function
 pub(crate) mod functions;
 
-/// google cloud pubsub/storage/auth
-pub(crate) mod gcp;
 /// opentelemetry
 pub(crate) mod otel;
 /// protobuf helpers
 pub(crate) mod pb;
 
-/// tcp server connector impl
-pub(crate) mod tcp_server;
-
-/// std streams connector (stdout, stderr, stdin)
-pub(crate) mod std_streams;
-
 /// Home of the famous metrics collector
 pub(crate) mod metrics;
 
-/// Metronome
-pub(crate) mod metronome;
+/// quiescence stuff
+pub(crate) mod quiescence;
+
+pub mod plugins;
 
 use std::fmt::Display;
 
@@ -54,9 +45,13 @@ use beef::Cow;
 
 use crate::config::Connector as ConnectorConfig;
 use crate::connectors::metrics::{MetricsSinkReporter, SourceReporter};
-use crate::connectors::sink::{SinkAddr, SinkContext, SinkMsg};
-use crate::connectors::source::{SourceAddr, SourceContext, SourceMsg};
+use crate::connectors::sink::{RawSink_TO, SinkAddr, SinkContext, SinkMsg};
+use crate::connectors::source::{RawSource_TO, SourceAddr, SourceContext, SourceMsg};
 use crate::errors::{Error, ErrorKind, Result};
+use crate::pdk::{
+    MayPanic::{self, NoPanic},
+    RResult,
+};
 use crate::pipeline;
 use crate::system::World;
 use crate::url::ports::{ERR, IN, OUT};
@@ -64,10 +59,27 @@ use crate::url::TremorUrl;
 use crate::OpConfig;
 use async_std::channel::{bounded, Sender};
 use halfbrown::{Entry, HashMap};
-use reconnect::Reconnect;
 use tremor_common::ids::ConnectorIdGen;
+use tremor_value::Value;
+use value_trait::{Builder, Mutable};
 
 use self::metrics::MetricsSender;
+use self::quiescence::QuiescenceBeacon;
+use self::reconnect::{Attempt, ReconnectRuntime};
+
+use abi_stable::{
+    declare_root_module_statics,
+    library::RootModule,
+    package_version_strings,
+    sabi_types::VersionStrings,
+    std_types::{
+        RBox,
+        ROption::{self, RNone, RSome},
+        RResult::{RErr, ROk},
+        RStr, RString,
+    },
+    StableAbi,
+};
 
 /// sender for connector manager messages
 pub type ManagerSender = Sender<ManagerMsg>;
@@ -105,12 +117,20 @@ impl Addr {
         }
         Ok(())
     }
+
+    fn has_source(&self) -> bool {
+        self.source.is_some()
+    }
+
+    fn has_sink(&self) -> bool {
+        self.sink.is_some()
+    }
 }
 
 /// Messages a Connector instance receives and acts upon
 pub enum Msg {
     /// connect 1 or more pipelines to a port
-    Connect {
+    Link {
         /// port to which to connect
         port: Cow<'static, str>,
         /// pipelines to connect
@@ -119,7 +139,7 @@ pub enum Msg {
         result_tx: Sender<Result<()>>,
     },
     /// disconnect pipeline `id` from the given `port`
-    Disconnect {
+    Unlink {
         /// port from which to disconnect
         port: Cow<'static, str>,
         /// id of the pipeline to disconnect
@@ -142,6 +162,16 @@ pub enum Msg {
     Pause,
     /// resume the connector after a pause
     Resume,
+    /// Drain events from this connector
+    ///
+    /// - stop reading events from external connections
+    /// - decline events received via the sink part
+    /// - wait for drainage to be finished
+    Drain(async_std::channel::Sender<Result<()>>),
+    /// notify this connector that its source part has been drained
+    SourceDrained,
+    /// notify this connector that its sink part has been drained
+    SinkDrained,
     /// stop the connector
     Stop,
     /// request a status report
@@ -164,8 +194,10 @@ pub struct StatusReport {
 /// msg used for connector creation
 #[derive(Debug)]
 pub struct Create {
-    servant_id: TremorUrl,
-    config: ConnectorConfig,
+    /// instance id
+    pub servant_id: TremorUrl,
+    /// config
+    pub config: ConnectorConfig,
 }
 
 impl Create {
@@ -174,6 +206,31 @@ impl Create {
     pub fn new(servant_id: TremorUrl, config: ConnectorConfig) -> Self {
         Self { servant_id, config }
     }
+}
+
+/// Stream id generator
+#[derive(Debug, Default)]
+pub struct StreamIdGen(u64);
+
+impl StreamIdGen {
+    /// get the next stream id and increment the internal state
+    pub fn next_stream_id(&mut self) -> u64 {
+        let res = self.0;
+        self.0 = self.0.wrapping_add(1);
+        res
+    }
+}
+
+/// How should we treat a stream being done
+///
+/// * `StreamClosed` -> Only this stream is closed
+/// * `ConnectorClosed` -> The entire connector is closed, notify that we are disconnected, reconnect according to chosen reconnect config
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub enum StreamDone {
+    /// Only this stream is closed, (only one of many)
+    StreamClosed,
+    /// With this stream being closed, the whole connector can be considered done/closed
+    ConnectorClosed,
 }
 
 /// msg for the `ConnectorManager` handling all connectors
@@ -239,7 +296,8 @@ impl Manager {
                         let connector = if let Some((builder, _)) =
                             known_connectors.get(&create.config.binding_type)
                         {
-                            let connector_res = builder.from_config(&url, &create.config.config);
+                            let connector_res =
+                                builder.from_config(&url, &create.config.config).await;
                             match connector_res {
                                 Ok(connector) => connector,
                                 Err(e) => {
@@ -339,7 +397,7 @@ impl Manager {
         &self,
         addr_tx: Sender<Result<Addr>>,
         url: TremorUrl,
-        mut connector: Box<dyn Connector>,
+        mut connector: Connector,
         config: ConnectorConfig,
         uid: u64,
     ) -> Result<()> {
@@ -347,6 +405,7 @@ impl Manager {
         let (msg_tx, msg_rx) = bounded(self.qsize);
 
         let mut connectivity = Connectivity::Disconnected;
+        let mut quiescence_beacon = QuiescenceBeacon::default();
 
         let source_metrics_reporter = SourceReporter::new(
             url.clone(),
@@ -354,7 +413,7 @@ impl Manager {
             config.metrics_interval_s,
         );
 
-        let default_codec = connector.default_codec();
+        let default_codec = connector.default_codec().into();
         let source_builder = source::builder(
             uid,
             &config,
@@ -365,6 +424,7 @@ impl Manager {
         let source_ctx = SourceContext {
             uid,
             url: url.clone(),
+            quiescence_beacon: quiescence_beacon.clone(),
         };
 
         let sink_metrics_reporter = MetricsSinkReporter::new(
@@ -384,11 +444,6 @@ impl Manager {
         // create sink instance
         let sink = connector.create_sink(sink_ctx, sink_builder).await?;
 
-        let ctx = ConnectorContext {
-            uid,
-            url: url.clone(),
-        };
-
         let addr = Addr {
             uid,
             url: url.clone(),
@@ -397,20 +452,30 @@ impl Manager {
             sink,
         };
 
-        let mut reconnect: Reconnect = Reconnect::new(&addr, config.reconnect);
+        let mut reconnect: ReconnectRuntime = ReconnectRuntime::new(&addr, &config.reconnect);
+        let notifier = reconnect.notifier();
+
+        let ctx = ConnectorContext {
+            uid,
+            url: url.clone(),
+            type_name: config.binding_type.clone(),
+            quiescence_beacon: quiescence_beacon.clone(),
+            notifier: notifier.clone(),
+        };
+
         let send_addr = addr.clone();
         let mut connector_state = ConnectorState::Initialized;
-
+        let mut drainage = None;
         // TODO: add connector metrics reporter (e.g. for reconnect attempts, cb's received, uptime, etc.)
         task::spawn::<_, Result<()>>(async move {
             // typical 1 pipeline connected to IN, OUT, ERR
             let mut pipelines: HashMap<Cow<'static, str>, Vec<(TremorUrl, pipeline::Addr)>> =
                 HashMap::with_capacity(3);
-
             // connector control plane loop
             while let Ok(msg) = msg_rx.recv().await {
                 match msg {
                     Msg::Report(tx) => {
+                        // request a status report from this connector
                         let pipes: HashMap<Cow<'static, str>, Vec<TremorUrl>> = pipelines
                             .iter()
                             .map(|(port, connected)| {
@@ -436,7 +501,7 @@ impl Manager {
                             error!("[Connector::{}] Error sending status report {}.", &url, e);
                         }
                     }
-                    Msg::Connect {
+                    Msg::Link {
                         port,
                         pipelines: mut mapping,
                         result_tx,
@@ -476,7 +541,7 @@ impl Manager {
                             match addr.source.as_ref() {
                                 Some(source) => source
                                     .addr
-                                    .send(SourceMsg::Connect {
+                                    .send(SourceMsg::Link {
                                         port,
                                         pipelines: mapping,
                                     })
@@ -498,13 +563,12 @@ impl Manager {
                                     .into(),
                             )
                         };
-                        // TODO: only send result after sink/source have finished connecting?
                         // send back the connect result
                         if let Err(e) = result_tx.send(res).await {
                             error!("Error sending connect result: {}", e);
                         }
                     }
-                    Msg::Disconnect { port, id, tx } => {
+                    Msg::Unlink { port, id, tx } => {
                         let delete = pipelines.get_mut(&port).map_or(false, |port_pipes| {
                             port_pipes.retain(|(url, _)| url != &id);
                             port_pipes.is_empty()
@@ -518,7 +582,7 @@ impl Manager {
                             match addr.source.as_ref() {
                                 Some(source) => source
                                     .addr
-                                    .send(SourceMsg::Disconnect { port, id })
+                                    .send(SourceMsg::Unlink { port, id })
                                     .await
                                     .map_err(Error::from),
                                 None => Err(ErrorKind::InvalidDisconnect(
@@ -548,8 +612,9 @@ impl Manager {
                         tx.send(res.map(|_| pipelines.is_empty())).await?;
                     }
                     Msg::ConnectionLost => {
+                        // FIXME: we don't always want to reconnect - add a flag that determines if a reconnect is appropriate
                         // react on the connection being lost
-                        // immediately try to reconnect.
+                        // immediately try to reconnect if we are not in draining state.
                         //
                         // TODO: this might lead to very fast retry loops if the connection is established as connector.connect returns successful
                         //       but in the next instant fails and sends this message.
@@ -558,13 +623,16 @@ impl Manager {
                         addr.send_sink(SinkMsg::ConnectionLost).await?;
                         addr.send_source(SourceMsg::ConnectionLost).await?;
 
-                        // reconnect
-                        addr.sender.send(Msg::Reconnect).await?;
+                        // reconnect if running - wait with reconnect if paused (until resume)
+                        if connector_state == ConnectorState::Running {
+                            info!("[Connector::{}] Triggering reconnect.", &addr.url);
+                            addr.sender.send(Msg::Reconnect).await?;
+                        }
                     }
                     Msg::Reconnect => {
                         // reconnect if we are below max_retries, otherwise bail out and fail the connector
                         info!("[Connector::{}] Connecting...", &addr.url);
-                        let new = reconnect.attempt(connector.as_mut(), &ctx).await?;
+                        let new = reconnect.attempt(&mut connector, &ctx).await?;
                         match (&connectivity, &new) {
                             (Connectivity::Disconnected, Connectivity::Connected) => {
                                 info!("[Connector::{}] Connected.", &addr.url);
@@ -634,12 +702,19 @@ impl Manager {
                     }
                     Msg::Resume if connector_state == ConnectorState::Paused => {
                         info!("[Connector::{}] Resuming...", &addr.url);
-                        // TODO: resume
                         connector.on_resume(&ctx).await;
                         connector_state = ConnectorState::Running;
 
                         addr.send_source(SourceMsg::Resume).await?;
                         addr.send_sink(SinkMsg::Resume).await?;
+
+                        if connectivity == Connectivity::Disconnected {
+                            info!(
+                                "[Connector::{}] Triggering reconnect as part of resume.",
+                                &addr.url
+                            );
+                            addr.send(Msg::Reconnect).await?;
+                        }
 
                         info!("[Connector::{}] Resumed.", &addr.url);
                     }
@@ -649,9 +724,78 @@ impl Manager {
                             &addr.url, &connector_state
                         );
                     }
+                    Msg::Drain(_) if connector_state == ConnectorState::Draining => {
+                        info!(
+                            "[Connector::{}] Ignoring Drain Msg. Current state: {:?}",
+                            &addr.url, &connector_state
+                        );
+                    }
+                    Msg::Drain(tx) => {
+                        info!("[Connector::{}] Draining...", &addr.url);
+
+                        // notify connector that it should stop reading - so no more new events arrive at its source part
+                        quiescence_beacon.stop_reading();
+                        // FIXME: add stop_writing()
+                        // let connector stop emitting anything to its source part - if possible here
+                        connector.on_drain(&ctx).await;
+                        connector_state = ConnectorState::Draining;
+
+                        // notify source to drain the source channel and then send the drain signal
+                        if let Some(source) = addr.source.as_ref() {
+                            source
+                                .addr
+                                .send(SourceMsg::Drain(addr.sender.clone()))
+                                .await?;
+                        } else {
+                            // proceed to the next step
+                            addr.send(Msg::SourceDrained).await?;
+                        }
+
+                        let d = Drainage::new(&addr, tx);
+                        if d.all_drained() {
+                            if let Err(e) = d.send_all_drained().await {
+                                error!(
+                                    "[Connector::{}] error signalling being fully drained: {}",
+                                    &addr.url, e
+                                );
+                            }
+                        }
+                        drainage = Some(d);
+                    }
+                    Msg::SourceDrained => {
+                        if let Some(drainage) = drainage.as_mut() {
+                            drainage.set_source_drained();
+                            if drainage.all_drained() {
+                                if let Err(e) = drainage.send_all_drained().await {
+                                    error!(
+                                        "[Connector::{}] Error signalling being fully drained: {}",
+                                        &addr.url, e
+                                    );
+                                }
+                            } else {
+                                // notify sink to go into DRAIN state
+                                // flush all events until we received a drain signal from all inputs
+                                if let Some(sink) = addr.sink.as_ref() {
+                                    sink.addr.send(SinkMsg::Drain(addr.sender.clone())).await?;
+                                }
+                            }
+                        }
+                    }
+                    Msg::SinkDrained => {
+                        if let Some(drainage) = drainage.as_mut() {
+                            drainage.set_sink_drained();
+                            if drainage.all_drained() {
+                                if let Err(e) = drainage.send_all_drained().await {
+                                    error!(
+                                        "[Connector::{}] Error signalling being fully drained: {}",
+                                        &addr.url, e
+                                    );
+                                }
+                            }
+                        }
+                    }
                     Msg::Stop => {
                         info!("[Connector::{}] Stopping...", &addr.url);
-                        // TODO: stop
                         connector.on_stop(&ctx).await;
                         connector_state = ConnectorState::Stopped;
 
@@ -662,8 +806,6 @@ impl Manager {
                         break;
                     }
                 } // match
-
-                // TODO: react on connector state changes
             } // while
             info!(
                 "[Connector::{}] Connector Stopped. Reason: {:?}",
@@ -677,8 +819,58 @@ impl Manager {
     }
 }
 
+#[derive(Debug, PartialEq)]
+enum DrainState {
+    None,
+    Expect,
+    Drained,
+}
+
+struct Drainage {
+    tx: Sender<Result<()>>,
+    source_drained: DrainState,
+    sink_drained: DrainState,
+}
+
+impl Drainage {
+    fn new(addr: &Addr, tx: Sender<Result<()>>) -> Self {
+        Self {
+            tx,
+            source_drained: if addr.has_source() {
+                DrainState::Expect
+            } else {
+                DrainState::None
+            },
+            sink_drained: if addr.has_sink() {
+                DrainState::Expect
+            } else {
+                DrainState::None
+            },
+        }
+    }
+
+    fn set_sink_drained(&mut self) {
+        self.sink_drained = DrainState::Drained;
+    }
+
+    fn set_source_drained(&mut self) {
+        self.source_drained = DrainState::Drained;
+    }
+
+    fn all_drained(&self) -> bool {
+        // None and Drained are valid here
+        self.source_drained != DrainState::Expect && self.sink_drained != DrainState::Expect
+    }
+
+    async fn send_all_drained(&self) -> Result<()> {
+        self.tx.send(Ok(())).await?;
+        Ok(())
+    }
+}
+
 /// state of a connector
-#[derive(Debug, PartialEq, Serialize, Deserialize, Copy, Clone)]
+#[repr(C)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Copy, Clone, StableAbi)]
 #[serde(rename_all = "lowercase")]
 pub enum ConnectorState {
     /// connector has been initialized, but not yet started
@@ -689,6 +881,8 @@ pub enum ConnectorState {
     Paused,
     /// connector was stopped
     Stopped,
+    /// Draining - getting rid of in-flight events and avoid emitting new ones
+    Draining,
     /// connector failed to start
     Failed,
 }
@@ -700,21 +894,43 @@ impl Display for ConnectorState {
             Self::Running => "running",
             Self::Paused => "paused",
             Self::Stopped => "stopped",
+            Self::Draining => "draining",
             Self::Failed => "failed",
         })
     }
 }
 
 /// connector context
+#[repr(C)]
+#[derive(Clone, StableAbi)]
 pub struct ConnectorContext {
     /// unique identifier
     pub uid: u64,
     /// url of the connector
     pub url: TremorUrl,
+    /// type name of the connector
+    pub type_name: String,
+    /// The Quiescence Beacon
+    pub quiescence_beacon: QuiescenceBeacon,
+    /// Notifier
+    pub notifier: reconnect::ConnectionLostNotifier,
+}
+
+impl ConnectorContext {
+    /// enclose the given meta in the right connector namespace
+    ///
+    /// Namespace: "connector.<connector-type>"
+    pub fn meta(&self, inner: Value<'static>) -> Value<'static> {
+        let mut map = Value::object_with_capacity(1);
+        let mut type_map = Value::object_with_capacity(1);
+        type_map.try_insert(self.type_name.clone(), inner);
+        map.try_insert("connector", type_map);
+        map
+    }
 }
 
 /// describes connectivity state of the connector
-#[derive(Debug, Serialize, Copy, Clone)]
+#[derive(Debug, Serialize, Copy, Clone, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum Connectivity {
     /// connector is connected
@@ -735,30 +951,31 @@ pub enum Connectivity {
 /// It is a meta entity on top of the sink and source part.
 /// The connector has its own control plane and is an artefact in the tremor repository.
 /// It controls the sink and source parts which are connected to the rest of the runtime via links to pipelines.
-#[async_trait::async_trait]
-pub trait Connector: Send {
+///
+/// This trait specifically is the low-level connector interface used for the
+/// plugin system. The `Connector` type wraps it up for ease of use.
+#[abi_stable::sabi_trait]
+pub trait RawConnector: Send {
     /// create a source part for this connector if applicable
     ///
     /// This function is called exactly once upon connector creation.
     /// If this connector does not act as a source, return `Ok(None)`.
-    async fn create_source(
+    fn create_source(
         &mut self,
         _source_context: SourceContext,
-        _builder: source::SourceManagerBuilder,
-    ) -> Result<Option<source::SourceAddr>> {
-        Ok(None)
+    ) -> MayPanic<RResult<ROption<RawSource_TO<'static, RBox<()>>>>> {
+        NoPanic(ROk(RNone))
     }
 
     /// Create a sink part for this connector if applicable
     ///
     /// This function is called exactly once upon connector creation.
     /// If this connector does not act as a sink, return `Ok(None)`.
-    async fn create_sink(
+    fn create_sink(
         &mut self,
         _sink_context: SinkContext,
-        _builder: sink::SinkManagerBuilder,
-    ) -> Result<Option<sink::SinkAddr>> {
-        Ok(None)
+    ) -> MayPanic<RResult<ROption<RawSink_TO<'static, RBox<()>>>>> {
+        NoPanic(ROk(RNone))
     }
 
     /// Attempt to connect to the outside world.
@@ -768,34 +985,126 @@ pub trait Connector: Send {
     /// To notify the runtime of the main connectivity being lost, a `notifier` is passed in.
     /// Call `notifier.notify().await` as the last thing when you notice the connection is lost.
     /// This is well suited when handling the connection in another task.
-    async fn connect(
-        &mut self,
-        ctx: &ConnectorContext,
-        notifier: reconnect::ConnectionLostNotifier,
-    ) -> Result<bool>;
+    ///
+    /// The attempt is the number of the connection attempt, the number this method has been called on this connector.
+    /// The very first attempt to establish a connection will be `0`.
+    /// All further attempts will be
+    ///
+    /// To know when to stop reading new data from the external connection, the `quiescence` beacon
+    /// can be used. Call `.reading()` and `.writing()` to see if you should continue doing so, if not, just stop and rest.
+    fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> MayPanic<RResult<bool>>;
 
     /// called once when the connector is started
     /// `connect` will be called after this for the first time, leave connection attempts in `connect`.
-    async fn on_start(&mut self, ctx: &ConnectorContext) -> Result<ConnectorState>;
+    fn on_start(&mut self, _ctx: &ConnectorContext) -> MayPanic<RResult<ConnectorState>> {
+        NoPanic(ROk(ConnectorState::Running))
+    }
 
     /// called when the connector pauses
-    async fn on_pause(&mut self, _ctx: &ConnectorContext) {}
+    fn on_pause(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {
+        NoPanic(())
+    }
     /// called when the connector resumes
-    async fn on_resume(&mut self, _ctx: &ConnectorContext) {}
+    fn on_resume(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {
+        NoPanic(())
+    }
+
+    /// Drain
+    ///
+    /// Ensure no new events arrive at the source part of this connector when this function returns
+    /// So we can safely send the `Drain` signal.
+    fn on_drain(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {
+        NoPanic(())
+    }
+
     /// called when the connector is stopped
-    async fn on_stop(&mut self, _ctx: &ConnectorContext) {}
+    fn on_stop(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {
+        NoPanic(())
+    }
 
     /// returns the default codec for this connector
-    fn default_codec(&self) -> &str;
+    // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
+    // otherwise, rather than a function?
+    fn default_codec<'a>(&'a self) -> RStr<'a>;
+}
+
+// The higher level connector interface, which wraps the raw connector from the
+// plugin.
+pub struct Connector(pub RawConnector_TO<'static, RBox<()>>);
+impl Connector {
+    #[inline]
+    pub async fn create_source(
+        &mut self,
+        source_context: SourceContext,
+        builder: source::SourceManagerBuilder,
+    ) -> Result<Option<source::SourceAddr>> {
+        match self.0.create_source(source_context.clone()).unwrap() {
+            ROk(RSome(raw_source)) => builder.spawn(raw_source, source_context).map(Some),
+            ROk(RNone) => Ok(None),
+            RErr(err) => Err(err.into()),
+        }
+    }
+
+    #[inline]
+    pub async fn create_sink(
+        &mut self,
+        sink_context: SinkContext,
+        builder: sink::SinkManagerBuilder,
+    ) -> Result<Option<sink::SinkAddr>> {
+        match self.0.create_sink(sink_context.clone()).unwrap() {
+            ROk(RSome(raw_sink)) => builder.spawn(raw_sink, sink_context).map(Some),
+            ROk(RNone) => Ok(None),
+            RErr(err) => Err(err.into()),
+        }
+    }
+
+    #[inline]
+    pub async fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> Result<bool> {
+        self.0
+            .connect(ctx, attempt)
+            .unwrap()
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
+    }
+
+    #[inline]
+    pub async fn on_start(&mut self, ctx: &ConnectorContext) -> Result<ConnectorState> {
+        self.0
+            .on_start(ctx)
+            .unwrap()
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
+    }
+
+    #[inline]
+    pub async fn on_pause(&mut self, ctx: &ConnectorContext) {
+        self.0.on_pause(ctx).unwrap()
+    }
+
+    #[inline]
+    pub async fn on_resume(&mut self, ctx: &ConnectorContext) {
+        self.0.on_resume(ctx).unwrap()
+    }
+
+    #[inline]
+    pub async fn on_stop(&mut self, ctx: &ConnectorContext) {
+        self.0.on_stop(ctx).unwrap()
+    }
+
+    #[inline]
+    pub fn default_codec(&self) -> &str {
+        self.0.default_codec().into()
+    }
 }
 
 /// something that is able to create a connector instance
+#[async_trait::async_trait]
 pub trait ConnectorBuilder: Sync + Send {
     /// create a connector from the given `id` and `config`
     ///
     /// # Errors
     ///  * If the config is invalid for the connector
-    fn from_config(&self, id: &TremorUrl, config: &Option<OpConfig>) -> Result<Box<dyn Connector>>;
+    async fn from_config(&self, id: &TremorUrl, config: &ROption<OpConfig>) -> RResult<Connector>;
 }
 
 /// registering builtin connector types
@@ -804,14 +1113,6 @@ pub trait ConnectorBuilder: Sync + Send {
 ///  * If a builtin connector couldn't be registered
 #[cfg(not(tarpaulin_include))]
 pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
-    world
-        .register_builtin_connector_type("metrics", Box::new(metrics::Builder::default()))
-        .await?;
-    world
-        .register_builtin_connector_type("tcp_server", Box::new(tcp_server::Builder::default()))
-        .await?;
-    world
-        .register_builtin_connector_type("std_stream", Box::new(std_streams::Builder::default()))
-        .await?;
+    // TODO: load plugins dynamically
     Ok(())
 }
