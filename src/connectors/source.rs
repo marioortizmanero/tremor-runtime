@@ -467,10 +467,7 @@ impl SourceManagerBuilder {
         self.qsize
     }
 
-    pub fn spawn<S>(self, source: S, ctx: SourceContext) -> Result<SourceAddr>
-    where
-        S: Source + Send + 'static,
-    {
+    pub fn spawn<S>(self, source: Source, ctx: SourceContext) -> Result<SourceAddr> {
         let qsize = self.qsize;
         let name = ctx.url.short_id("c-src"); // connector source
         let (source_tx, source_rx) = bounded(qsize);
@@ -620,11 +617,8 @@ impl SourceState {
 
 /// entity driving the source task
 /// and keeping the source state around
-pub(crate) struct SourceManager<S>
-where
-    S: Source,
-{
-    source: S,
+pub(crate) struct SourceManager {
+    source: Source,
     ctx: SourceContext,
     rx: Receiver<SourceMsg>,
     addr: SourceAddr,
@@ -641,12 +635,9 @@ where
     expected_drained: usize,
 }
 
-impl<S> SourceManager<S>
-where
-    S: Source,
-{
+impl SourceManager {
     fn new(
-        source: S,
+        source: Source,
         ctx: SourceContext,
         builder: SourceManagerBuilder,
         rx: Receiver<SourceMsg>,
