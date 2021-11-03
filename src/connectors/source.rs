@@ -57,7 +57,7 @@ use tremor_pipeline::{
 };
 use tremor_value::{literal, pdk::Value as PdkValue, Value};
 use value_trait::Builder;
-use abi_stable::rvec;
+use abi_stable::{StableAbi, rvec};
 
 use super::metrics::SourceReporter;
 use super::quiescence::BoxedQuiescenceBeacon;
