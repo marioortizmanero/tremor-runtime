@@ -167,6 +167,9 @@ pub enum AsyncSinkReply {
     CB(ContraflowData, CbAction),
 }
 
+/// Alias for the FFI-safe dynamic sink type
+pub type BoxedRawSink = RawSink_TO<'static, RBox<()>>;
+
 /// connector sink - receiving events
 #[abi_stable::sabi_trait]
 pub trait RawSink: Send {
@@ -250,7 +253,7 @@ pub trait RawSink: Send {
 
 // Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
 // types so that it's easier to use with `std`.
-pub struct Sink(pub RawSink_TO<'static, RBox<()>>);
+pub struct Sink(pub BoxedRawSink);
 impl Sink {
     #[inline]
     pub async fn on_event(
