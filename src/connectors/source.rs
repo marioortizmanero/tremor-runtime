@@ -137,6 +137,9 @@ pub enum SourceReply {
 // sender for source reply
 pub type SourceReplySender = Sender<SourceReply>;
 
+/// Alias for the FFI-safe dynamic source type
+pub type BoxedRawSource = RawSource_TO<'static, RBox<()>>;
+
 /// source part of a connector
 #[abi_stable::sabi_trait]
 pub trait RawSource: Send {
@@ -245,7 +248,7 @@ pub trait RawSource: Send {
 /// Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
 /// types so that it's easier to use with `std`. This may be removed in the
 /// future for performance reasons.
-pub struct Source(pub RawSource_TO<'static, RBox<()>>);
+pub struct Source(pub BoxedRawSource);
 impl Source {
     #[inline]
     pub async fn pull_data(&mut self, pull_id: u64, ctx: &SourceContext) -> Result<SourceReply> {

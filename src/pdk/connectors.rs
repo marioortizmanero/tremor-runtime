@@ -2,7 +2,7 @@
 //! TODO: move into a separate crate along  with the `RawConnector` trait and
 //! similars.
 
-use crate::connectors::RawConnector_TO;
+use crate::connectors::BoxedRawConnector;
 
 use abi_stable::{
     declare_root_module_statics, library::RootModule, package_version_strings,
@@ -13,7 +13,7 @@ use abi_stable::{
 #[derive(StableAbi)]
 #[sabi(kind(Prefix))]
 pub struct ConnectorMod {
-    pub new: extern "C" fn() -> RawConnector_TO<'static, RBox<()>>,
+    pub new: extern "C" fn() -> BoxedRawConnector,
 }
 
 // Marking `MinMod` as the main module in this plugin. Note that `MinMod_Ref` is
