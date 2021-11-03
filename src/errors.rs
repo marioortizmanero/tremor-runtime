@@ -114,6 +114,7 @@ error_chain! {
         MsgPackEncoderError(rmp_serde::encode::Error);
         ParseIntError(std::num::ParseIntError);
         ParseFloatError(std::num::ParseFloatError);
+        PluginError(abi_stable::std_types::RBoxError);
         RegexError(regex::Error);
         SinkDequeueError(async_sink::SinkDequeueError);
         SinkEnqueueError(async_sink::SinkEnqueueError);
@@ -126,7 +127,6 @@ error_chain! {
         Utf8Error(std::str::Utf8Error);
         YamlError(serde_yaml::Error) #[doc = "Error during yaml parsing"];
         Wal(qwal::Error);
-        // TODO: plugin error?
     }
 
     errors {
