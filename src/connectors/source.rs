@@ -154,8 +154,8 @@ pub trait RawSource: Send {
     /// Pulls custom metrics from the source
     // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
     // otherwise, rather than a function?
-    fn metrics(&mut self, _timestamp: u64) -> RVec<EventPayload> {
-        rvec![]
+    fn metrics(&mut self, _timestamp: u64) -> MayPanic<RVec<EventPayload>> {
+        NoPanic(rvec![])
     }
 
     ///////////////////////////
@@ -404,25 +404,6 @@ impl ChannelSourceRuntime {
                 };
             }
         });
-    }
-}
-
-#[async_trait::async_trait()]
-impl Source for ChannelSource {
-    async fn pull_data(&mut self, _pull_id: u64, _ctx: &SourceContext) -> Result<SourceReply> {
-        match self.rx.try_recv() {
-            Ok(reply) => Ok(reply),
-            Err(TryRecvError::Empty) => {
-                // TODO: configure pull interval in connector config?
-                Ok(SourceReply::Empty(DEFAULT_POLL_INTERVAL))
-            }
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    /// this source is not handling acks/fails
-    fn is_transactional(&self) -> bool {
-        false
     }
 }
 
