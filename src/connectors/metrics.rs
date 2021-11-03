@@ -81,7 +81,7 @@ pub struct SourceReporter {
     metrics_out: u64,
     metrics_err: u64,
     tx: Sender<Msg>,
-    flush_interval_ns: ROption<u64>,
+    flush_interval_ns: Option<u64>,
     last_flush_ns: u64,
 }
 

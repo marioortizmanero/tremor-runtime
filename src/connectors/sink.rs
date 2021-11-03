@@ -317,8 +317,6 @@ pub struct SinkAddr {
     pub addr: Sender<SinkMsg>,
 }
 
-#[repr(C)]
-#[derive(StableAbi)]
 pub struct SinkManagerBuilder {
     qsize: usize,
     serializer: EventSerializer,

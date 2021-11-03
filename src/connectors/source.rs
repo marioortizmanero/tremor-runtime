@@ -28,6 +28,7 @@ use crate::config::{Codec as CodecConfig, Connector as ConnectorConfig};
 use crate::connectors::Msg;
 use crate::errors::{Error, Result};
 use crate::pdk::{
+    self,
     panic::MayPanic::{self, NoPanic},
     RResult,
 };
@@ -99,7 +100,7 @@ pub enum SourceReply {
         /// the data
         data: RVec<u8>,
         /// metadata associated with this data
-        meta: ROption<Value<'static>>,
+        meta: ROption<pdk::Value<'static>>,
         /// stream id of the data
         stream: u64,
     },
@@ -113,7 +114,7 @@ pub enum SourceReply {
     // for when the source knows where boundaries are, maybe because it receives chunks already
     BatchData {
         origin_uri: EventOriginUri,
-        batch_data: RVec<Tuple2<RVec<u8>, ROption<Value<'static>>>>,
+        batch_data: RVec<Tuple2<RVec<u8>, ROption<pdk::Value<'static>>>>,
         stream: u64,
     },
     /// A stream is opened
@@ -396,8 +397,6 @@ pub struct SourceAddr {
 }
 
 #[allow(clippy::module_name_repetitions)]
-#[repr(C)]
-#[derive(StableAbi)]
 pub struct SourceManagerBuilder {
     qsize: usize,
     streams: Streams,
