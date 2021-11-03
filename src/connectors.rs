@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// quality of service utilities
-pub(crate) mod qos;
-
 /// prelude with commonly needed stuff imported
 pub(crate) mod prelude;
 /// Sink part of a connector
@@ -28,51 +25,19 @@ pub(crate) mod reconnect;
 /// home for connector specific function
 pub(crate) mod functions;
 
-/// google cloud pubsub/storage/auth
-pub(crate) mod gcp;
 /// opentelemetry
 pub(crate) mod otel;
 /// protobuf helpers
 pub(crate) mod pb;
 
-/// file connector implementation
-pub mod file;
-
-/// tcp server and client connector impls
-pub(crate) mod tcp;
-
-/// udp server connector impl
-pub(crate) mod udp_server;
-
-/// udp server connector impl
-pub(crate) mod udp_client;
-
-/// std streams connector (stdout, stderr, stdin)
-pub(crate) mod stdio;
-
 /// Home of the famous metrics collector
 pub(crate) mod metrics;
-
-/// Metronome
-pub(crate) mod metronome;
-
-/// Exit Connector
-pub(crate) mod exit;
-
-/// KV
-pub(crate) mod kv;
-
-/// Write Ahead Log
-pub(crate) mod wal;
 
 /// connector for checking guaranteed delivery and circuit breaker logic
 //pub(crate) mod cb;
 
 /// quiescence stuff
 pub(crate) mod quiescence;
-
-/// collection of TLS utilities and configs
-pub(crate) mod tls;
 
 use std::fmt::Display;
 
@@ -425,7 +390,7 @@ impl Manager {
         &self,
         addr_tx: Sender<Result<Addr>>,
         url: TremorUrl,
-        mut connector: Box<dyn Connector>,
+        mut connector: Box<Connector>,
         config: ConnectorConfig,
         uid: u64,
     ) -> Result<()> {
@@ -1213,7 +1178,7 @@ pub trait ConnectorBuilder: Sync + Send {
         &self,
         id: &TremorUrl,
         config: &Option<OpConfig>,
-    ) -> Result<Box<dyn Connector>>;
+    ) -> Result<Box<Connector>>;
 }
 
 /// registering builtin connector types
@@ -1222,5 +1187,6 @@ pub trait ConnectorBuilder: Sync + Send {
 ///  * If a builtin connector couldn't be registered
 #[cfg(not(tarpaulin_include))]
 pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
+    // TODO load dynamically
     Ok(())
 }
