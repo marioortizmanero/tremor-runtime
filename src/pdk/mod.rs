@@ -2,8 +2,6 @@ pub mod connectors;
 mod panic;
 mod value;
 
-use crate::errors::Error;
-
 use abi_stable::std_types::RBoxError;
 
 pub use panic::MayPanic;
