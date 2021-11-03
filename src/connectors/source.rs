@@ -178,8 +178,8 @@ pub trait RawSource: Send {
     /// Pulls custom metrics from the source
     // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
     // otherwise, rather than a function?
-    fn metrics(&mut self, _timestamp: u64) -> RVec<EventPayload> {
-        rvec![]
+    fn metrics(&mut self, _timestamp: u64) -> MayPanic<RVec<EventPayload>> {
+        NoPanic(rvec![])
     }
 
     ///////////////////////////

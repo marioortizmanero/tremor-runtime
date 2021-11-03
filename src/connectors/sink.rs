@@ -254,14 +254,15 @@ pub trait RawSink: Send {
 // types so that it's easier to use with `std`.
 pub struct Sink(pub RawSink_TO<'static, RBox<()>>);
 impl Sink {
-    fn on_event(
+    #[inline]
+    pub async fn on_event(
         &mut self,
         input: RStr<'_>,
         event: PdkEvent,
         ctx: &SinkContext,
         serializer: MutEventSerializer,
         start: u64,
-    ) -> RResult<SinkReply> {
+    ) -> Result<SinkReply> {
         self.0
             .on_event(input.into(), event, ctx, serializer, start)
             .unwrap()
@@ -269,12 +270,13 @@ impl Sink {
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
-    fn on_signal(
+    #[inline]
+    pub async fn on_signal(
         &mut self,
         signal: Event,
         ctx: &SinkContext,
         serializer: &mut EventSerializer,
-    ) -> RResult<SinkReply> {
+    ) -> Result<SinkReply> {
         self.0
             .on_signal(signal, ctx, serializer)
             .unwrap()
@@ -283,34 +285,43 @@ impl Sink {
             .into() // RResult -> Result
     }
 
-    fn metrics(&mut self, timestamp: u64) -> RVec<EventPayload> {
+    #[inline]
+    pub fn metrics(&mut self, timestamp: u64) -> Vec<EventPayload> {
         self.0.metrics(timestamp).unwrap().into()
     }
 
-    fn on_start(&mut self, ctx: &mut SinkContext) -> MayPanic<()> {
-        NoPanic(())
+    #[inline]
+    pub async fn on_start(&mut self, ctx: &mut SinkContext) {
+        self.0.on_start(ctx).unwrap()
     }
-    fn on_pause(&mut self, ctx: &mut SinkContext) -> MayPanic<()> {
-        NoPanic(())
+    #[inline]
+    pub async fn on_pause(&mut self, ctx: &mut SinkContext) {
+        self.0.on_pause(ctx).unwrap()
     }
-    fn on_resume(&mut self, ctx: &mut SinkContext) -> MayPanic<()> {
-        NoPanic(())
+    #[inline]
+    pub async fn on_resume(&mut self, ctx: &mut SinkContext) {
+        self.0.on_resume(ctx).unwrap()
     }
-    fn on_stop(&mut self, ctx: &mut SinkContext) -> MayPanic<()> {
-        NoPanic(())
-    }
-
-    fn on_connection_lost(&mut self, ctx: &mut SinkContext) -> MayPanic<()> {
-        NoPanic(())
-    }
-    fn on_connection_established(&mut self, ctx: &mut SinkContext) -> MayPanic<()> {
-        NoPanic(())
+    #[inline]
+    pub async fn on_stop(&mut self, ctx: &mut SinkContext) {
+        self.0.on_stop(ctx).unwrap()
     }
 
+    #[inline]
+    pub async fn on_connection_lost(&mut self, ctx: &mut SinkContext) {
+        self.0.on_connection_lost(ctx).unwrap()
+    }
+    #[inline]
+    pub async fn on_connection_established(&mut self, ctx: &mut SinkContext) {
+        self.0.on_connection_established(ctx).unwrap()
+    }
+
+    #[inline]
     pub fn auto_ack(&self) -> bool {
         self.0.auto_ack()
     }
 
+    #[inline]
     pub fn asynchronous(&self) -> bool {
         self.0.asynchronous()
     }

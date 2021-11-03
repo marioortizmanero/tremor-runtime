@@ -340,5 +340,12 @@ fn get_sink_meta<'lt, 'value>(
     meta: &'lt Value<'value>,
     ctx: &SinkContext,
 ) -> Option<&'lt Value<'value>> {
-    meta.get(ctx.connector_type.to_string().as_str())
+    ctx.url
+        .resource_type()
+        .and_then(|rt| meta.get(&Cow::owned(rt.to_string())))
+        .and_then(|rt_meta| {
+            ctx.url
+                .artefact()
+                .and_then(|artefact| rt_meta.get(artefact))
+        })
 }
