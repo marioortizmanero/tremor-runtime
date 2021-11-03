@@ -14,15 +14,17 @@
 
 //! Tremor runtime
 
-#![deny(warnings)]
-#![deny(missing_docs)]
+// TODO: turn back on
+// #![deny(warnings)]
+// #![deny(missing_docs)]
 #![recursion_limit = "1024"]
-#![deny(
-    clippy::all,
-    clippy::unwrap_used,
-    clippy::unnecessary_unwrap,
-    clippy::pedantic
-)]
+// TODO: turn back on
+// #![deny(
+//     clippy::all,
+//     clippy::unwrap_used,
+//     clippy::unnecessary_unwrap,
+//     clippy::pedantic
+// )]
 // TODO this is needed due to a false positive in clippy
 // https://github.com/rust-lang/rust/issues/83125
 // we will need this in 1.53.1

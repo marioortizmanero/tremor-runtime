@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(crate) mod impls;
 /// prelude with commonly needed stuff imported
 pub(crate) mod prelude;
 
@@ -22,47 +21,19 @@ pub mod sink;
 /// source parts
 pub mod source;
 
-#[macro_use]
-pub(crate) mod utils;
-
-/// file connector implementation
-pub mod file;
-
-/// tcp server and client connector impls
-pub(crate) mod tcp;
-
-/// udp server connector impl
-pub(crate) mod udp_server;
-
-/// udp server connector impl
-pub(crate) mod udp_client;
-
-/// std streams connector (stdout, stderr, stdin)
-pub(crate) mod stdio;
+/// opentelemetry
+pub(crate) mod otel;
+/// protobuf helpers
+pub(crate) mod pb;
 
 /// Home of the famous metrics collector
 pub(crate) mod metrics;
-
-/// Metronome
-pub(crate) mod metronome;
-
-/// Exit Connector
-pub(crate) mod exit;
-
-/// KV
-pub(crate) mod kv;
-
-/// Write Ahead Log
-pub(crate) mod wal;
 
 /// connector for checking guaranteed delivery and circuit breaker logic
 //pub(crate) mod cb;
 
 /// quiescence stuff
 pub(crate) mod quiescence;
-
-/// collection of TLS utilities and configs
-pub(crate) mod tls;
 
 use std::fmt::Display;
 
@@ -464,13 +435,18 @@ async fn connector_task(
     // create sink instance
     let sink_addr = connector.create_sink(sink_ctx, sink_builder).await?;
 
-    let connector_addr = Addr {
-        uid,
-        alias: alias.clone(),
-        sender: msg_tx,
-        source: source_addr,
-        sink: sink_addr,
-    };
+    #[allow(clippy::too_many_lines)]
+    // instantiates the connector and starts listening for control plane messages
+    async fn connector_task(
+        &self,
+        addr_tx: Sender<Result<Addr>>,
+        url: TremorUrl,
+        mut connector: Box<Connector>,
+        config: ConnectorConfig,
+        uid: u64,
+    ) -> Result<()> {
+        // channel for connector-level control plane communication
+        let (msg_tx, msg_rx) = bounded(self.qsize);
 
     let mut reconnect: ReconnectRuntime =
         ReconnectRuntime::new(&connector_addr, notifier.clone(), &config.reconnect);
@@ -1209,7 +1185,7 @@ pub trait ConnectorBuilder: Sync + Send + std::fmt::Debug {
         &self,
         alias: &str,
         config: &Option<OpConfig>,
-    ) -> Result<Box<dyn Connector>>;
+    ) -> Result<Box<Connector>>;
 }
 
 /// builtin connector types
@@ -1252,5 +1228,6 @@ pub fn debug_connector_types() -> Vec<Box<dyn ConnectorBuilder + 'static>> {
 ///  * If a builtin connector couldn't be registered
 #[cfg(not(tarpaulin_include))]
 pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
+    // TODO load dynamically
     Ok(())
 }
