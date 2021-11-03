@@ -162,6 +162,49 @@ pub trait ConfigImpl {
     where
         Self: serde::de::Deserialize<'static>,
     {
-        Ok(tremor_value::structurize(config.clone_static())?)
+        Self::from_str(&serde_yaml::to_string(config)?)
+    }
+
+    /// The exact same as `new`, but works with a raw `&str` instead of an
+    /// already built value.
+    ///
+    /// # Errors
+    /// if the Configuration is invalid
+    fn from_str(config: &str) -> Result<Self>
+    where
+        for<'de> Self: serde::de::Deserialize<'de>,
+    {
+        // simpler ways, but does not give us the kind of error info we want
+        //let validated_config: Config = serde_yaml::from_value(c.clone())?;
+        //let validated_config: Config = serde_yaml::from_str(&serde_yaml::to_string(c)?)?;
+
+        // serialize the YAML config and deserialize it again, so that we get extra info on
+        // YAML errors here (eg: name of the config key where the errror occured). can just
+        // use serde_yaml::from_value() here, but the error message there is limited.
+        serde_yaml::from_str(config).map_err(|e| {
+            // remove the potentially misleading "at line..." info, since it does not
+            // correspond to the numbers in the file now
+            LINE_REGEXP.replace(&e.to_string(), "").to_string().into()
+        })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn error() {
+        #[derive(serde::Deserialize)]
+        struct C {
+            _s: String,
+        }
+        impl ConfigImpl for C {}
+
+        let y: serde_yaml::Value = serde_yaml::from_str("5").unwrap();
+
+        let e = C::new(&y).err().unwrap().to_string();
+
+        assert_eq!(e, "invalid type: integer `5`, expected struct C")
     }
 }

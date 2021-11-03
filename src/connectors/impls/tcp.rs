@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(crate) mod client;
+// pub(crate) mod client;
 pub(crate) mod server;
 
 use crate::connectors::prelude::*;
+use abi_stable::std_types::{
+    ROption::{RNone, RSome},
+    RVec,
+};
 use async_std::net::TcpStream;
 use futures::{
     io::{ReadHalf, WriteHalf},
@@ -29,7 +33,7 @@ where
     wrapped_stream: S,
     underlying_stream: TcpStream,
     buffer: Vec<u8>,
-    alias: String,
+    url: TremorUrl,
     origin_uri: EventOriginUri,
     meta: Value<'static>,
 }
@@ -38,7 +42,7 @@ impl TcpReader<TcpStream> {
     fn new(
         stream: TcpStream,
         buffer: Vec<u8>,
-        alias: String,
+        url: TremorUrl,
         origin_uri: EventOriginUri,
         meta: Value<'static>,
     ) -> Self {
@@ -46,7 +50,7 @@ impl TcpReader<TcpStream> {
             wrapped_stream: stream.clone(),
             underlying_stream: stream,
             buffer,
-            alias,
+            url,
             origin_uri,
             meta,
         }
@@ -58,7 +62,7 @@ impl TcpReader<ReadHalf<async_tls::server::TlsStream<TcpStream>>> {
         stream: ReadHalf<async_tls::server::TlsStream<TcpStream>>,
         underlying_stream: TcpStream,
         buffer: Vec<u8>,
-        alias: String,
+        url: TremorUrl,
         origin_uri: EventOriginUri,
         meta: Value<'static>,
     ) -> Self {
@@ -66,19 +70,20 @@ impl TcpReader<ReadHalf<async_tls::server::TlsStream<TcpStream>>> {
             wrapped_stream: stream,
             underlying_stream,
             buffer,
-            alias,
+            url,
             origin_uri,
             meta,
         }
     }
 }
 
+/* TODO: add back
 impl TcpReader<ReadHalf<async_tls::client::TlsStream<TcpStream>>> {
     fn tls_client(
         stream: ReadHalf<async_tls::client::TlsStream<TcpStream>>,
         underlying_stream: TcpStream,
         buffer: Vec<u8>,
-        alias: String,
+        url: TremorUrl,
         origin_uri: EventOriginUri,
         meta: Value<'static>,
     ) -> Self {
@@ -86,12 +91,13 @@ impl TcpReader<ReadHalf<async_tls::client::TlsStream<TcpStream>>> {
             wrapped_stream: stream,
             underlying_stream,
             buffer,
-            alias,
+            url,
             origin_uri,
             meta,
         }
     }
 }
+*/
 
 #[async_trait::async_trait]
 impl<S> StreamReader for TcpReader<S>
@@ -105,8 +111,8 @@ where
             trace!("[Connector::{}] Stream {stream} EOF", &self.alias);
             return Ok(SourceReply::EndStream {
                 origin_uri: self.origin_uri.clone(),
-                meta: Some(self.meta.clone()),
-                stream,
+                meta: RSome(self.meta.clone().into()),
+                stream_id: stream,
             });
         }
         debug!("[Connector::{}] Read {} bytes", &self.alias, bytes_read);
@@ -114,10 +120,10 @@ where
         Ok(SourceReply::Data {
             origin_uri: self.origin_uri.clone(),
             stream,
-            meta: Some(self.meta.clone()),
+            meta: RSome(self.meta.clone().into()),
             // ALLOW: we know bytes_read is smaller than or equal buf_size
-            data: self.buffer[0..bytes_read].to_vec(),
-            port: None,
+            data: RVec::from(&self.buffer[0..bytes_read]),
+            port: RNone,
         })
     }
 
@@ -126,7 +132,7 @@ where
         if let Err(e) = self.underlying_stream.shutdown(std::net::Shutdown::Read) {
             warn!(
                 "[Connector::{}] Error shutting down reading half of stream {}: {}",
-                &self.alias, stream, e
+                &self.url, stream, e
             );
         }
         StreamDone::StreamClosed
@@ -160,6 +166,19 @@ impl TcpWriter<WriteHalf<async_tls::server::TlsStream<TcpStream>>> {
         }
     }
 }
+/* TODO: add back
+impl TcpWriter<WriteHalf<async_tls::client::TlsStream<TcpStream>>> {
+    fn tls_client(
+        tls_stream: WriteHalf<async_tls::client::TlsStream<TcpStream>>,
+        underlying_stream: TcpStream,
+    ) -> Self {
+        Self {
+            wrapped_stream: tls_stream,
+            underlying_stream,
+        }
+    }
+}
+*/
 
 #[async_trait::async_trait]
 impl<S> StreamWriter for TcpWriter<S>
@@ -173,7 +192,7 @@ where
         }
         Ok(())
     }
-    async fn on_done(&mut self, _stream: u64) -> Result<StreamDone> {
+    async fn on_done(&self, _stream: u64) -> Result<StreamDone> {
         self.underlying_stream.shutdown(std::net::Shutdown::Write)?;
         Ok(StreamDone::StreamClosed)
     }

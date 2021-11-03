@@ -7,6 +7,9 @@ name = "tremor-pipeline"
 version = "0.11.4"
 
 [dependencies]
+# FIXME: update to crates.io when this is added to a new version:
+# https://github.com/rodrimati1992/abi_stable_crates/pull/68
+abi_stable = "0.10.3"
 async-broadcast = "0.3"
 async-std = { version = "1.10.0", features = ["attributes"] }
 beef = { version = "0.5", features = ["impl_serde"] }
@@ -24,13 +27,14 @@ serde = "1"
 serde_derive = "1"
 serde_yaml = "0.8"
 simd-json = { version = "0.4", features = ["known-key"] }
-simd-json-derive = "0.2"
+# FIXME: change version after it's upstreamed
+simd-json-derive = "0.2.3-alpha.0"
 sled = "0.34"
 tremor-common = { path = "../tremor-common" }
 tremor-script = { path = "../tremor-script" }
 tremor-value = { path = "../tremor-value" }
 url = "2.2.2"
-value-trait = "0.2"
+value-trait = { version = "0.2.9", features = ["c-abi"] }
 window = { git = "https://github.com/tremor-rs/window.git", tag = "v0.1.1" }
 
 [dev-dependencies]

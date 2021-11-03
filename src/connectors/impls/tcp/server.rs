@@ -15,20 +15,34 @@ use super::{TcpReader, TcpWriter};
 use crate::connectors::prelude::*;
 use crate::connectors::sink::channel_sink::ChannelSinkMsg;
 use crate::connectors::utils::tls::{load_server_config, TLSServerConfig};
-use crate::errors::Kind as ErrorKind;
-use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
+use crate::errors::{Error, ErrorKind};
+use crate::ttry;
 use async_std::net::TcpListener;
 use async_std::task::{self, JoinHandle};
 use async_tls::TlsAcceptor;
 use futures::io::AsyncReadExt;
 use rustls::ServerConfig;
 use simd_json::ValueAccess;
+use std::future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use abi_stable::{
+    export_root_module,
+    prefix_type::PrefixTypeTrait,
+    rstr, rvec, sabi_extern_fn,
+    std_types::{
+        ROption::{self, RSome},
+        RResult::{RErr, ROk},
+        RStr, RString,
+    },
+    type_level::downcasting::TD_Opaque,
+};
+use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt};
+
 const URL_SCHEME: &str = "tremor-tcp-server";
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     // kept as a str, so it is re-resolved upon each connect
@@ -65,19 +79,27 @@ pub struct TcpServer {
     sink_rx: Receiver<ChannelSinkMsg<ConnectionMeta>>,
 }
 
-#[derive(Debug, Default)]
-pub(crate) struct Builder {}
-
-#[async_trait::async_trait]
-impl ConnectorBuilder for Builder {
-    fn connector_type(&self) -> ConnectorType {
-        "tcp_server".into()
+/// Note that since it's a built-in plugin, `#[export_root_module]` can't be
+/// used or it would conflict with other plugins.
+pub fn instantiate_root_module() -> ConnectorMod_Ref {
+    ConnectorMod {
+        connector_type,
+        from_config,
     }
-    async fn from_config(
-        &self,
-        id: &str,
-        raw_config: &ConnectorConfig,
-    ) -> crate::errors::Result<Box<dyn Connector>> {
+    .leak_into_prefix()
+}
+
+#[sabi_extern_fn]
+pub fn connector_type() -> ConnectorType {
+    "tcp_server".into()
+}
+
+#[sabi_extern_fn]
+pub fn from_config(
+    id: TremorUrl,
+    raw_config: ConnectorConfig,
+) -> FfiFuture<RResult<BoxedRawConnector>> {
+    async move {
         if let Some(raw_config) = &raw_config.config {
             let config = Config::new(raw_config)?;
 
@@ -97,6 +119,7 @@ impl ConnectorBuilder for Builder {
             Err(ErrorKind::MissingConfiguration(id.to_string()).into())
         }
     }
+    .into_ffi()
 }
 
 fn resolve_connection_meta(meta: &Value) -> Option<ConnectionMeta> {
@@ -111,27 +134,30 @@ fn resolve_connection_meta(meta: &Value) -> Option<ConnectionMeta> {
         })
 }
 
-#[async_trait::async_trait()]
-impl Connector for TcpServer {
-    async fn create_source(
+impl RawConnector for TcpServer {
+    fn create_source(
         &mut self,
-        ctx: SourceContext,
-        builder: SourceManagerBuilder,
-    ) -> Result<Option<SourceAddr>> {
+        _ctx: SourceContext,
+        _qsize: usize,
+    ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSource>>> {
         let sink_runtime = ChannelSinkRuntime::new(self.sink_tx.clone());
         let source = TcpServerSource::new(
             self.config.clone(),
             self.tls_server_config.clone(),
             sink_runtime,
         );
-        builder.spawn(source, ctx).map(Some)
+        // We don't need to be able to downcast the connector back to the original
+        // type, so we just pass it as an opaque type.
+        let source = BoxedRawSource::from_value(source, TD_Opaque);
+        future::ready(ROk(RSome(source))).into_ffi()
     }
 
-    async fn create_sink(
+    fn create_sink(
         &mut self,
-        ctx: SinkContext,
-        builder: SinkManagerBuilder,
-    ) -> Result<Option<SinkAddr>> {
+        _ctx: SinkContext,
+        _qsize: usize,
+        reply_tx: BoxedContraflowSender,
+    ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSink>>> {
         // we use this constructor as we need the sink channel already when creating the source
         let sink = ChannelSink::from_channel_no_meta(
             resolve_connection_meta,
@@ -139,7 +165,10 @@ impl Connector for TcpServer {
             self.sink_tx.clone(),
             self.sink_rx.clone(),
         );
-        builder.spawn(sink, ctx).map(Some)
+        // We don't need to be able to downcast the connector back to the original
+        // type, so we just pass it as an opaque type.
+        let sink = BoxedRawSink::from_value(sink, TD_Opaque);
+        future::ready(ROk(RSome(sink))).into_ffi()
     }
 
     fn codec_requirements(&self) -> CodecReq {
@@ -174,129 +203,147 @@ impl TcpServerSource {
         }
     }
 }
-#[async_trait::async_trait()]
-impl Source for TcpServerSource {
-    #[allow(clippy::too_many_lines)]
-    async fn connect(&mut self, ctx: &SourceContext, _attempt: &Attempt) -> Result<bool> {
-        let path = vec![self.config.port.to_string()];
-        let accept_ctx = ctx.clone();
-        let buf_size = self.config.buf_size;
 
-        // cancel last accept task if necessary, this will drop the previous listener
-        if let Some(previous_handle) = self.accept_task.take() {
-            previous_handle.cancel().await;
-        }
+impl RawSource for TcpServerSource {
+    fn connect<'a>(
+        &'a mut self,
+        ctx: &'a SourceContext,
+        _attempt: &'a Attempt,
+    ) -> BorrowingFfiFuture<'a, RResult<bool>> {
+        async move {
+            let path = rvec![RString::from(self.config.port.to_string())];
+            let accept_ctx = ctx.clone();
+            let buf_size = self.config.buf_size;
 
-        let listener = TcpListener::bind((self.config.host.as_str(), self.config.port)).await?;
-
-        let ctx = ctx.clone();
-        let tls_server_config = self.tls_server_config.clone();
-
-        let runtime = self.runtime.clone();
-        let sink_runtime = self.sink_runtime.clone();
-        // accept task
-        // FIXME: using `?` in the acceptor tasks causes the server quietly failing
-        //        when the acceptor task errors
-        self.accept_task = Some(task::spawn(async move {
-            let mut stream_id_gen = StreamIdGen::default();
-            // FIXME: handle quiesence when no new accepts happen
-            while let (true, Ok((stream, peer_addr))) = (
-                ctx.quiescence_beacon().continue_reading().await,
-                listener.accept().await,
-            ) {
-                debug!("{} new connection from {}", &accept_ctx, peer_addr);
-                let stream_id: u64 = stream_id_gen.next_stream_id();
-                let connection_meta: ConnectionMeta = peer_addr.into();
-                // Async<T> allows us to read in one thread and write in another concurrently - see its documentation
-                // So we don't need no BiLock like we would when using `.split()`
-                let origin_uri = EventOriginUri {
-                    scheme: URL_SCHEME.to_string(),
-                    host: peer_addr.ip().to_string(),
-                    port: Some(peer_addr.port()),
-                    path: path.clone(), // captures server port
-                };
-
-                let tls_acceptor: Option<TlsAcceptor> = tls_server_config
-                    .clone()
-                    .map(|sc| TlsAcceptor::from(Arc::new(sc)));
-                if let Some(acceptor) = tls_acceptor {
-                    let tls_stream = acceptor.accept(stream.clone()).await?; // TODO: this should live in its own task, as it requires rome roundtrips :()
-                    let (tls_read_stream, tls_write_sink) = tls_stream.split();
-                    let meta = ctx.meta(literal!({
-                        "tls": true,
-                        "peer": {
-                            "host": peer_addr.ip().to_string(),
-                            "port": peer_addr.port()
-                        }
-                    }));
-                    let tls_reader = TcpReader::tls_server(
-                        tls_read_stream,
-                        stream.clone(),
-                        vec![0; buf_size],
-                        ctx.alias.clone(),
-                        origin_uri.clone(),
-                        meta,
-                    );
-                    runtime.register_stream_reader(stream_id, &ctx, tls_reader);
-
-                    sink_runtime.register_stream_writer(
-                        stream_id,
-                        Some(connection_meta.clone()),
-                        &ctx,
-                        TcpWriter::tls_server(tls_write_sink, stream),
-                    );
-                } else {
-                    let meta = ctx.meta(literal!({
-                        "tls": false,
-                        "peer": {
-                            "host": peer_addr.ip().to_string(),
-                            "port": peer_addr.port()
-                        }
-                    }));
-                    let tcp_reader = TcpReader::new(
-                        stream.clone(),
-                        vec![0; buf_size],
-                        ctx.alias.clone(),
-                        origin_uri.clone(),
-                        meta,
-                    );
-                    runtime.register_stream_reader(stream_id, &ctx, tcp_reader);
-
-                    sink_runtime.register_stream_writer(
-                        stream_id,
-                        Some(connection_meta.clone()),
-                        &ctx,
-                        TcpWriter::new(stream),
-                    );
-                }
+            // cancel last accept task if necessary, this will drop the previous listener
+            if let Some(previous_handle) = self.accept_task.take() {
+                previous_handle.cancel().await;
             }
 
-            // notify connector task about disconnect
-            // of the listening socket
-            ctx.notifier().notify().await?;
-            Ok(())
-        }));
+            let listener = ttry!(
+                TcpListener::bind((self.config.host.as_str(), self.config.port))
+                    .await
+                    .map_err(Error::from)
+            );
 
-        Ok(true)
+            let ctx = ctx.clone();
+            let tls_server_config = self.tls_server_config.clone();
+
+            let runtime = self.runtime.clone();
+            let sink_runtime = self.sink_runtime.clone();
+            // accept task
+            // FIXME: using `?` in the acceptor tasks causes the server quietly failing
+            //        when the acceptor task errors
+            self.accept_task = Some(task::spawn(async move {
+                let mut stream_id_gen = StreamIdGen::default();
+                // FIXME: handle quiesence when no new accepts happen
+                while let (true, Ok((stream, peer_addr))) = (
+                    ctx.quiescence_beacon().continue_reading().await,
+                    listener.accept().await,
+                ) {
+                    debug!("{} new connection from {}", &accept_ctx, peer_addr);
+                    let stream_id: u64 = stream_id_gen.next_stream_id();
+                    let connection_meta: ConnectionMeta = peer_addr.into();
+                    // Async<T> allows us to read in one thread and write in another concurrently - see its documentation
+                    // So we don't need no BiLock like we would when using `.split()`
+                    let origin_uri = EventOriginUri {
+                        scheme: URL_SCHEME.to_string(),
+                        host: peer_addr.ip().to_string(),
+                        port: Some(peer_addr.port()),
+                        path: path.clone(), // captures server port
+                    };
+
+                    let tls_acceptor: Option<TlsAcceptor> = tls_server_config
+                        .clone()
+                        .map(|sc| TlsAcceptor::from(Arc::new(sc)));
+                    if let Some(acceptor) = tls_acceptor {
+                        let tls_stream = acceptor.accept(stream.clone()).await?; // TODO: this should live in its own task, as it requires rome roundtrips :()
+                        let (tls_read_stream, tls_write_sink) = tls_stream.split();
+                        let meta = ctx.meta(literal!({
+                            "tls": true,
+                            "peer": {
+                                "host": peer_addr.ip().to_string(),
+                                "port": peer_addr.port()
+                            }
+                        }));
+                        let tls_reader = TcpReader::tls_server(
+                            tls_read_stream,
+                            stream.clone(),
+                            vec![0; buf_size],
+                            ctx.alias.clone(),
+                            origin_uri.clone(),
+                            meta,
+                        );
+                        runtime.register_stream_reader(stream_id, &ctx, tls_reader);
+
+                        sink_runtime.register_stream_writer(
+                            stream_id,
+                            Some(connection_meta.clone()),
+                            &ctx,
+                            TcpWriter::tls_server(tls_write_sink, stream),
+                        );
+                    } else {
+                        let meta = ctx.meta(literal!({
+                            "tls": false,
+                            "peer": {
+                                "host": peer_addr.ip().to_string(),
+                                "port": peer_addr.port()
+                            }
+                        }));
+                        let tcp_reader = TcpReader::new(
+                            stream.clone(),
+                            vec![0; buf_size],
+                            ctx.alias.clone(),
+                            origin_uri.clone(),
+                            meta,
+                        );
+                        runtime.register_stream_reader(stream_id, &ctx, tcp_reader);
+
+                        sink_runtime.register_stream_writer(
+                            stream_id,
+                            Some(connection_meta.clone()),
+                            &ctx,
+                            TcpWriter::new(stream),
+                        );
+                    }
+                }
+
+                // notify connector task about disconnect
+                // of the listening socket
+                ctx.notifier().notify().await?;
+                Ok(())
+            }));
+
+            ROk(true)
+        }.into_ffi()
     }
 
-    async fn pull_data(&mut self, _pull_id: &mut u64, _ctx: &SourceContext) -> Result<SourceReply> {
-        match self.connection_rx.try_recv() {
-            Ok(reply) => Ok(reply),
+    fn pull_data<'a>(
+        &'a mut self,
+        _pull_id: &'a mut u64,
+        _ctx: &'a SourceContext,
+    ) -> BorrowingFfiFuture<'a, RResult<SourceReply>> {
+        let res = match self.connection_rx.try_recv() {
+            Ok(reply) => ROk(reply),
             Err(TryRecvError::Empty) => {
                 // TODO: configure pull interval in connector config?
-                Ok(SourceReply::Empty(DEFAULT_POLL_INTERVAL))
+                ROk(SourceReply::Empty(DEFAULT_POLL_INTERVAL))
             }
-            Err(e) => Err(e.into()),
-        }
+            Err(e) => RErr(RError::new(e)),
+        };
+
+        future::ready(res).into_ffi()
     }
 
-    async fn on_stop(&mut self, _ctx: &SourceContext) -> Result<()> {
-        if let Some(accept_task) = self.accept_task.take() {
-            // stop acceptin' new connections
-            accept_task.cancel().await;
+    fn on_stop(&mut self, _ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<()>> {
+        async move {
+            if let Some(accept_task) = self.accept_task.take() {
+                // stop acceptin' new connections
+                accept_task.cancel().await;
+            }
+            ROk(())
         }
-        Ok(())
+        .into_ffi()
     }
 
     fn is_transactional(&self) -> bool {

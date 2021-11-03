@@ -805,11 +805,12 @@ impl Select {
 /// They **must** remain private. All interactions with them have to be guarded
 /// by the implementation logic to ensure they remain sane.
 ///
+#[repr(C)]
 #[derive(Clone, Default)]
 pub struct EventPayload {
     /// The vector of raw input values
-    raw: Vec<Arc<Pin<Vec<u8>>>>,
-    data: ValueAndMeta<'static>,
+    pub(crate) raw: Vec<Arc<Pin<Vec<u8>>>>,
+    pub(crate) data: ValueAndMeta<'static>,
 }
 
 #[cfg(not(tarpaulin_include))] // this is a simple Debug implementation
@@ -1140,8 +1141,8 @@ impl<'input> simd_json_derive::Deserialize<'input> for EventPayload {
     Clone, Debug, PartialEq, Serialize, simd_json_derive::Serialize, simd_json_derive::Deserialize,
 )]
 pub struct ValueAndMeta<'event> {
-    v: Value<'event>,
-    m: Value<'event>,
+    pub(crate) v: Value<'event>,
+    pub(crate) m: Value<'event>,
 }
 
 impl<'event> ValueAndMeta<'event> {

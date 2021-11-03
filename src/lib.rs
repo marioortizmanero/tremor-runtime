@@ -14,8 +14,9 @@
 
 //! Tremor runtime
 
-#![deny(warnings)]
-#![deny(missing_docs)]
+// TODO: turn back on
+// #![deny(warnings)]
+// #![deny(missing_docs)]
 #![recursion_limit = "1024"]
 #![deny(
     clippy::all,
@@ -73,6 +74,9 @@ pub mod version;
 
 /// Instance management
 pub mod instance;
+
+/// Plugin Development Kit
+pub mod pdk;
 
 /// Metrics instance name
 pub static mut INSTANCE: &str = "tremor";
