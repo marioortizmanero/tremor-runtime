@@ -1,5 +1,9 @@
 pub mod connectors;
+mod panic;
+mod value;
 
-use abi_stable::std_types::SendRBoxError;
+use abi_stable::std_types::RBoxError;
 
-pub type RResult<T> = abi_stable::std_types::RResult<T, SendRBoxError>;
+pub use panic::MayPanic;
+pub use value::Value;
+pub type RResult<T> = abi_stable::std_types::RResult<T, RBoxError>;

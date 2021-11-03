@@ -14,9 +14,6 @@
 
 //! Tremor runtime
 
-// TODO: disable and cleanup with `cargo fix` automatically once done
-#![allow(unused)]
-#![allow(dead_code)]
 // TODO: turn back on
 // #![deny(warnings)]
 // #![deny(missing_docs)]

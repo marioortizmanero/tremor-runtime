@@ -1356,5 +1356,6 @@ pub fn debug_connector_types() -> Vec<Box<dyn ConnectorBuilder + 'static>> {
 ///  * If a builtin connector couldn't be registered
 #[cfg(not(tarpaulin_include))]
 pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
+    // TODO load dynamically
     Ok(())
 }
