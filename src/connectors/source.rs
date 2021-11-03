@@ -31,14 +31,21 @@ use tremor_script::{pdk::EventPayload as PdkEventPayload, EventPayload, ValueAnd
 use crate::config::{Codec as CodecConfig, Connector as ConnectorConfig};
 use crate::connectors::Msg;
 use crate::errors::{Error, Result};
-use crate::pdk::{MayPanic::{self, NoPanic}, RResult};
+use crate::pdk::{
+    MayPanic::{self, NoPanic},
+    RResult,
+};
 use crate::pipeline;
 use crate::preprocessor::{finish, make_preprocessors, preprocess, Preprocessors};
 use crate::{
     codec::{self, Codec},
     pipeline::InputTarget,
 };
-use abi_stable::{rvec, StableAbi, std_types::{RBox, RVec, RResult::ROk}};
+use abi_stable::{
+    rvec,
+    std_types::{RBox, RResult::ROk, RVec},
+    StableAbi,
+};
 use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
 use beef::Cow;
 use tremor_common::url::ports::{ERR, OUT};
