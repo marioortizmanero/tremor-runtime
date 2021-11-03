@@ -738,12 +738,7 @@ pub(crate) struct SinkManager {
 }
 
 impl SinkManager {
-    fn new(
-        sink: Sink,
-        ctx: SinkContext,
-        builder: SinkManagerBuilder,
-        rx: Receiver<SinkMsg>,
-    ) -> Self {
+    fn new(sink: Sink, ctx: SinkContext, builder: SinkManagerBuilder, rx: Receiver<SinkMsg>) -> Self {
         let SinkManagerBuilder {
             serializer,
             reply_channel,

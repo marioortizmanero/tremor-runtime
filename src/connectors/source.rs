@@ -570,7 +570,7 @@ impl SourceManagerBuilder {
         self.qsize
     }
 
-    pub fn spawn(self, source: Source, ctx: SourceContext) -> Result<SourceAddr> {
+    pub fn spawn<S>(self, source: Source, ctx: SourceContext) -> Result<SourceAddr> {
         let qsize = self.qsize;
         let name = ctx.url.short_id("c-src"); // connector source
         let (source_tx, source_rx) = bounded(qsize);
@@ -740,13 +740,6 @@ pub(crate) struct SourceManager {
     expected_drained: usize,
     pull_counter: u64,
     cb_open_received: bool,
-}
-
-/// control flow enum
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Control {
-    Continue,
-    Terminate,
 }
 
 impl SourceManager {
