@@ -17,6 +17,7 @@ use crate::config::Reconnect;
 use crate::connectors::{Addr, Connectivity, Connector, ConnectorContext, Msg};
 use crate::errors::Result;
 use crate::url::TremorUrl;
+use abi_stable::StableAbi;
 use async_std::channel::Sender;
 use async_std::task;
 use std::fmt::Display;
@@ -75,7 +76,8 @@ impl ReconnectStrategy for SimpleBackoff {
 }
 
 /// describing the number of previous connection attempts
-#[derive(Debug, Default, PartialEq, Eq)]
+#[repr(C)]
+#[derive(Debug, Default, PartialEq, Eq, StableAbi)]
 pub struct Attempt {
     overall: u64,
     success: u64,

@@ -63,7 +63,7 @@ use abi_stable::{
         RBox,
         ROption::{self, RNone, RSome},
         RResult::{RErr, ROk},
-        RVec,
+        RString, RVec,
     },
     StableAbi,
 };
@@ -921,7 +921,8 @@ impl Drainage {
 }
 
 /// state of a connector
-#[derive(Debug, PartialEq, Serialize, Deserialize, Copy, Clone)]
+#[repr(C)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Copy, Clone, StableAbi)]
 #[serde(rename_all = "lowercase")]
 pub enum ConnectorState {
     /// connector has been initialized, but not yet started
@@ -952,14 +953,15 @@ impl Display for ConnectorState {
 }
 
 /// connector context
-#[derive(Clone)]
+#[repr(C)]
+#[derive(Clone, StableAbi)]
 pub struct ConnectorContext {
     /// unique identifier
     pub uid: u64,
     /// url of the connector
     pub url: TremorUrl,
     /// type name of the connector
-    pub type_name: String,
+    pub type_name: RString,
     /// The Quiescence Beacon
     pub quiescence_beacon: QuiescenceBeacon,
     /// Notifier
