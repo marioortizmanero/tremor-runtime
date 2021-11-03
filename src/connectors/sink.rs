@@ -32,7 +32,7 @@ use crate::url::ports::IN;
 use crate::url::TremorUrl;
 use abi_stable::{
     rvec,
-    std_types::{RResult::ROk, RStr, RVec},
+    std_types::{RResult::ROk, RStr, RVec, RBox},
     StableAbi,
 };
 use async_std::channel::{bounded, unbounded, Receiver, Sender};
@@ -158,7 +158,7 @@ pub trait RawSink: Send {
         ctx: &SinkContext,
         serializer: &mut EventSerializer,
         start: u64,
-    ) -> RResult<SinkReply>;
+    ) -> MayPanic<RResult<SinkReply>>;
     /// called when receiving a signal
     /* async */
     fn on_signal(
@@ -166,13 +166,13 @@ pub trait RawSink: Send {
         _signal: Event,
         _ctx: &SinkContext,
         _serializer: &mut EventSerializer,
-    ) -> RResult<SinkReply> {
-        ROk(SinkReply::default())
+    ) -> MayPanic<RResult<SinkReply>> {
+        NoPanic(ROk(SinkReply::default()))
     }
 
     /// Pull metrics from the sink
-    fn metrics(&mut self, _timestamp: u64) -> RVec<EventPayload> {
-        rvec![]
+    fn metrics(&mut self, _timestamp: u64) -> MayPanic<RVec<EventPayload>> {
+        NoPanic(rvec![])
     }
 
     // lifecycle stuff
@@ -242,7 +242,6 @@ impl Sink {
         self.0
             .on_event(input.into(), event, ctx, serializer, start)
             .unwrap()
-            .map(Into::into) // RVec -> Vec
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -256,7 +255,6 @@ impl Sink {
         self.0
             .on_signal(signal, ctx, serializer)
             .unwrap()
-            .map(Into::into) // RVec -> Vec
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -311,6 +309,7 @@ pub trait StreamWriter: Send + Sync {
     }
 }
 /// context for the connector sink
+#[derive(Clone)]
 pub struct SinkContext {
     /// the connector unique identifier
     pub uid: u64,
