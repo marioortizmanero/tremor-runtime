@@ -1024,7 +1024,10 @@ pub enum Connectivity {
 /// It is a meta entity on top of the sink and source part.
 /// The connector has its own control plane and is an artefact in the tremor repository.
 /// It controls the sink and source parts which are connected to the rest of the runtime via links to pipelines.
-#[async_trait::async_trait]
+///
+/// This trait specifically is the low-level connector interface used for the
+/// plugin system. The `Connector` type wraps it up for ease of use.
+#[abi_stable::sabi_trait]
 pub trait Connector: Send {
     /// This connector works with structured data and does not allow the use
     /// of codecs.
@@ -1036,24 +1039,23 @@ pub trait Connector: Send {
     ///
     /// This function is called exactly once upon connector creation.
     /// If this connector does not act as a source, return `Ok(None)`.
-    async fn create_source(
+    /* async */ fn create_source(
         &mut self,
         _source_context: SourceContext,
-        _builder: source::SourceManagerBuilder,
-    ) -> Result<Option<source::SourceAddr>> {
-        Ok(None)
+    ) -> MayPanic<RResult<ROption<RawSource_TO<'static, RBox<()>>>>> {
+        NoPanic(Ok(None))
     }
 
     /// Create a sink part for this connector if applicable
     ///
     /// This function is called exactly once upon connector creation.
     /// If this connector does not act as a sink, return `Ok(None)`.
-    async fn create_sink(
+    /* async */ fn create_sink(
         &mut self,
         _sink_context: SinkContext,
         _builder: sink::SinkManagerBuilder,
-    ) -> Result<Option<sink::SinkAddr>> {
-        Ok(None)
+    ) -> MayPanic<RResult<ROption<RawSink_TO<'static, RBox<()>>>>> {
+        NoPanic(Ok(None))
     }
 
     /// Attempt to connect to the outside world.
@@ -1070,30 +1072,104 @@ pub trait Connector: Send {
     ///
     /// To know when to stop reading new data from the external connection, the `quiescence` beacon
     /// can be used. Call `.reading()` and `.writing()` to see if you should continue doing so, if not, just stop and rest.
-    async fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> Result<bool>;
+    /* async */ fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> MayPanic<RResult<bool>>;
 
     /// called once when the connector is started
     /// `connect` will be called after this for the first time, leave connection attempts in `connect`.
-    async fn on_start(&mut self, _ctx: &ConnectorContext) -> Result<ConnectorState> {
-        Ok(ConnectorState::Running)
+    /* async */ fn on_start(&mut self, _ctx: &ConnectorContext) -> MayPanic<RResult<ConnectorState>> {
+        NoPanic(Ok(ConnectorState::Running))
     }
 
     /// called when the connector pauses
-    async fn on_pause(&mut self, _ctx: &ConnectorContext) {}
+    /* async */ fn on_pause(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {NoPanic(())}
     /// called when the connector resumes
-    async fn on_resume(&mut self, _ctx: &ConnectorContext) {}
+    /* async */ fn on_resume(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {NoPanic(())}
 
     /// Drain
     ///
     /// Ensure no new events arrive at the source part of this connector when this function returns
     /// So we can safely send the `Drain` signal.
-    async fn on_drain(&mut self, _ctx: &ConnectorContext) {}
+    /* async */ fn on_drain(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {NoPanic(())}
 
     /// called when the connector is stopped
-    async fn on_stop(&mut self, _ctx: &ConnectorContext) {}
+    /* async */ fn on_stop(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {NoPanic(())}
 
     /// returns the default codec for this connector
     fn default_codec(&self) -> &str;
+}
+
+// The higher level connector interface, which wraps the raw connector from the
+// plugin.
+pub struct Connector(pub RawConnector_TO<'static, RBox<()>>);
+impl Connector {
+    #[inline]
+    fn is_structured(&self) -> bool {
+        self.0.is_structured()
+    }
+
+    #[inline]
+    pub async fn create_source(
+        &mut self,
+        source_context: SourceContext,
+        builder: source::SourceManagerBuilder,
+    ) -> Result<Option<source::SourceAddr>> {
+        match self.0.create_source(source_context.clone()).unwrap() {
+            ROk(RSome(raw_source)) => builder.spawn(raw_source, source_context).map(Some),
+            ROk(RNone) => Ok(None),
+            RErr(err) => Err(err.into()),
+        }
+    }
+
+    #[inline]
+    pub async fn create_sink(
+        &mut self,
+        sink_context: SinkContext,
+        builder: sink::SinkManagerBuilder,
+    ) -> Result<Option<sink::SinkAddr>> {
+        match self.0.create_sink(sink_context.clone()).unwrap() {
+            ROk(RSome(raw_sink)) => builder.spawn(raw_sink, sink_context).map(Some),
+            ROk(RNone) => Ok(None),
+            RErr(err) => Err(err.into()),
+        }
+    }
+
+    #[inline]
+    pub async fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> Result<bool> {
+        self.0
+            .connect(ctx, attempt)
+            .unwrap()
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
+    }
+
+    #[inline]
+    pub async fn on_start(&mut self, ctx: &ConnectorContext) -> Result<ConnectorState> {
+        self.0
+            .on_start(ctx)
+            .unwrap()
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
+    }
+
+    #[inline]
+    pub async fn on_pause(&mut self, ctx: &ConnectorContext) {
+        self.0.on_pause(ctx).unwrap()
+    }
+
+    #[inline]
+    pub async fn on_resume(&mut self, ctx: &ConnectorContext) {
+        self.0.on_resume(ctx).unwrap()
+    }
+
+    #[inline]
+    pub async fn on_stop(&mut self, ctx: &ConnectorContext) {
+        self.0.on_stop(ctx).unwrap()
+    }
+
+    #[inline]
+    pub fn default_codec(&self) -> &str {
+        self.0.default_codec().into()
+    }
 }
 
 /// something that is able to create a connector instance
@@ -1116,35 +1192,5 @@ pub trait ConnectorBuilder: Sync + Send {
 ///  * If a builtin connector couldn't be registered
 #[cfg(not(tarpaulin_include))]
 pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
-    world
-        .register_builtin_connector_type("exit", Box::new(exit::Builder::new(world)))
-        .await?;
-    world
-        .register_builtin_connector_type("file", Box::new(file::Builder::default()))
-        .await?;
-    world
-        .register_builtin_connector_type("metrics", Box::new(metrics::Builder::default()))
-        .await?;
-    world
-        .register_builtin_connector_type("stdio", Box::new(stdio::Builder::default()))
-        .await?;
-    world
-        .register_builtin_connector_type("tcp_client", Box::new(tcp::client::Builder::default()))
-        .await?;
-    world
-        .register_builtin_connector_type("tcp_server", Box::new(tcp::server::Builder::default()))
-        .await?;
-    world
-        .register_builtin_connector_type("udp_client", Box::new(udp_client::Builder::default()))
-        .await?;
-    world
-        .register_builtin_connector_type("udp_server", Box::new(udp_server::Builder::default()))
-        .await?;
-    world
-        .register_builtin_connector_type("kv", Box::new(kv::Builder::default()))
-        .await?;
-    world
-        .register_builtin_connector_type("wal", Box::new(wal::Builder::default()))
-        .await?;
     Ok(())
 }
