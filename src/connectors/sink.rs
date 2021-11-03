@@ -25,7 +25,7 @@ use crate::config::{Codec as CodecConfig, Connector as ConnectorConfig};
 use crate::connectors::{Msg, StreamDone};
 use crate::errors::Result;
 use crate::pdk::{
-    panic::MayPanic::{self, NoPanic},
+    MayPanic::{self, NoPanic},
     RResult,
 };
 use crate::permge::PriorityMerge;

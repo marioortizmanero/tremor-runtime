@@ -49,7 +49,7 @@ use crate::connectors::sink::{RawSink_TO, SinkAddr, SinkContext, SinkMsg};
 use crate::connectors::source::{RawSource_TO, SourceAddr, SourceContext, SourceMsg};
 use crate::errors::{Error, ErrorKind, Result};
 use crate::pdk::{
-    panic::MayPanic::{self, NoPanic},
+    MayPanic::{self, NoPanic},
     RResult,
 };
 use crate::pipeline;

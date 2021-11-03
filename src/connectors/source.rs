@@ -29,7 +29,7 @@ use crate::connectors::Msg;
 use crate::errors::{Error, Result};
 use crate::pdk::{
     self,
-    panic::MayPanic::{self, NoPanic},
+    MayPanic::{self, NoPanic},
     RResult,
 };
 use crate::pipeline;
