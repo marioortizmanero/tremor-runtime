@@ -14,10 +14,7 @@
 
 use crate::errors::{Error, ErrorKind, Result};
 use abi_stable::{
-    std_types::{
-        ROption::{self, RNone, RSome},
-        RString,
-    },
+    std_types::{ROption, RString},
     StableAbi,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};

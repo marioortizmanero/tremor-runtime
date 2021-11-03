@@ -18,10 +18,7 @@ use crate::connectors::{Addr, Connectivity, Connector, ConnectorContext, Msg};
 use crate::errors::Result;
 use crate::pdk::RResult;
 use crate::url::TremorUrl;
-use abi_stable::{
-    std_types::{RBox, RResult::ROk, SendRBoxError},
-    StableAbi,
-};
+use abi_stable::StableAbi;
 use async_std::channel::Sender;
 use async_std::task;
 use futures::future::{join3, ready, FutureExt};

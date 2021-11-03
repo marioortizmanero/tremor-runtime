@@ -57,7 +57,7 @@ use abi_stable::{
         RBox,
         ROption::{self, RNone, RSome},
         RResult::{RErr, ROk},
-        RVec,
+        RString, RVec,
     },
     StableAbi,
 };
