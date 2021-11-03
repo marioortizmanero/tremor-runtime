@@ -24,7 +24,10 @@ use crate::codec::{self, Codec};
 use crate::config::{Codec as CodecConfig, Connector as ConnectorConfig};
 use crate::connectors::{Msg, StreamDone};
 use crate::errors::Result;
-use crate::pdk::{MayPanic::{self, NoPanic}, RResult};
+use crate::pdk::{
+    MayPanic::{self, NoPanic},
+    RResult,
+};
 use crate::permge::PriorityMerge;
 use crate::pipeline;
 use crate::postprocessor::{make_postprocessors, postprocess, Postprocessors};
@@ -32,7 +35,7 @@ use crate::url::ports::IN;
 use crate::url::TremorUrl;
 use abi_stable::{
     rvec,
-    std_types::{RResult::ROk, RStr, RVec, RBox},
+    std_types::{RBox, RResult::ROk, RStr, RVec},
     StableAbi,
 };
 use async_std::channel::{bounded, unbounded, Receiver, Sender};
@@ -563,7 +566,12 @@ pub(crate) struct SinkManager {
 }
 
 impl SinkManager {
-    fn new(sink: Sink, ctx: SinkContext, builder: SinkManagerBuilder, rx: Receiver<SinkMsg>) -> Self {
+    fn new(
+        sink: Sink,
+        ctx: SinkContext,
+        builder: SinkManagerBuilder,
+        rx: Receiver<SinkMsg>,
+    ) -> Self {
         let SinkManagerBuilder {
             serializer,
             reply_channel,
