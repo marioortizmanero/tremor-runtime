@@ -37,7 +37,7 @@ use crate::url::ports::{ERR, OUT};
 use crate::url::TremorUrl;
 use abi_stable::{
     rvec,
-    std_types::{ROption, RString, RVec, Tuple2, RBox, RResult::ROk},
+    std_types::{RBox, ROption, RResult::ROk, RString, RVec, Tuple2},
     StableAbi,
 };
 use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
