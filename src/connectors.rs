@@ -46,10 +46,13 @@ use beef::Cow;
 
 use crate::config::Connector as ConnectorConfig;
 use crate::connectors::metrics::{MetricsSinkReporter, SourceReporter};
-use crate::connectors::sink::{SinkAddr, SinkContext, SinkMsg, RawSink_TO, Sink};
-use crate::connectors::source::{SourceAddr, SourceContext, SourceMsg, RawSource_TO, Source};
+use crate::connectors::sink::{RawSink_TO, Sink, SinkAddr, SinkContext, SinkMsg};
+use crate::connectors::source::{RawSource_TO, Source, SourceAddr, SourceContext, SourceMsg};
 use crate::errors::{Error, ErrorKind, Result};
-use crate::pdk::{MayPanic::{self, NoPanic}, RResult};
+use crate::pdk::{
+    MayPanic::{self, NoPanic},
+    RResult,
+};
 use crate::pipeline;
 use crate::system::World;
 use crate::url::ports::{ERR, IN, OUT};
@@ -59,7 +62,7 @@ use abi_stable::{
     std_types::{
         RBox,
         ROption::{self, RNone, RSome},
-        RResult::{ROk, RErr},
+        RResult::{RErr, ROk},
         RVec,
     },
     StableAbi,
