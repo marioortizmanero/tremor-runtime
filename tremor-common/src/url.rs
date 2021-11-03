@@ -13,11 +13,19 @@
 // limitations under the License.
 
 use crate::errors::{Error, Result};
+use abi_stable::{
+    std_types::{
+        ROption::{self, RNone, RSome},
+        RString,
+    },
+    StableAbi,
+};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 
 /// The type or resource the url references
-#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
+#[repr(C)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, StableAbi)]
 pub enum ResourceType {
     /// This is a pipeline
     Pipeline,
@@ -28,7 +36,8 @@ pub enum ResourceType {
 }
 
 /// The scrope of the URL
-#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
+#[repr(C)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, StableAbi)]
 pub enum Scope {
     /// This URL identifies a specific port
     Port,
@@ -42,31 +51,30 @@ pub enum Scope {
 
 /// module for standard port names
 pub mod ports {
-    use beef::Cow;
-
     /// standard input port
-    pub const IN: Cow<'static, str> = Cow::const_str("in");
+    pub const IN: &str = "in";
 
     /// standard output port
-    pub const OUT: Cow<'static, str> = Cow::const_str("out");
+    pub const OUT: &str = "out";
 
     /// standard err port
-    pub const ERR: Cow<'static, str> = Cow::const_str("err");
+    pub const ERR: &str = "err";
 
     /// standard metrics port
-    pub const METRICS: Cow<'static, str> = Cow::const_str("metrics");
+    pub const METRICS: &str = "metrics";
 }
 
 /// A tremor URL identifying an entity in tremor
 #[allow(clippy::module_name_repetitions)]
-#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+#[repr(C)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug, StableAbi)]
 pub struct TremorUrl {
     scope: Scope,
-    host: String,
-    resource_type: Option<ResourceType>,
-    artefact: Option<String>,
-    instance: Option<String>,
-    instance_port: Option<String>,
+    host: RString,
+    resource_type: ROption<ResourceType>,
+    artefact: ROption<RString>,
+    instance: ROption<RString>,
+    instance_port: ROption<RString>,
 }
 
 fn decode_type(t: &str) -> Result<ResourceType> {
@@ -91,13 +99,13 @@ impl fmt::Display for ResourceType {
 impl fmt::Display for TremorUrl {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let r = write!(f, "tremor://{}", self.host);
-        if let Some(resource_type) = &self.resource_type {
+        if let RSome(resource_type) = &self.resource_type {
             write!(f, "/{}", resource_type)?;
-            if let Some(artefact) = &self.artefact {
+            if let RSome(artefact) = &self.artefact {
                 write!(f, "/{}", artefact)?;
-                if let Some(instance) = &self.instance {
+                if let RSome(instance) = &self.instance {
                     write!(f, "/{}", instance)?;
-                    if let Some(instance_port) = &self.instance_port {
+                    if let RSome(instance_port) = &self.instance_port {
                         write!(f, "/{}", instance_port)?;
                     };
                 };
@@ -193,27 +201,33 @@ impl TremorUrl {
             let (scope, resource_type, artefact, instance, instance_port) = if relative {
                 // TODO: This is not correct!
                 match parts.as_slice() {
-                    [port] => (Scope::Instance, None, None, None, Some((*port).to_string())),
+                    [port] => (
+                        Scope::Instance,
+                        RNone,
+                        RNone,
+                        RNone,
+                        RSome(RString::from(*port)),
+                    ),
                     [instance, port] => (
                         Scope::Type,
-                        None,
-                        None,
-                        Some((*instance).to_string()),
-                        Some((*port).to_string()),
+                        RNone,
+                        RNone,
+                        RSome(RString::from(*instance)),
+                        RSome(RString::from(*port)),
                     ),
                     [artefact, instance, port] => (
                         Scope::Artefact,
-                        None,
-                        Some((*artefact).to_string()),
-                        Some((*instance).to_string()),
-                        Some((*port).to_string()),
+                        RNone,
+                        RSome(RString::from(*artefact)),
+                        RSome(RString::from(*instance)),
+                        RSome(RString::from(*port)),
                     ),
                     [resource_type, artefact, instance, port] => (
                         Scope::Port,
-                        Some(decode_type(resource_type)?),
-                        Some((*artefact).to_string()),
-                        Some((*instance).to_string()),
-                        Some((*port).to_string()),
+                        RSome(decode_type(resource_type)?),
+                        RSome(RString::from(*artefact)),
+                        RSome(RString::from(*instance)),
+                        RSome(RString::from(*port)),
                     ),
 
                     _ => {
@@ -227,31 +241,31 @@ impl TremorUrl {
                 match parts.as_slice() {
                     [resource_type, artefact, instance, port] => (
                         Scope::Port,
-                        Some(decode_type(resource_type)?),
-                        Some((*artefact).to_string()),
-                        Some((*instance).to_string()),
-                        Some((*port).to_string()),
+                        RSome(decode_type(resource_type)?),
+                        RSome(RString::from(*artefact)),
+                        RSome(RString::from(*instance)),
+                        RSome(RString::from(*port)),
                     ),
                     [resource_type, artefact, instance] => (
-                        Scope::Instance,
-                        Some(decode_type(resource_type)?),
-                        Some((*artefact).to_string()),
-                        Some((*instance).to_string()),
-                        None,
+                        Scope::Servant,
+                        RSome(decode_type(resource_type)?),
+                        RSome(RString::from(*artefact)),
+                        RSome(RString::from(*instance)),
+                        RNone,
                     ),
                     [resource_type, artefact] => (
                         Scope::Artefact,
-                        Some(decode_type(resource_type)?),
-                        Some((*artefact).to_string()),
-                        None,
-                        None,
+                        RSome(decode_type(resource_type)?),
+                        RSome(RString::from(*artefact)),
+                        RNone,
+                        RNone,
                     ),
                     [resource_type] => (
                         Scope::Type,
-                        Some(decode_type(resource_type)?),
-                        None,
-                        None,
-                        None,
+                        RSome(decode_type(resource_type)?),
+                        RNone,
+                        RNone,
+                        RNone,
                     ),
 
                     _ => {
@@ -263,7 +277,7 @@ impl TremorUrl {
                 }
             };
 
-            let host = r.host_str().unwrap_or("localhost").to_owned();
+            let host = RString::from(r.host_str().unwrap_or("localhost"));
             Ok(Self {
                 scope,
                 host,
@@ -293,8 +307,8 @@ impl TremorUrl {
 
     /// Trims the url to the instance
     pub fn trim_to_instance(&mut self) {
-        self.instance_port = None;
-        self.scope = Scope::Instance;
+        self.instance_port = RNone;
+        self.scope = Scope::Servant;
     }
 
     /// Return a clone which is trimmed to the instance
@@ -307,8 +321,8 @@ impl TremorUrl {
 
     /// Trims the url to the artefact
     pub fn trim_to_artefact(&mut self) {
-        self.instance_port = None;
-        self.instance = None;
+        self.instance_port = RNone;
+        self.instance = RNone;
         self.scope = Scope::Artefact;
     }
 
@@ -319,7 +333,7 @@ impl TremorUrl {
     where
         S: ToString + ?Sized,
     {
-        self.instance = Some(i.to_string());
+        self.instance = RSome(i.to_string().into());
         if self.scope == Scope::Artefact {
             self.scope = Scope::Instance;
         }
@@ -332,8 +346,8 @@ impl TremorUrl {
     where
         S: ToString + ?Sized,
     {
-        self.instance_port = Some(i.to_string());
-        if self.scope == Scope::Instance {
+        self.instance_port = RSome(i.to_string().into());
+        if self.scope == Scope::Servant {
             self.scope = Scope::Port;
         }
     }
@@ -343,8 +357,8 @@ impl TremorUrl {
     where
         S: ToString + ?Sized,
     {
-        self.instance_port = Some(i.to_string());
-        if self.scope == Scope::Instance {
+        self.instance_port = RSome(i.to_string().into());
+        if self.scope == Scope::Servant {
             self.scope = Scope::Port;
         }
         self
@@ -353,17 +367,17 @@ impl TremorUrl {
     /// Retrieves the instance
     #[must_use]
     pub fn instance(&self) -> Option<&str> {
-        self.instance.as_deref()
+        self.instance.as_deref().into()
     }
     /// Retrieves the artefact
     #[must_use]
     pub fn artefact(&self) -> Option<&str> {
-        self.artefact.as_deref()
+        self.artefact.as_deref().into()
     }
     /// Retrieves the port
     #[must_use]
     pub fn instance_port(&self) -> Option<&str> {
-        self.instance_port.as_deref()
+        self.instance_port.as_deref().into()
     }
     /// Retrieves the port
     ///
@@ -376,7 +390,7 @@ impl TremorUrl {
     /// Retrieves the type
     #[must_use]
     pub fn resource_type(&self) -> Option<ResourceType> {
-        self.resource_type
+        self.resource_type.into()
     }
     /// Retrieves the scope
     #[must_use]

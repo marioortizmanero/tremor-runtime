@@ -21,6 +21,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "tremor_script"
 
 [dependencies]
+abi_stable = "0.10.3"
 atty = "0.2"
 base64 = "0.13"
 beef = { version = "0.5", features = ["impl_serde"] }
@@ -48,7 +49,8 @@ regex = "1"
 serde = "1.0"
 serde_derive = "1.0"
 simd-json = { version = "0.4", features = ["known-key"] }
-simd-json-derive = "0.2"
+# FIXME: change version after it's upstreamed
+simd-json-derive = { version = "0.2.3-alpha.0", features = ["impl-abi_stable"] }
 sketches-ddsketch = "0.1.2"
 strip-ansi-escapes = "0.1"
 termcolor = "1.1"
@@ -58,7 +60,7 @@ tremor-kv = "0.2"
 tremor-value = { version = "0.3", path = "../tremor-value" }
 unicode-xid = "0.2"
 url = "2"
-value-trait = "0.2"
+value-trait = { version = "0.2.9", features = ["c-abi"] }
 xz2 = "0.1"
 
 [build-dependencies]

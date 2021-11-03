@@ -96,8 +96,8 @@ impl ConnectorBuilder for Builder {
     }
     async fn from_config(
         &self,
-        _id: &str,
-        _config: &Option<OpConfig>,
+        _id: &TremorUrl,
+        _config: &Option<serde_yaml::Value>,
     ) -> Result<Box<dyn Connector>> {
         Ok(Box::new(MetricsConnector::new()))
     }
@@ -159,7 +159,7 @@ impl MetricsSource {
 
 #[async_trait::async_trait()]
 impl Source for MetricsSource {
-    async fn pull_data(&mut self, _pull_id: &mut u64, _ctx: &SourceContext) -> Result<SourceReply> {
+    async fn pull_data(&mut self, _pull_id: u64, _ctx: &SourceContext) -> Result<SourceReply> {
         match self.rx.try_recv() {
             Ok(msg) => Ok(SourceReply::Structured {
                 payload: msg.payload,
@@ -174,10 +174,6 @@ impl Source for MetricsSource {
 
     fn is_transactional(&self) -> bool {
         false
-    }
-
-    fn asynchronous(&self) -> bool {
-        true
     }
 }
 

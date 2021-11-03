@@ -14,19 +14,25 @@
 
 pub use crate::connectors::quiescence::QuiescenceBeacon;
 pub use crate::connectors::sink::{
-    AsyncSinkReply, ChannelSink, ChannelSinkRuntime, ContraflowData, EventSerializer,
-    SingleStreamSink, SingleStreamSinkRuntime, Sink, SinkAck, SinkAddr, SinkContext,
-    SinkManagerBuilder, SinkMeta, SinkReply, StreamWriter,
+    AsyncSinkReply, BoxedContraflowSender, BoxedEventSerializer, BoxedRawSink, ChannelSink,
+    ChannelSinkRuntime, ContraflowData, ContraflowSenderOpaque, EventSerializerOpaque,
+    MutEventSerializer, RawSink, SingleStreamSink, SingleStreamSinkRuntime, SinkAck, SinkAddr,
+    SinkContext, SinkMeta, SinkReply, StreamWriter,
 };
 pub use crate::connectors::source::{
-    ChannelSource, ChannelSourceRuntime, Source, SourceAddr, SourceContext, SourceManagerBuilder,
+    BoxedRawSource, ChannelSource, ChannelSourceRuntime, RawSource, SourceAddr, SourceContext,
     SourceReply, SourceReplySender, StreamReader, DEFAULT_POLL_INTERVAL,
 };
 pub use crate::connectors::utils::reconnect::{Attempt, ConnectionLostNotifier};
 pub use crate::connectors::{
-    Connector, ConnectorBuilder, ConnectorContext, ConnectorType, Context, StreamDone, StreamIdGen,
+    BoxedRawConnector, ConnectorContext, ConnectorType, Context, RawConnector, StreamDone,
+    StreamIdGen,
 };
 pub use crate::errors::{Error, ErrorKind, Result};
+pub use crate::pdk::{
+    connectors::{ConnectorMod, ConnectorMod_Ref},
+    RResult,
+};
 pub use crate::utils::hostname;
 pub use crate::{Event, OpConfig, QSIZE};
 pub use std::sync::atomic::Ordering;

@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(crate) mod metrics;
-pub(crate) mod quiescence;
-pub(crate) mod reconnect;
-pub(crate) mod tls;
+// FIXME: this should be reorganized after the pdk is moved to a separate crate
+// (they used to be `pub(crate)`).
+pub mod metrics;
+pub mod quiescence;
+pub mod reconnect;
+pub mod tls;

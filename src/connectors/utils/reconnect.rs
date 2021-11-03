@@ -14,11 +14,15 @@
 
 /// reconnect logic and execution for connectors
 use crate::config::Reconnect;
-use crate::connectors::sink::SinkMsg;
-use crate::connectors::source::SourceMsg;
-use crate::connectors::{Addr, Connectivity, Connector, ConnectorContext, Context, Msg};
-use crate::errors::{Error, Result};
-use async_std::channel::{bounded, Sender};
+use crate::connectors::{Addr, Connectivity, Connector, ConnectorContext, Msg};
+use crate::errors::Result;
+use crate::pdk::RResult;
+use abi_stable::{
+    std_types::{RBox, SendRBoxError},
+    StableAbi,
+};
+use async_ffi::{BorrowingFfiFuture, FutureExt};
+use async_std::channel::Sender;
 use async_std::task;
 use futures::future::{join3, ready, FutureExt};
 use std::convert::identity;
@@ -78,7 +82,8 @@ impl ReconnectStrategy for SimpleBackoff {
 }
 
 /// describing the number of previous connection attempts
-#[derive(Debug, Default, PartialEq, Eq, Clone)]
+#[repr(C)]
+#[derive(Debug, Default, PartialEq, Eq, StableAbi)]
 pub struct Attempt {
     overall: u64,
     success: u64,
@@ -147,17 +152,33 @@ pub(crate) struct ReconnectRuntime {
 #[derive(Clone)]
 pub struct ConnectionLostNotifier(Sender<Msg>);
 
-impl ConnectionLostNotifier {
-    /// constructor
-    pub fn new(tx: Sender<Msg>) -> Self {
-        Self(tx)
-    }
+/// Note that since `ConnectionLostNotifier` is used for the plugin system, it
+/// must be `#[repr(C)]` in order to interact with it. However, since it uses a
+/// complex type such as a channel, it's easier to just make it available as an
+/// opaque type instead, with the help of `sabi_trait`.
+#[abi_stable::sabi_trait]
+pub trait ConnectionLostNotifierOpaque: Clone + Send + Sync {
     /// notify the runtime that this connector lost its connection
-    pub async fn notify(&self) -> Result<()> {
-        self.0.send(Msg::ConnectionLost).await?;
-        Ok(())
+    fn notify(&self) -> BorrowingFfiFuture<'_, RResult<()>>;
+}
+impl ConnectionLostNotifierOpaque for ConnectionLostNotifier {
+    fn notify(&self) -> BorrowingFfiFuture<'_, RResult<()>> {
+        async move {
+            self.0
+                .send(Msg::ConnectionLost)
+                .await
+                .map_err(|e| {
+                    // First converting to our own error type, and then to abi_stable's
+                    let e: crate::errors::Error = e.into();
+                    SendRBoxError::new(e)
+                })
+                .into()
+        }
+        .into_ffi()
     }
 }
+/// Alias for the type used in FFI
+pub type BoxedConnectionLostNotifier = ConnectionLostNotifierOpaque_TO<'static, RBox<()>>;
 
 impl ReconnectRuntime {
     pub(crate) fn notifier(&self) -> ConnectionLostNotifier {
@@ -210,7 +231,7 @@ impl ReconnectRuntime {
     /// asynchronously and send a `connector::Msg::Reconnect` to the connector identified by `addr`.
     pub(crate) async fn attempt(
         &mut self,
-        connector: &mut dyn Connector,
+        connector: &mut Connector,
         ctx: &ConnectorContext,
     ) -> Result<(Connectivity, bool)> {
         let (tx, rx) = bounded(2);
@@ -308,7 +329,10 @@ impl ReconnectRuntime {
 mod tests {
     // use crate::connectors::quiescence::QuiescenceBeacon;
 
-    use crate::connectors::quiescence::QuiescenceBeacon;
+    use crate::connectors::{quiescence::QuiescenceBeacon, RawConnector};
+    use crate::errors::Error;
+    use crate::pdk::{RError, RResult};
+    use abi_stable::{rstr, std_types::RStr};
 
     use super::*;
 
@@ -316,14 +340,19 @@ mod tests {
     struct FakeConnector {
         answer: Option<bool>,
     }
-    #[async_trait::async_trait]
-    impl Connector for FakeConnector {
-        async fn connect(&mut self, _ctx: &ConnectorContext, _attempt: &Attempt) -> Result<bool> {
-            self.answer.ok_or("Blergh!".into())
+    impl RawConnector for FakeConnector {
+        fn connect<'a>(
+            &'a mut self,
+            _ctx: &'a ConnectorContext,
+            _attempt: &'a Attempt,
+        ) -> BorrowingFfiFuture<'a, RResult<bool>> {
+            self.answer
+                .ok_or(RError::new(Error::from("Blergh!")))
+                .into()
         }
 
-        fn default_codec(&self) -> &str {
-            "json"
+        fn default_codec(&self) -> RStr<'_> {
+            rstr!("json")
         }
     }
 

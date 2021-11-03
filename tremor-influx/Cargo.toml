@@ -18,7 +18,7 @@ rustc-args = ["-C target-feature=+avx,+avx2,+sse4.2"]
 
 [dependencies]
 lexical = "6.0.1"
-value-trait = "0.2"
+value-trait = { version = "0.2.9", features = ["c-abi"] }
 
 [dev-dependencies]
 criterion = "0.3"
