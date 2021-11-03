@@ -2,10 +2,13 @@
 //! TODO: move into a separate crate along  with the `RawConnector` trait and
 //! similars.
 
-use crate::connectors::{ConnectorMod_Ref, RawConnector_TO};
+use crate::connectors::RawConnector_TO;
 
 use abi_stable::{
-    declare_root_module_statics, package_version_strings, std_types::RBox, RootModule,
+    declare_root_module_statics, package_version_strings, std_types::RBox,
+    StableAbi,
+    sabi_types::VersionStrings,
+    library::RootModule,
 };
 
 #[repr(C)]

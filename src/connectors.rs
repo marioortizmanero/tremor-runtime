@@ -45,9 +45,9 @@ use beef::Cow;
 
 use crate::config::Connector as ConnectorConfig;
 use crate::connectors::metrics::{MetricsSinkReporter, SourceReporter};
-use crate::connectors::sink::{SinkAddr, SinkContext, SinkMsg};
-use crate::connectors::source::{SourceAddr, SourceContext, SourceMsg};
-use crate::errors::{Error, ErrorKind, RResult, Result};
+use crate::connectors::sink::{RawSink_TO, SinkAddr, SinkContext, SinkMsg};
+use crate::connectors::source::{RawSource_TO, SourceAddr, SourceContext, SourceMsg};
+use crate::errors::{Error, ErrorKind, Result};
 use crate::pdk::{
     panic::MayPanic::{self, NoPanic},
     RResult,
@@ -74,7 +74,7 @@ use abi_stable::{
     sabi_types::VersionStrings,
     std_types::{
         RBox,
-        ROption::{self, RNone},
+        ROption::{self, RNone, RSome},
         RResult::{RErr, ROk},
         RStr, RString,
     },

@@ -49,7 +49,7 @@ use tremor_script::EventPayload;
 
 use abi_stable::{
     rvec,
-    std_types::{RResult::ROk, RStr, RVec},
+    std_types::{RResult::ROk, RStr, RVec, RBox},
     StableAbi,
 };
 
@@ -341,10 +341,7 @@ impl SinkManagerBuilder {
     }
 
     /// spawn your specific sink
-    pub fn spawn<S>(self, sink: S, ctx: SinkContext) -> Result<SinkAddr>
-    where
-        S: Sink + Send + 'static,
-    {
+    pub fn spawn<S>(self, sink: Sink, ctx: SinkContext) -> Result<SinkAddr> {
         let qsize = self.qsize;
         let name = ctx.url.short_id("c-sink"); // connector sink
         let (sink_tx, sink_rx) = bounded(qsize);
@@ -479,11 +476,8 @@ enum SinkState {
     Stopped,
 }
 
-pub(crate) struct SinkManager<S>
-where
-    S: Sink,
-{
-    sink: S,
+pub(crate) struct SinkManager {
+    sink: Sink,
     ctx: SinkContext,
     rx: Receiver<SinkMsg>,
     reply_rx: Receiver<AsyncSinkReply>,
@@ -501,11 +495,8 @@ where
     state: SinkState,
 }
 
-impl<S> SinkManager<S>
-where
-    S: Sink,
-{
-    fn new(sink: S, ctx: SinkContext, builder: SinkManagerBuilder, rx: Receiver<SinkMsg>) -> Self {
+impl SinkManager {
+    fn new(sink: Sink, ctx: SinkContext, builder: SinkManagerBuilder, rx: Receiver<SinkMsg>) -> Self {
         let SinkManagerBuilder {
             serializer,
             reply_channel,

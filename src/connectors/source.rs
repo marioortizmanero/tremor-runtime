@@ -26,7 +26,7 @@ use tremor_script::{EventPayload, ValueAndMeta};
 use crate::codec::{self, Codec};
 use crate::config::{Codec as CodecConfig, Connector as ConnectorConfig};
 use crate::connectors::Msg;
-use crate::errors::{Error, RResult, Result};
+use crate::errors::{Error, Result};
 use crate::pdk::{
     panic::MayPanic::{self, NoPanic},
     RResult,
@@ -37,7 +37,7 @@ use crate::url::ports::{ERR, OUT};
 use crate::url::TremorUrl;
 use abi_stable::{
     rvec,
-    std_types::{ROption, RString, RVec, Tuple2},
+    std_types::{ROption, RString, RVec, Tuple2, RBox, RResult::ROk},
     StableAbi,
 };
 use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
