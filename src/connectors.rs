@@ -73,12 +73,20 @@ use crate::config::Connector as ConnectorConfig;
 use crate::connectors::metrics::{MetricsSinkReporter, SourceReporter};
 use crate::connectors::sink::{SinkAddr, SinkContext, SinkMsg};
 use crate::connectors::source::{SourceAddr, SourceContext, SourceMsg};
-use crate::pdk::{RResult, MayPanic};
 use crate::errors::{Error, ErrorKind, Result};
+use crate::pdk::{MayPanic, RResult};
 use crate::pipeline;
 use crate::system::World;
 use crate::OpConfig;
-use crate::{config::Connector as ConnectorConfig, connectors::utils::metrics::METRICS_CHANNEL};
+use abi_stable::{
+    std_types::{
+        RBox,
+        ROption::{self, RNone},
+        RResult::ROk,
+        RVec,
+    },
+    StableAbi,
+};
 use async_std::channel::{bounded, Sender};
 use async_std::task::{self};
 use beef::Cow;
@@ -93,7 +101,6 @@ use tremor_script::ast::DeployEndpoint;
 use tremor_value::Value;
 use utils::reconnect::{Attempt, ConnectionLostNotifier, ReconnectRuntime};
 use value_trait::{Builder, Mutable};
-use abi_stable::{StableAbi, std_types::{RBox, RVec, ROption::{self, RNone}, RResult::ROk}};
 
 /// quiescence stuff
 pub(crate) use utils::{metrics, quiescence, reconnect};
@@ -1037,7 +1044,8 @@ pub trait RawConnector: Send {
     ///
     /// This function is called exactly once upon connector creation.
     /// If this connector does not act as a source, return `Ok(None)`.
-    /* async */ fn create_source(
+    /* async */
+    fn create_source(
         &mut self,
         _source_context: SourceContext,
     ) -> MayPanic<RResult<ROption<RawSource_TO<'static, RBox<()>>>>> {
@@ -1048,7 +1056,8 @@ pub trait RawConnector: Send {
     ///
     /// This function is called exactly once upon connector creation.
     /// If this connector does not act as a sink, return `Ok(None)`.
-    /* async */ fn create_sink(
+    /* async */
+    fn create_sink(
         &mut self,
         _sink_context: SinkContext,
         _builder: sink::SinkManagerBuilder,
@@ -1070,27 +1079,41 @@ pub trait RawConnector: Send {
     ///
     /// To know when to stop reading new data from the external connection, the `quiescence` beacon
     /// can be used. Call `.reading()` and `.writing()` to see if you should continue doing so, if not, just stop and rest.
-    /* async */ fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> MayPanic<RResult<bool>>;
+    /* async */
+    fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> MayPanic<RResult<bool>>;
 
     /// called once when the connector is started
     /// `connect` will be called after this for the first time, leave connection attempts in `connect`.
-    /* async */ fn on_start(&mut self, _ctx: &ConnectorContext) -> MayPanic<RResult<ConnectorState>> {
+    /* async */
+    fn on_start(&mut self, _ctx: &ConnectorContext) -> MayPanic<RResult<ConnectorState>> {
         NoPanic(ROk(ConnectorState::Running))
     }
 
     /// called when the connector pauses
-    /* async */ fn on_pause(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {NoPanic(())}
+    /* async */
+    fn on_pause(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {
+        NoPanic(())
+    }
     /// called when the connector resumes
-    /* async */ fn on_resume(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {NoPanic(())}
+    /* async */
+    fn on_resume(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {
+        NoPanic(())
+    }
 
     /// Drain
     ///
     /// Ensure no new events arrive at the source part of this connector when this function returns
     /// So we can safely send the `Drain` signal.
-    /* async */ fn on_drain(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {NoPanic(())}
+    /* async */
+    fn on_drain(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {
+        NoPanic(())
+    }
 
     /// called when the connector is stopped
-    /* async */ fn on_stop(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {NoPanic(())}
+    /* async */
+    fn on_stop(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {
+        NoPanic(())
+    }
 
     /// returns the default codec for this connector
     // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
