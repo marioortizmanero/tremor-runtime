@@ -175,8 +175,8 @@ pub trait RawSource: Send {
     /// Pulls custom metrics from the source
     // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
     // otherwise, rather than a function?
-    fn metrics(&mut self, _timestamp: u64) -> RVec<EventPayload> {
-        rvec![]
+    fn metrics(&mut self, _timestamp: u64) -> MayPanic<RVec<EventPayload>> {
+        NoPanic(rvec![])
     }
 
     ///////////////////////////
@@ -376,6 +376,56 @@ pub trait StreamReader: Send {
     /// called when the reader is finished or encountered an error
     async fn on_done(&mut self, _stream: u64) -> StreamDone {
         StreamDone::StreamClosed
+    }
+}
+
+/// FIXME: this needs renaming and docs
+#[derive(Clone)]
+pub struct ChannelSourceRuntime {
+    sender: Sender<SourceReply>,
+    ctx: SourceContext,
+}
+
+impl ChannelSourceRuntime {
+    const READ_TIMEOUT_MS: Duration = Duration::from_millis(100);
+    pub(crate) fn register_stream_reader<R>(
+        &self,
+        stream: u64,
+        ctx: &ConnectorContext,
+        mut reader: R,
+    ) where
+        R: StreamReader + 'static + std::marker::Sync,
+    {
+        let ctx = ctx.clone();
+        let tx = self.sender.clone();
+        task::spawn(async move {
+            if tx.send(SourceReply::StartStream(stream)).await.is_err() {
+                error!("[Connector::{}] Failed to start stream", ctx.url);
+                return;
+            };
+
+            while ctx.quiescence_beacon.continue_reading().await {
+                let sc_data = timeout(Self::READ_TIMEOUT_MS, reader.read(stream)).await;
+
+                let sc_data = match sc_data {
+                    Err(_) => continue,
+                    Ok(Ok(d)) => d,
+                    Ok(Err(e)) => {
+                        error!("[Connector::{}] reader error: {}", ctx.url, e);
+                        break;
+                    }
+                };
+                let last = matches!(&sc_data, SourceReply::EndStream(_));
+                if tx.send(sc_data).await.is_err() || last {
+                    break;
+                };
+            }
+            if reader.on_done(stream).await == StreamDone::ConnectorClosed {
+                if let Err(e) = ctx.notifier.notify().await {
+                    error!("[Connector::{}] Failed to notify connector: {}", ctx.url, e);
+                };
+            }
+        });
     }
 }
 
