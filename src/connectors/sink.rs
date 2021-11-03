@@ -26,9 +26,8 @@ pub(crate) mod concurrency_cap;
 use crate::codec::{self, Codec};
 use crate::config::{Codec as CodecConfig, Connector as ConnectorConfig};
 use crate::connectors::{Msg, StreamDone};
-use crate::pdk::{RResult, MayPanic};
 use crate::errors::Result;
-use crate::pdk::RResult;
+use crate::pdk::{MayPanic, RResult};
 use crate::permge::PriorityMerge;
 use crate::pipeline;
 use crate::postprocessor::{make_postprocessors, postprocess, Postprocessors};
@@ -36,9 +35,8 @@ use crate::url::ports::IN;
 use crate::url::TremorUrl;
 use abi_stable::{
     rvec,
-    std_types::{RBox, RResult::ROk, RStr, RVec, SendRBoxError},
-    type_level::downcasting::TD_Opaque,
-    RMut, StableAbi,
+    std_types::{RResult::ROk, RStr, RVec},
+    StableAbi,
 };
 use async_std::channel::{bounded, unbounded, Receiver, Sender};
 use async_std::stream::StreamExt; // for .next() on PriorityMerge
@@ -53,7 +51,6 @@ use std::fmt::Display;
 use tremor_common::time::nanotime;
 use tremor_pipeline::{CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID};
 use tremor_script::EventPayload;
-use abi_stable::{std_types::{RVec, RStr, RResult::ROk}, rvec, StableAbi};
 
 use tremor_value::{pdk::Value as PdkValue, Value};
 
@@ -177,7 +174,8 @@ pub type BoxedRawSink = RawSink_TO<'static, RBox<()>>;
 pub trait RawSink: Send {
     /// called when receiving an event
     /// FIXME: Why are we returning a Vec but the elements don't allow to correlate what was acked
-    /* async */ fn on_event(
+    /* async */
+    fn on_event(
         &mut self,
         input: RStr<'_>,
         event: Event,
@@ -186,7 +184,8 @@ pub trait RawSink: Send {
         start: u64,
     ) -> RResult<SinkReply>;
     /// called when receiving a signal
-    /* async */ fn on_signal(
+    /* async */
+    fn on_signal(
         &mut self,
         _signal: Event,
         _ctx: &SinkContext,
@@ -202,19 +201,37 @@ pub trait RawSink: Send {
 
     // lifecycle stuff
     /// called when started
-    /* async */ fn on_start(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {NoPanic(())}
+    /* async */
+    fn on_start(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {
+        NoPanic(())
+    }
     /// called when paused
-    /* async */ fn on_pause(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {NoPanic(())}
+    /* async */
+    fn on_pause(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {
+        NoPanic(())
+    }
     /// called when resumed
-    /* async */ fn on_resume(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {NoPanic(())}
+    /* async */
+    fn on_resume(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {
+        NoPanic(())
+    }
     /// called when stopped
-    /* async */ fn on_stop(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {NoPanic(())}
+    /* async */
+    fn on_stop(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {
+        NoPanic(())
+    }
 
     // connectivity stuff
     /// called when sink lost connectivity
-    /* async */ fn on_connection_lost(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {NoPanic(())}
+    /* async */
+    fn on_connection_lost(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {
+        NoPanic(())
+    }
     /// called when sink re-established connectivity
-    /* async */ fn on_connection_established(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {NoPanic(())}
+    /* async */
+    fn on_connection_established(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {
+        NoPanic(())
+    }
 
     /// if `true` events are acknowledged/failed automatically by the sink manager.
     /// Such sinks should return SinkReply::None from on_event or SinkReply::Fail if they fail immediately.
@@ -232,7 +249,6 @@ pub trait RawSink: Send {
         false
     }
 }
-
 
 // Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
 // types so that it's easier to use with `std`.
