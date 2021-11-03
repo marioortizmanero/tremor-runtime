@@ -25,12 +25,56 @@ pub mod source;
 #[macro_use]
 pub(crate) mod utils;
 
-use self::metrics::{SinkReporter, SourceReporter};
-use self::sink::{SinkAddr, SinkContext, SinkMsg};
-use self::source::{SourceAddr, SourceContext, SourceMsg};
-use self::utils::quiescence::QuiescenceBeacon;
-use crate::errors::{Error, Kind as ErrorKind, Result};
-use crate::instance::InstanceState;
+/// file connector implementation
+pub mod file;
+
+/// tcp server and client connector impls
+pub(crate) mod tcp;
+
+/// udp server connector impl
+pub(crate) mod udp_server;
+
+/// udp server connector impl
+pub(crate) mod udp_client;
+
+/// std streams connector (stdout, stderr, stdin)
+pub(crate) mod stdio;
+
+/// Home of the famous metrics collector
+pub(crate) mod metrics;
+
+/// Metronome
+pub(crate) mod metronome;
+
+/// Exit Connector
+pub(crate) mod exit;
+
+/// KV
+pub(crate) mod kv;
+
+/// Write Ahead Log
+pub(crate) mod wal;
+
+/// connector for checking guaranteed delivery and circuit breaker logic
+//pub(crate) mod cb;
+
+/// quiescence stuff
+pub(crate) mod quiescence;
+
+/// collection of TLS utilities and configs
+pub(crate) mod tls;
+
+use std::fmt::Display;
+
+use async_std::task::{self, JoinHandle};
+use beef::Cow;
+
+use crate::config::Connector as ConnectorConfig;
+use crate::connectors::metrics::{MetricsSinkReporter, SourceReporter};
+use crate::connectors::sink::{SinkAddr, SinkContext, SinkMsg};
+use crate::connectors::source::{SourceAddr, SourceContext, SourceMsg};
+use crate::pdk::{RResult, MayPanic};
+use crate::errors::{Error, ErrorKind, Result};
 use crate::pipeline;
 use crate::system::World;
 use crate::OpConfig;
@@ -979,40 +1023,11 @@ const OUT_PORTS_REF: &'static [Cow<'static, str>; 2] = &OUT_PORTS;
 /// This trait specifically is the low-level connector interface used for the
 /// plugin system. The `Connector` type wraps it up for ease of use.
 #[abi_stable::sabi_trait]
-pub trait Connector: Send {
-    /// Valid input ports for the connector, by default this is `in`
-    fn input_ports(&self) -> &[Cow<'static, str>] {
-        IN_PORTS_REF
-    }
-    /// Valid output ports for the connector, by default this is `out` and `err`
-    fn output_ports(&self) -> &[Cow<'static, str>] {
-        OUT_PORTS_REF
-    }
-
-    /// Tests if a input port is valid, by default does a case insensitive search against
-    /// `self.input_ports()`
-    fn is_valid_input_port(&self, port: &str) -> bool {
-        for valid in self.input_ports() {
-            if port.eq_ignore_ascii_case(valid.as_ref()) {
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Tests if a input port is valid, by default does a case insensitive search against
-    /// `self.output_ports()`
-    fn is_valid_output_port(&self, port: &str) -> bool {
-        for valid in self.output_ports() {
-            if port.eq_ignore_ascii_case(valid.as_ref()) {
-                return true;
-            }
-        }
-        false
-    }
-
+pub trait RawConnector: Send {
     /// This connector works with structured data and does not allow the use
     /// of codecs.
+    // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
+    // otherwise, rather than a function?
     fn is_structured(&self) -> bool {
         false
     }
@@ -1077,6 +1092,8 @@ pub trait Connector: Send {
     /* async */ fn on_stop(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {NoPanic(())}
 
     /// returns the default codec for this connector
+    // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
+    // otherwise, rather than a function?
     fn default_codec(&self) -> &str;
 }
 
