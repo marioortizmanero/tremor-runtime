@@ -315,35 +315,6 @@ impl Source {
     }
 }
 
-/// A source that receives `SourceReply` messages via a channel.
-/// It does not handle acks/fails.
-///
-/// Connector implementations handling their stuff in a separate task can use the
-/// channel obtained by `ChannelSource::sender()` to send `SourceReply`s to the
-/// runtime.
-pub struct ChannelSource {
-    rx: Receiver<SourceReply>,
-    tx: SourceReplySender,
-    ctx: SourceContext,
-}
-
-impl ChannelSource {
-    /// constructor
-    pub fn new(ctx: SourceContext, qsize: usize) -> Self {
-        let (tx, rx) = bounded(qsize);
-        Self { rx, tx, ctx }
-    }
-
-    /// get the sender for the source
-    /// FIXME: change the name
-    pub fn runtime(&self) -> ChannelSourceRuntime {
-        ChannelSourceRuntime {
-            sender: self.tx.clone(),
-            ctx: self.ctx.clone(),
-        }
-    }
-}
-
 ///
 #[async_trait::async_trait]
 pub trait StreamReader: Send {
@@ -404,25 +375,6 @@ impl ChannelSourceRuntime {
     }
 }
 
-#[async_trait::async_trait()]
-impl Source for ChannelSource {
-    async fn pull_data(&mut self, _pull_id: u64, _ctx: &SourceContext) -> Result<SourceReply> {
-        match self.rx.try_recv() {
-            Ok(reply) => Ok(reply),
-            Err(TryRecvError::Empty) => {
-                // TODO: configure pull interval in connector config?
-                Ok(SourceReply::Empty(DEFAULT_POLL_INTERVAL))
-            }
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    /// this source is not handling acks/fails
-    fn is_transactional(&self) -> bool {
-        false
-    }
-}
-
 // TODO make fields private and add some nice methods
 /// context for a source
 #[repr(C)]
@@ -457,10 +409,7 @@ impl SourceManagerBuilder {
         self.qsize
     }
 
-    pub fn spawn<S>(self, source: S, ctx: SourceContext) -> Result<SourceAddr>
-    where
-        S: Source + Send + 'static,
-    {
+    pub fn spawn(self, source: Source, ctx: SourceContext) -> Result<SourceAddr> {
         let qsize = self.qsize;
         let name = ctx.url.short_id("c-src"); // connector source
         let (source_tx, source_rx) = bounded(qsize);
@@ -609,11 +558,8 @@ impl SourceState {
 
 /// entity driving the source task
 /// and keeping the source state around
-pub(crate) struct SourceManager<S>
-where
-    S: Source,
-{
-    source: S,
+pub(crate) struct SourceManager {
+    source: Source,
     ctx: SourceContext,
     rx: Receiver<SourceMsg>,
     pipelines_out: Vec<(TremorUrl, pipeline::Addr)>,
@@ -629,12 +575,9 @@ where
     expected_drained: usize,
 }
 
-impl<S> SourceManager<S>
-where
-    S: Source,
-{
+impl SourceManager {
     fn new(
-        source: S,
+        source: Source,
         ctx: SourceContext,
         builder: SourceManagerBuilder,
         rx: Receiver<SourceMsg>,

@@ -203,54 +203,6 @@ fn make_metrics_payload(
     (value, Value::object()).into()
 }
 
-pub(crate) struct MetricsSource {
-    rx: Receiver<Msg>,
-    origin_uri: EventOriginUri,
-}
-
-impl MetricsSource {
-    pub(crate) fn new(rx: Receiver<Msg>) -> Self {
-        Self {
-            rx,
-            origin_uri: EventOriginUri {
-                scheme: "tremor-metrics".to_string(),
-                host: hostname(),
-                port: None,
-                path: vec![],
-            },
-        }
-    }
-}
-
-#[async_trait::async_trait()]
-impl Source for MetricsSource {
-    async fn pull_data(&mut self, _pull_id: u64, _ctx: &SourceContext) -> Result<SourceReply> {
-        match self.rx.try_recv() {
-            Ok(msg) => Ok(SourceReply::Structured {
-                payload: msg.payload,
-                origin_uri: msg.origin_uri.unwrap_or_else(|| self.origin_uri.clone()),
-                stream: DEFAULT_STREAM_ID,
-            }),
-            Err(TryRecvError::Closed) => Err(TryRecvError::Closed.into()),
-            Err(TryRecvError::Empty) => Ok(SourceReply::Empty(10)),
-        }
-    }
-
-    fn is_transactional(&self) -> bool {
-        false
-    }
-}
-
-pub(crate) struct MetricsSink {
-    tx: Sender<Msg>,
-}
-
-impl MetricsSink {
-    pub(crate) fn new(tx: Sender<Msg>) -> Self {
-        Self { tx }
-    }
-}
-
 /// verify a value for conformance with the required metrics event format
 pub(crate) fn verify_metrics_value(value: &Value<'_>) -> Result<()> {
     value
@@ -275,44 +227,4 @@ pub(crate) fn verify_metrics_value(value: &Value<'_>) -> Result<()> {
             }
         })
         .ok_or_else(|| ErrorKind::InvalidMetricsData.into())
-}
-
-/// passing events through to the source channel
-#[async_trait::async_trait()]
-impl Sink for MetricsSink {
-    /// entrypoint for custom metrics events
-    async fn on_event(
-        &mut self,
-        _input: &str,
-        event: tremor_pipeline::Event,
-        _ctx: &SinkContext,
-        _serializer: &mut EventSerializer,
-        _start: u64,
-    ) -> ResultVec {
-        // verify event format
-        for (value, _meta) in event.value_meta_iter() {
-            // if it fails here an error event is sent to the ERR port of this connector
-            verify_metrics_value(value)?;
-        }
-
-        let mut res = Vec::with_capacity(1);
-        let Event {
-            origin_uri, data, ..
-        } = event;
-
-        let metrics_msg = Msg::new(data, origin_uri);
-        let ack_or_fail = match self.tx.try_broadcast(metrics_msg) {
-            Err(TrySendError::Closed(_)) => {
-                // channel is closed
-                res.push(SinkReply::CB(CbAction::Close));
-                SinkReply::Fail
-            }
-            Err(TrySendError::Full(_)) => SinkReply::Fail,
-            _ => SinkReply::Ack,
-        };
-        if event.transactional {
-            res.push(ack_or_fail);
-        }
-        Ok(res)
-    }
 }

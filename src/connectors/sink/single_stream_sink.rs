@@ -26,26 +26,6 @@ use tremor_common::time::nanotime;
 
 use super::{AsyncSinkReply, EventCfData, Sink, StreamWriter};
 
-pub struct SingleStreamSink {
-    tx: Sender<SinkData>,
-    rx: Receiver<SinkData>,
-    reply_tx: Sender<AsyncSinkReply>,
-}
-
-impl SingleStreamSink {
-    pub fn new(qsize: usize, reply_tx: Sender<AsyncSinkReply>) -> Self {
-        let (tx, rx) = bounded(qsize);
-        Self { tx, rx, reply_tx }
-    }
-    /// hand out a `ChannelSinkRuntime` instance in order to register stream writers
-    pub fn runtime(&self) -> SingleStreamSinkRuntime {
-        SingleStreamSinkRuntime {
-            rx: self.rx.clone(),
-            reply_tx: self.reply_tx.clone(),
-        }
-    }
-}
-
 pub(crate) struct SinkData {
     data: Vec<Vec<u8>>,
     contraflow: Option<EventCfData>,
@@ -111,49 +91,5 @@ impl SingleStreamSinkRuntime {
             }
             Result::Ok(())
         });
-    }
-}
-#[async_trait::async_trait()]
-impl Sink for SingleStreamSink {
-    async fn on_event(
-        &mut self,
-        _input: &str,
-        event: tremor_pipeline::Event,
-        ctx: &super::SinkContext,
-        serializer: &mut super::EventSerializer,
-        start: u64,
-    ) -> super::ResultVec {
-        let ingest_ns = event.ingest_ns;
-        let contraflow = if event.transactional {
-            Some(EventCfData::from(&event))
-        } else {
-            None
-        };
-        let mut res = Vec::with_capacity(event.len());
-        for value in event.value_iter() {
-            let data = serializer.serialize(value, ingest_ns)?;
-            let sink_data = SinkData {
-                data,
-                contraflow: contraflow.clone(), // :scream:
-                start,
-            };
-            res.push(if self.tx.send(sink_data).await.is_err() {
-                error!("[Sink::{}] Error sending to closed stream: 0", &ctx.url);
-                SinkReply::Fail
-            } else {
-                SinkReply::None
-            });
-        }
-        Ok(res)
-    }
-
-    fn asynchronous(&self) -> bool {
-        // events are delivered asynchronously on their stream task
-        true
-    }
-
-    fn auto_ack(&self) -> bool {
-        // we handle ack/fail in the asynchronous stream
-        false
     }
 }
