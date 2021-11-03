@@ -46,7 +46,7 @@ use tremor_pipeline::{
 };
 use tremor_value::{literal, Value};
 use value_trait::Builder;
-use abi_stable::rvec;
+use abi_stable::{StableAbi, rvec};
 
 /// The default poll interval for `try_recv` on channels in connectors
 pub const DEFAULT_POLL_INTERVAL: u64 = 10;

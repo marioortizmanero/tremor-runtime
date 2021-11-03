@@ -24,11 +24,9 @@ pub mod single_stream_sink;
 pub(crate) mod concurrency_cap;
 
 use crate::codec::{self, Codec};
-use crate::config::{
-    Codec as CodecConfig, Connector as ConnectorConfig, Postprocessor as PostprocessorConfig,
-};
-use crate::connectors::utils::reconnect::{Attempt, ConnectionLostNotifier};
-use crate::connectors::{ConnectorType, Context, Msg, QuiescenceBeacon, StreamDone};
+use crate::config::{Codec as CodecConfig, Connector as ConnectorConfig};
+use crate::connectors::{Msg, StreamDone};
+use crate::pdk::{RResult, MayPanic};
 use crate::errors::Result;
 use crate::permge::PriorityMerge;
 use crate::pipeline;
@@ -45,7 +43,8 @@ use std::collections::{BTreeMap, HashSet};
 use std::fmt::Display;
 use tremor_common::time::nanotime;
 use tremor_pipeline::{CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID};
-use tremor_script::{ast::DeployEndpoint, EventPayload};
+use tremor_script::EventPayload;
+use abi_stable::{std_types::{RVec, RStr, RResult::ROk}, rvec, StableAbi};
 
 use tremor_value::Value;
 
@@ -160,100 +159,130 @@ pub enum AsyncSinkReply {
 }
 
 /// connector sink - receiving events
-#[async_trait::async_trait]
-pub trait Sink: Send {
+#[abi_stable::sabi_trait]
+pub trait RawSink: Send {
     /// called when receiving an event
-    async fn on_event(
+    /// FIXME: Why are we returning a Vec but the elements don't allow to correlate what was acked
+    /* async */ fn on_event(
+        &mut self,
+        input: RStr<'_>,
+        event: Event,
+        ctx: &SinkContext,
+        serializer: &mut EventSerializer,
+        start: u64,
+    ) -> RResult<SinkReply>;
+    /// called when receiving a signal
+    /* async */ fn on_signal(
+        &mut self,
+        _signal: Event,
+        _ctx: &SinkContext,
+        _serializer: &mut EventSerializer,
+    ) -> RResult<SinkReply> {
+        ROk(SinkReply::default())
+    }
+
+    /// Pull metrics from the sink
+    fn metrics(&mut self, _timestamp: u64) -> RVec<EventPayload> {
+        rvec![]
+    }
+
+    // lifecycle stuff
+    /// called when started
+    /* async */ fn on_start(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {NoPanic(())}
+    /// called when paused
+    /* async */ fn on_pause(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {NoPanic(())}
+    /// called when resumed
+    /* async */ fn on_resume(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {NoPanic(())}
+    /// called when stopped
+    /* async */ fn on_stop(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {NoPanic(())}
+
+    // connectivity stuff
+    /// called when sink lost connectivity
+    /* async */ fn on_connection_lost(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {NoPanic(())}
+    /// called when sink re-established connectivity
+    /* async */ fn on_connection_established(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {NoPanic(())}
+
+    /// if `true` events are acknowledged/failed automatically by the sink manager.
+    /// Such sinks should return SinkReply::None from on_event or SinkReply::Fail if they fail immediately.
+    ///
+    /// if `false` events need to be acked/failed manually by the sink impl
+    // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
+    // otherwise, rather than a function?
+    fn auto_ack(&self) -> bool;
+
+    /// if true events are sent asynchronously, not necessarily when `on_event` returns.
+    /// if false events can be considered delivered once `on_event` returns.
+    // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
+    // otherwise, rather than a function?
+    fn asynchronous(&self) -> bool {
+        false
+    }
+}
+
+
+// Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
+// types so that it's easier to use with `std`.
+pub struct Sink(pub RawSink_TO<'static, RBox<()>>);
+impl Sink {
+    fn on_event(
         &mut self,
         input: &str,
         event: Event,
         ctx: &SinkContext,
         serializer: &mut EventSerializer,
         start: u64,
-    ) -> Result<SinkReply>;
-    /// called when receiving a signal
-    async fn on_signal(
+    ) -> RResultVec {
+        self.0
+            .on_event(input.into(), event, ctx, serializer, start)
+            .unwrap()
+            .map(Into::into) // RVec -> Vec
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
+    }
+    fn on_signal(
         &mut self,
-        _signal: Event,
-        _ctx: &SinkContext,
-        _serializer: &mut EventSerializer,
-    ) -> Result<SinkReply> {
-        Ok(SinkReply::default())
+        signal: Event,
+        ctx: &SinkContext,
+        serializer: &mut EventSerializer,
+    ) -> RResultVec {
+        self.0
+            .on_signal(signal, ctx, serializer)
+            .unwrap()
+            .map(Into::into) // RVec -> Vec
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
-    /// Pull metrics from the sink
-    ///
-    /// The expected format is:
-    ///
-    /// ```js
-    /// {
-    ///     "measurement": <name>,
-    ///     "tags": {
-    ///         "connector": <connector-url>,
-    ///         ...
-    ///     },
-    ///     "fields": {
-    ///         "name": <measurement-value>,
-    ///         ...
-    ///     },
-    ///     "timestamp": <timestamp in ns>
-    /// }
-    /// ```
-    ///
-    fn metrics(&mut self, _timestamp: u64) -> Vec<EventPayload> {
-        vec![]
+    fn metrics(&mut self, timestamp: u64) -> RVec<EventPayload> {
+        self.0.metrics(timestamp).unwrap().into()
     }
 
-    // lifecycle stuff
-    /// called when started
-    async fn on_start(&mut self, _ctx: &SinkContext) -> Result<()> {
-        Ok(())
+    fn on_start(&mut self, ctx: &mut SinkContext) -> MayPanic<()> {
+        NoPanic(())
+    }
+    fn on_pause(&mut self, ctx: &mut SinkContext) -> MayPanic<()> {
+        NoPanic(())
+    }
+    fn on_resume(&mut self, ctx: &mut SinkContext) -> MayPanic<()> {
+        NoPanic(())
+    }
+    fn on_stop(&mut self, ctx: &mut SinkContext) -> MayPanic<()> {
+        NoPanic(())
     }
 
-    /// Connect to the external thingy.
-    /// This function is called definitely after `on_start` has been called.
-    ///
-    /// This function might be called multiple times, check the `attempt` where you are at.
-    /// The intended result of this function is to re-establish a connection. It might reuse a working connection.
-    ///
-    /// Return `Ok(true)` if the connection could be successfully established.
-    async fn connect(&mut self, _ctx: &SinkContext, _attempt: &Attempt) -> Result<bool> {
-        Ok(true)
+    fn on_connection_lost(&mut self, ctx: &mut SinkContext) -> MayPanic<()> {
+        NoPanic(())
+    }
+    fn on_connection_established(&mut self, ctx: &mut SinkContext) -> MayPanic<()> {
+        NoPanic(())
     }
 
-    /// called when paused
-    async fn on_pause(&mut self, _ctx: &SinkContext) -> Result<()> {
-        Ok(())
-    }
-    /// called when resumed
-    async fn on_resume(&mut self, _ctx: &SinkContext) -> Result<()> {
-        Ok(())
-    }
-    /// called when stopped
-    async fn on_stop(&mut self, _ctx: &SinkContext) -> Result<()> {
-        Ok(())
+    pub fn auto_ack(&self) -> bool {
+        self.0.auto_ack()
     }
 
-    // connectivity stuff
-    /// called when sink lost connectivity
-    async fn on_connection_lost(&mut self, _ctx: &SinkContext) -> Result<()> {
-        Ok(())
-    }
-    /// called when sink re-established connectivity
-    async fn on_connection_established(&mut self, _ctx: &SinkContext) -> Result<()> {
-        Ok(())
-    }
-
-    /// if `true` events are acknowledged/failed automatically by the sink manager.
-    /// Such sinks should return SinkReply::None from on_event or SinkReply::Fail if they fail immediately.
-    ///
-    /// if `false` events need to be acked/failed manually by the sink impl
-    fn auto_ack(&self) -> bool;
-
-    /// if true events are sent asynchronously, not necessarily when `on_event` returns.
-    /// if false events can be considered delivered once `on_event` returns.
-    fn asynchronous(&self) -> bool {
-        false
+    pub fn asynchronous(&self) -> bool {
+        self.0.asynchronous()
     }
 }
 
