@@ -31,6 +31,8 @@ extern crate log;
 
 use crate::errors::{ErrorKind, Result};
 use async_broadcast::{broadcast, Receiver, Sender};
+use crate::op::prelude::*;
+use abi_stable::{std_types::RVec, StableAbi};
 use beef::Cow;
 use executable_graph::NodeConfig;
 use halfbrown::HashMap;
@@ -44,12 +46,15 @@ use std::fmt::Display;
 use std::iter::Iterator;
 use std::str::FromStr;
 use std::{fmt, sync::Mutex};
-use tremor_script::{ast::Helper, prelude::*};
+use tremor_script::prelude::*;
 
 /// Pipeline Errors
 pub mod errors;
 mod event;
 mod executable_graph;
+
+/// Types specific to the Plugin Development Kit
+pub mod pdk;
 
 #[macro_use]
 mod macros;
@@ -141,7 +146,11 @@ lazy_static! {
 
 /// Stringified numeric key
 /// from <https://github.com/serde-rs/json-benchmark/blob/master/src/prim_str.rs>
-#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Debug)]
+// FIXME: this didn't use to derive `Hash` because it was used for a `BTreeMap`.
+// Since it's now necessary for a `HashMap` as well (see the pdk module), it's
+// required now.
+#[repr(C)]
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, StableAbi)]
 pub struct PrimStr<T>(T)
 where
     T: Copy + Ord + Display + FromStr;
@@ -274,8 +283,15 @@ impl Default for NodeKind {
 }
 
 /// A circuit breaker action
+#[repr(C)]
 #[derive(
-    Debug, Clone, Copy, PartialEq, simd_json_derive::Serialize, simd_json_derive::Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    simd_json_derive::Serialize,
+    simd_json_derive::Deserialize,
+    StableAbi,
 )]
 pub enum CbAction {
     /// Nothing of note
@@ -336,15 +352,22 @@ impl CbAction {
 ///
 /// `EventId` also tracks min and max event ids for other events in order to support batched and grouped events
 /// and facilitate CB mechanics
+#[repr(C)]
 #[derive(
-    Debug, Clone, PartialEq, Default, simd_json_derive::Serialize, simd_json_derive::Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Default,
+    simd_json_derive::Serialize,
+    simd_json_derive::Deserialize,
+    StableAbi,
 )]
 pub struct EventId {
     source_id: u64,
     stream_id: u64,
     event_id: u64,
     pull_id: u64,
-    tracked_pull_ids: Vec<TrackedPullIds>,
+    tracked_pull_ids: RVec<TrackedPullIds>,
 }
 
 /// default stream id if streams dont make sense
@@ -361,7 +384,7 @@ impl EventId {
             stream_id,
             event_id,
             pull_id,
-            tracked_pull_ids: Vec::with_capacity(0),
+            tracked_pull_ids: RVec::with_capacity(0),
         }
     }
 
@@ -637,8 +660,15 @@ impl fmt::Display for EventId {
     }
 }
 
+#[repr(C)]
 #[derive(
-    Debug, Clone, PartialEq, Default, simd_json_derive::Serialize, simd_json_derive::Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Default,
+    simd_json_derive::Serialize,
+    simd_json_derive::Deserialize,
+    StableAbi,
 )]
 /// tracked min and max pull id for a given source and stream
 ///
@@ -817,8 +847,15 @@ impl EventIdGenerator {
 }
 
 /// The kind of signal this is
+#[repr(C)]
 #[derive(
-    Debug, Clone, Copy, PartialEq, simd_json_derive::Serialize, simd_json_derive::Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    simd_json_derive::Serialize,
+    simd_json_derive::Deserialize,
+    StableAbi,
 )]
 pub enum SignalKind {
     // Lifecycle
