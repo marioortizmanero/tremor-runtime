@@ -83,6 +83,7 @@ use crate::config::Connector as ConnectorConfig;
 use crate::connectors::metrics::{MetricsSinkReporter, SourceReporter};
 use crate::connectors::sink::{SinkAddr, SinkContext, SinkMsg};
 use crate::connectors::source::{SourceAddr, SourceContext, SourceMsg};
+use crate::pdk::{RResult, MayPanic};
 use crate::errors::{Error, ErrorKind, Result};
 use crate::pipeline;
 use crate::system::World;
@@ -1028,9 +1029,11 @@ pub enum Connectivity {
 /// This trait specifically is the low-level connector interface used for the
 /// plugin system. The `Connector` type wraps it up for ease of use.
 #[abi_stable::sabi_trait]
-pub trait Connector: Send {
+pub trait RawConnector: Send {
     /// This connector works with structured data and does not allow the use
     /// of codecs.
+    // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
+    // otherwise, rather than a function?
     fn is_structured(&self) -> bool {
         false
     }
@@ -1095,6 +1098,8 @@ pub trait Connector: Send {
     /* async */ fn on_stop(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {NoPanic(())}
 
     /// returns the default codec for this connector
+    // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
+    // otherwise, rather than a function?
     fn default_codec(&self) -> &str;
 }
 
