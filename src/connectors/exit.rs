@@ -30,14 +30,12 @@ use simd_json::ValueAccess;
 
 #[derive(Clone)]
 pub struct Exit {
+    url: TremorUrl,
     world: World,
 }
 
 #[async_trait::async_trait()]
 impl Connector for Exit {
-    fn is_structured(&self) -> bool {
-        true
-    }
     async fn connect(&mut self, _ctx: &ConnectorContext, _attempt: &Attempt) -> Result<bool> {
         Ok(true)
     }
@@ -69,9 +67,6 @@ impl Exit {
 
 #[async_trait::async_trait()]
 impl Sink for Exit {
-    fn auto_ack(&self) -> bool {
-        true
-    }
     async fn on_event(
         &mut self,
         _input: &str,
@@ -79,7 +74,7 @@ impl Sink for Exit {
         _ctx: &SinkContext,
         _serializer: &mut EventSerializer,
         _start: u64,
-    ) -> Result<SinkReply> {
+    ) -> ResultVec {
         for (value, _meta) in event.value_meta_iter() {
             if let Some(delay) = value.get_u64(Self::DELAY) {
                 async_std::task::sleep(Duration::from_millis(delay)).await;
@@ -95,7 +90,7 @@ impl Sink for Exit {
             // this should stop the whole server process
             self.world.stop(mode).await?;
         }
-        Ok(SinkReply::default())
+        Ok(vec![])
     }
 }
 
@@ -115,10 +110,11 @@ impl Builder {
 impl ConnectorBuilder for Builder {
     async fn from_config(
         &self,
-        _id: &TremorUrl,
+        id: &TremorUrl,
         _config: &Option<OpConfig>,
     ) -> Result<Box<dyn Connector>> {
         Ok(Box::new(Exit {
+            url: id.clone(),
             world: self.world.clone(),
         }))
     }

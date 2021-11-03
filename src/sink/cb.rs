@@ -43,6 +43,7 @@ impl Sink for Cb {
     ) -> ResultVec {
         let mut res = Vec::with_capacity(event.len());
         for (value, meta) in event.value_meta_iter() {
+            //            let event = event.clone();
             debug!(
                 "[Sink::CB] {} {}",
                 &event.id.event_id(),

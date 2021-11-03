@@ -15,13 +15,13 @@
 pub use crate::connectors::quiescence::QuiescenceBeacon;
 pub use crate::connectors::reconnect::{Attempt, ConnectionLostNotifier};
 pub use crate::connectors::sink::{
-    AsyncSinkReply, ChannelSink, ChannelSinkRuntime, ContraflowData, EventSerializer,
-    SingleStreamSink, SingleStreamSinkRuntime, Sink, SinkAck, SinkAddr, SinkContext,
-    SinkManagerBuilder, SinkMeta, SinkReply, StreamWriter,
+    ChannelSink, ChannelSinkRuntime, EventSerializer, ResultVec, SingleStreamSink,
+    SingleStreamSinkRuntime, Sink, SinkAddr, SinkContext, SinkManagerBuilder, SinkReply,
+    StreamWriter,
 };
 pub use crate::connectors::source::{
     ChannelSource, ChannelSourceRuntime, Source, SourceAddr, SourceContext, SourceManagerBuilder,
-    SourceReply, SourceReplySender, StreamReader, DEFAULT_POLL_INTERVAL,
+    SourceReply, SourceReplySender, StreamReader,
 };
 pub use crate::connectors::{
     Connector, ConnectorBuilder, ConnectorContext, ConnectorState, StreamDone, StreamIdGen,
@@ -29,11 +29,10 @@ pub use crate::connectors::{
 pub use crate::errors::{Error, ErrorKind, Result};
 pub use crate::url::TremorUrl;
 pub use crate::utils::hostname;
-pub use crate::{Event, OpConfig, QSIZE};
+pub use crate::{OpConfig, QSIZE};
 pub use std::sync::atomic::Ordering;
 pub use tremor_pipeline::{ConfigImpl, EventOriginUri, DEFAULT_STREAM_ID};
 
-/// default buf size used for reading from files and streams (sockets etc)
 pub(crate) fn default_buf_size() -> usize {
     8192
 }

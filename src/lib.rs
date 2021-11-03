@@ -1,3 +1,5 @@
+// FIXME: temporary while PDK is WIP
+#![allow(unused_imports)]
 // Copyright 2020-2021, The Tremor Team
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,9 +36,6 @@ extern crate serde_derive;
 extern crate log;
 #[macro_use]
 extern crate lazy_static;
-
-#[macro_use]
-extern crate rental;
 
 #[cfg(test)]
 #[macro_use]
@@ -93,7 +92,7 @@ pub mod version;
 /// Tremor connector extensions
 pub mod connectors;
 
-/// For the Plugin Development Kit
+/// The plugin development kit
 pub mod pdk;
 
 pub(crate) mod common;

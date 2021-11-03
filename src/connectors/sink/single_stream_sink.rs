@@ -16,8 +16,6 @@
 //!
 //! With some shenanigans removed, compared to `ChannelSink`.
 
-use std::marker::PhantomData;
-
 use crate::connectors::{sink::SinkReply, ConnectorContext, StreamDone};
 use crate::errors::Result;
 use async_std::{
@@ -26,49 +24,18 @@ use async_std::{
 };
 use tremor_common::time::nanotime;
 
-use super::channel_sink::{NoMeta, SinkMeta, SinkMetaBehaviour};
-use super::{AsyncSinkReply, ContraflowData, EventSerializer, Sink, SinkContext, StreamWriter};
+use super::{AsyncSinkReply, EventCfData, Sink, StreamWriter};
 
-pub struct SingleStreamSink<B>
-where
-    B: SinkMetaBehaviour + Send + Sync,
-{
-    _b: PhantomData<B>,
+pub struct SingleStreamSink {
     tx: Sender<SinkData>,
     rx: Receiver<SinkData>,
     reply_tx: Sender<AsyncSinkReply>,
 }
 
-impl SingleStreamSink<NoMeta> {
-    pub fn new_no_meta(qsize: usize, reply_tx: Sender<AsyncSinkReply>) -> Self {
-        SingleStreamSink::new(qsize, reply_tx)
-    }
-}
-
-// impl SingleStreamSink<WithMeta> {
-//     pub fn new_with_meta(qsize: usize, reply_tx: Sender<AsyncSinkReply>) -> Self {
-//         let (tx, rx) = bounded(qsize);
-//         Self {
-//             tx,
-//             rx,
-//             reply_tx,
-//             _b: PhantomData::default(),
-//         }
-//     }
-// }
-
-impl<B> SingleStreamSink<B>
-where
-    B: SinkMetaBehaviour + Send + Sync,
-{
+impl SingleStreamSink {
     pub fn new(qsize: usize, reply_tx: Sender<AsyncSinkReply>) -> Self {
         let (tx, rx) = bounded(qsize);
-        Self {
-            tx,
-            rx,
-            reply_tx,
-            _b: PhantomData::default(),
-        }
+        Self { tx, rx, reply_tx }
     }
     /// hand out a `ChannelSinkRuntime` instance in order to register stream writers
     pub fn runtime(&self) -> SingleStreamSinkRuntime {
@@ -81,8 +48,7 @@ where
 
 pub(crate) struct SinkData {
     data: Vec<Vec<u8>>,
-    meta: Option<SinkMeta>,
-    contraflow: Option<ContraflowData>,
+    contraflow: Option<EventCfData>,
     start: u64,
 }
 
@@ -109,7 +75,6 @@ impl SingleStreamSinkRuntime {
                 true,
                 Ok(SinkData {
                     data,
-                    meta,
                     contraflow,
                     start,
                 }),
@@ -117,7 +82,7 @@ impl SingleStreamSinkRuntime {
                 ctx.quiescence_beacon.continue_writing().await,
                 rx.recv().await,
             ) {
-                let failed = writer.write(data, meta).await.is_err();
+                let failed = writer.write(data).await.is_err();
 
                 if let Some(cf_data) = contraflow {
                     let reply = if failed {
@@ -148,71 +113,38 @@ impl SingleStreamSinkRuntime {
         });
     }
 }
-
 #[async_trait::async_trait()]
-impl<B> Sink for SingleStreamSink<B>
-where
-    B: SinkMetaBehaviour + Send + Sync,
-{
+impl Sink for SingleStreamSink {
     async fn on_event(
         &mut self,
         _input: &str,
         event: tremor_pipeline::Event,
-        ctx: &SinkContext,
-        serializer: &mut EventSerializer,
+        ctx: &super::SinkContext,
+        serializer: &mut super::EventSerializer,
         start: u64,
-    ) -> Result<SinkReply> {
+    ) -> super::ResultVec {
         let ingest_ns = event.ingest_ns;
         let contraflow = if event.transactional {
-            Some(ContraflowData::from(&event))
+            Some(EventCfData::from(&event))
         } else {
             None
         };
-        if let Some(((last_value, last_meta), value_meta_iter)) =
-            event.value_meta_iter().split_last()
-        {
-            // handle first couple of items (if batched)
-            for (value, meta) in value_meta_iter {
-                let data = serializer.serialize(value, ingest_ns)?;
-                let meta = if B::NEEDS_META {
-                    Some(meta.clone_static())
-                } else {
-                    None
-                };
-                let sink_data = SinkData {
-                    data,
-                    meta,
-                    contraflow: contraflow.clone(), // :scream:
-                    start,
-                };
-                if self.tx.send(sink_data).await.is_err() {
-                    error!("[Sink::{}] Error sending to closed stream: 0", &ctx.url);
-                    return Ok(SinkReply::FAIL);
-                }
-            }
-            // handle last item
-            let data = serializer.serialize(last_value, ingest_ns)?;
-            let meta = if B::NEEDS_META {
-                Some(last_meta.clone_static())
-            } else {
-                None
-            };
+        let mut res = Vec::with_capacity(event.len());
+        for value in event.value_iter() {
+            let data = serializer.serialize(value, ingest_ns)?;
             let sink_data = SinkData {
                 data,
-                meta,
-                contraflow,
+                contraflow: contraflow.clone(), // :scream:
                 start,
             };
-            if self.tx.send(sink_data).await.is_err() {
+            res.push(if self.tx.send(sink_data).await.is_err() {
                 error!("[Sink::{}] Error sending to closed stream: 0", &ctx.url);
-                Ok(SinkReply::FAIL)
+                SinkReply::Fail
             } else {
-                Ok(SinkReply::NONE)
-            }
-        } else {
-            // no values inside the event, let's ack it, as we never go asynchronous
-            Ok(SinkReply::ACK)
+                SinkReply::None
+            });
         }
+        Ok(res)
     }
 
     fn asynchronous(&self) -> bool {

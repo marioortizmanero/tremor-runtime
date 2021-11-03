@@ -16,7 +16,7 @@ pub(crate) mod client;
 pub(crate) mod server;
 
 use super::{
-    prelude::*,
+    sink::StreamWriter,
     source::{SourceReply, StreamReader},
     StreamDone,
 };
@@ -123,7 +123,6 @@ where
             meta: Some(self.meta.clone()),
             // ALLOW: we know bytes_read is smaller than or equal buf_size
             data: self.buffer[0..bytes_read].to_vec(),
-            port: None,
         })
     }
 
@@ -183,7 +182,7 @@ impl<S> StreamWriter for TcpWriter<S>
 where
     S: futures::io::AsyncWrite + std::marker::Unpin + std::marker::Sync + std::marker::Send,
 {
-    async fn write(&mut self, data: Vec<Vec<u8>>, _meta: Option<SinkMeta>) -> Result<()> {
+    async fn write(&mut self, data: Vec<Vec<u8>>) -> Result<()> {
         for chunk in data {
             let slice: &[u8] = &chunk;
             self.wrapped_stream.write_all(slice).await?;

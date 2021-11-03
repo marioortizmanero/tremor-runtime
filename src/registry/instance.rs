@@ -17,11 +17,13 @@
 // different artefact types
 //
 
+use std::time::Duration;
+
 use hashbrown::HashSet;
 
 use crate::errors::Result;
 use crate::repository::BindingArtefact;
-use crate::system::{World, DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT};
+use crate::system::World;
 use crate::url::TremorUrl;
 use crate::{connectors, offramp, onramp, pipeline};
 
@@ -105,15 +107,16 @@ impl Instance for BindingArtefact {
             .links
             .iter()
             .flat_map(|(_from, tos)| tos.iter())
-            .map(TremorUrl::to_instance)
-            .filter(TremorUrl::is_connector)
+            .filter(|c| c.is_connector())
+            .cloned()
             .collect();
         let source_connectors: HashSet<TremorUrl> = self
             .binding
             .links
             .iter()
-            .map(|(from, _tos)| from.to_instance())
-            .filter(TremorUrl::is_connector)
+            .map(|(from, _tos)| from)
+            .filter(|c| c.is_connector())
+            .cloned()
             .collect();
 
         // starting connectors without source first, so they are ready when stuff arrives
@@ -147,15 +150,16 @@ impl Instance for BindingArtefact {
             .links
             .iter()
             .flat_map(|(_from, tos)| tos.iter())
-            .filter(|url| (*url).is_connector())
-            .map(TremorUrl::to_instance)
+            .filter(|c| c.is_connector())
+            .cloned()
             .collect();
         let sources: HashSet<TremorUrl> = self
             .binding
             .links
             .iter()
-            .map(|(from, _tos)| from.to_instance())
-            .filter(TremorUrl::is_connector)
+            .map(|(from, _tos)| from)
+            .filter(|c| c.is_connector())
+            .cloned()
             .collect();
 
         let start_points = sources.difference(&sinks);
@@ -178,7 +182,7 @@ impl Instance for BindingArtefact {
         // wait for 5 secs for all drain futures
         // it might be this binding represents a topology that doesn't support proper quiescence
         let res = async_std::future::timeout(
-            DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT,
+            Duration::from_secs(2),
             futures::future::join_all(drain_futures),
         )
         .await;
@@ -210,8 +214,8 @@ impl Instance for BindingArtefact {
             .links
             .iter()
             .flat_map(|(from, tos)| std::iter::once(from).chain(tos.iter()))
-            .filter(|url| (*url).is_pipeline())
-            .map(TremorUrl::to_instance)
+            .filter(|url| url.is_pipeline())
+            .cloned()
             .collect();
         // pipelines
         for pipeline_url in pipelines {
@@ -232,23 +236,24 @@ impl Instance for BindingArtefact {
             .links
             .iter()
             .flat_map(|(_from, tos)| tos.iter())
-            .map(TremorUrl::to_instance)
-            .filter(TremorUrl::is_connector)
+            .filter(|c| c.is_connector())
+            .cloned()
             .collect();
         let sources: HashSet<TremorUrl> = self
             .binding
             .links
             .iter()
-            .map(|(from, _tos)| from.to_instance())
-            .filter(TremorUrl::is_connector)
+            .map(|(from, _tos)| from)
+            .filter(|c| c.is_connector())
+            .cloned()
             .collect();
         let pipelines: HashSet<TremorUrl> = self
             .binding
             .links
             .iter()
             .flat_map(|(from, tos)| std::iter::once(from).chain(tos.iter()))
-            .map(TremorUrl::to_instance)
-            .filter(TremorUrl::is_pipeline)
+            .filter(|url| url.is_pipeline())
+            .cloned()
             .collect();
 
         for source in sources.difference(&sinks) {
@@ -274,15 +279,16 @@ impl Instance for BindingArtefact {
             .links
             .iter()
             .flat_map(|(_from, tos)| tos.iter())
-            .map(TremorUrl::to_instance)
-            .filter(TremorUrl::is_connector)
+            .filter(|c| c.is_connector())
+            .cloned()
             .collect();
         let sources: HashSet<TremorUrl> = self
             .binding
             .links
             .iter()
-            .map(|(from, _tos)| from.to_instance())
-            .filter(TremorUrl::is_connector)
+            .map(|(from, _tos)| from)
+            .filter(|c| c.is_connector())
+            .cloned()
             .collect();
         let pipelines: HashSet<TremorUrl> = self
             .binding
@@ -290,7 +296,7 @@ impl Instance for BindingArtefact {
             .iter()
             .flat_map(|(from, tos)| std::iter::once(from).chain(tos.iter()))
             .filter(|url| url.is_pipeline())
-            .map(TremorUrl::to_instance)
+            .cloned()
             .collect();
 
         for url in pipelines {

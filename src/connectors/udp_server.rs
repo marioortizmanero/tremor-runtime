@@ -84,7 +84,6 @@ impl StreamReader for UdpReader {
                 meta: None,
                 // ALLOW: we know bytes_read is smaller than or equal buf_size
                 data: self.buffer[0..bytes_read].to_vec(),
-                port: None,
             })
         }
     }
