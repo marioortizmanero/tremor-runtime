@@ -57,7 +57,7 @@ use abi_stable::{
         RBox,
         ROption::{self, RNone, RSome},
         RResult::{RErr, ROk},
-        RVec,
+        RString, RVec,
     },
     StableAbi,
 };
@@ -976,6 +976,68 @@ impl Drainage {
             })
             .await?;
         Ok(())
+    }
+}
+
+/// state of a connector
+#[repr(C)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Copy, Clone, StableAbi)]
+#[serde(rename_all = "lowercase")]
+pub enum ConnectorState {
+    /// connector has been initialized, but not yet started
+    Initialized,
+    /// connector is running
+    Running,
+    /// connector has been paused
+    Paused,
+    /// connector was stopped
+    Stopped,
+    /// Draining - getting rid of in-flight events and avoid emitting new ones
+    Draining,
+    /// connector failed to start
+    Failed,
+}
+
+impl Display for ConnectorState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Initialized => "initialized",
+            Self::Running => "running",
+            Self::Paused => "paused",
+            Self::Stopped => "stopped",
+            Self::Draining => "draining",
+            Self::Failed => "failed",
+        })
+    }
+}
+
+/// connector context
+#[repr(C)]
+#[derive(Clone, StableAbi)]
+pub struct ConnectorContext {
+    /// unique identifier
+    pub uid: u64,
+    /// url of the connector
+    pub url: TremorUrl,
+    /// type name of the connector
+    pub type_name: RString,
+    /// The Quiescence Beacon
+    pub quiescence_beacon: QuiescenceBeacon,
+    /// Notifier
+    pub notifier: reconnect::ConnectionLostNotifier,
+}
+
+impl ConnectorContext {
+    /// enclose the given meta in the right connector namespace
+    ///
+    /// Namespace: "connector.<connector-type>"
+    #[must_use]
+    pub fn meta(&self, inner: Value<'static>) -> Value<'static> {
+        let mut map = Value::object_with_capacity(1);
+        let mut type_map = Value::object_with_capacity(1);
+        type_map.try_insert(self.type_name.clone(), inner);
+        map.try_insert("connector", type_map);
+        map
     }
 }
 

@@ -14,11 +14,11 @@
 
 /// reconnect logic and execution for connectors
 use crate::config::Reconnect;
-use crate::connectors::sink::SinkMsg;
-use crate::connectors::source::SourceMsg;
-use crate::connectors::{Addr, Connectivity, Connector, ConnectorContext, Context, Msg};
-use crate::errors::{Error, Result};
-use async_std::channel::{bounded, Sender};
+use crate::connectors::{Addr, Connectivity, Connector, ConnectorContext, Msg};
+use crate::errors::Result;
+use crate::url::TremorUrl;
+use abi_stable::StableAbi;
+use async_std::channel::Sender;
 use async_std::task;
 use futures::future::{join3, ready, FutureExt};
 use std::convert::identity;
@@ -78,7 +78,8 @@ impl ReconnectStrategy for SimpleBackoff {
 }
 
 /// describing the number of previous connection attempts
-#[derive(Debug, Default, PartialEq, Eq, Clone)]
+#[repr(C)]
+#[derive(Debug, Default, PartialEq, Eq, StableAbi)]
 pub struct Attempt {
     overall: u64,
     success: u64,

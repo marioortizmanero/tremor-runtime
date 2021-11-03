@@ -339,7 +339,8 @@ pub trait StreamWriter: Send + Sync {
     }
 }
 /// context for the connector sink
-#[derive(Clone)]
+#[repr(C)]
+#[derive(Clone, StableAbi)]
 pub struct SinkContext {
     /// the connector unique identifier
     pub uid: u64,
