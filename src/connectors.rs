@@ -427,7 +427,7 @@ impl Manager {
         let source_ctx = SourceContext {
             uid,
             url: url.clone(),
-            quiescence_beacon: QuiescenceBeaconOpaque_TO::from_value(
+            quiescence_beacon: BoxedQuiescenceBeacon::from_value(
                 quiescence_beacon.clone(),
                 TD_Opaque,
             ),
@@ -466,11 +466,11 @@ impl Manager {
             uid,
             url: url.clone(),
             type_name: config.binding_type.clone().into(),
-            quiescence_beacon: QuiescenceBeaconOpaque_TO::from_value(
+            quiescence_beacon: BoxedQuiescenceBeacon::from_value(
                 quiescence_beacon.clone(),
                 TD_Opaque,
             ),
-            notifier: reconnect::ConnectionLostNotifierOpaque_TO::from_value(
+            notifier: reconnect::BoxedConnectionLostNotifier::from_value(
                 notifier.clone(),
                 TD_Opaque,
             ),
