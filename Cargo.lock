@@ -27,10 +27,10 @@ dependencies = [
 [[package]]
 name = "abi_stable"
 version = "0.10.3"
-source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref#2cf8389c3fe8b082e4528a5838472181fa23e15e"
+source = "git+https://github.com/rodrimati1992/abi_stable_crates.git#eac8356baaca4946c3e8bbacc5a0f770133a17a8"
 dependencies = [
- "abi_stable_derive 0.10.3 (git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref)",
- "abi_stable_shared 0.10.3 (git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref)",
+ "abi_stable_derive 0.10.3 (git+https://github.com/rodrimati1992/abi_stable_crates.git)",
+ "abi_stable_shared 0.10.3 (git+https://github.com/rodrimati1992/abi_stable_crates.git)",
  "core_extensions",
  "crossbeam-channel",
  "generational-arena",
@@ -64,10 +64,10 @@ dependencies = [
 [[package]]
 name = "abi_stable_derive"
 version = "0.10.3"
-source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref#2cf8389c3fe8b082e4528a5838472181fa23e15e"
+source = "git+https://github.com/rodrimati1992/abi_stable_crates.git#eac8356baaca4946c3e8bbacc5a0f770133a17a8"
 dependencies = [
- "abi_stable_shared 0.10.3 (git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref)",
- "as_derive_utils 0.10.3 (git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref)",
+ "abi_stable_shared 0.10.3 (git+https://github.com/rodrimati1992/abi_stable_crates.git)",
+ "as_derive_utils 0.10.3 (git+https://github.com/rodrimati1992/abi_stable_crates.git)",
  "core_extensions",
  "proc-macro2",
  "quote",
@@ -88,7 +88,7 @@ dependencies = [
 [[package]]
 name = "abi_stable_shared"
 version = "0.10.3"
-source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref#2cf8389c3fe8b082e4528a5838472181fa23e15e"
+source = "git+https://github.com/rodrimati1992/abi_stable_crates.git#eac8356baaca4946c3e8bbacc5a0f770133a17a8"
 dependencies = [
  "core_extensions",
 ]
@@ -251,7 +251,7 @@ dependencies = [
 [[package]]
 name = "as_derive_utils"
 version = "0.10.3"
-source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref#2cf8389c3fe8b082e4528a5838472181fa23e15e"
+source = "git+https://github.com/rodrimati1992/abi_stable_crates.git#eac8356baaca4946c3e8bbacc5a0f770133a17a8"
 dependencies = [
  "core_extensions",
  "proc-macro2",
@@ -4911,7 +4911,7 @@ dependencies = [
 name = "tremor-pipeline"
 version = "0.11.4"
 dependencies = [
- "abi_stable 0.10.3 (git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref)",
+ "abi_stable 0.10.3 (git+https://github.com/rodrimati1992/abi_stable_crates.git)",
  "base64 0.13.0",
  "beef",
  "byteorder",
@@ -4945,7 +4945,7 @@ dependencies = [
 name = "tremor-runtime"
 version = "0.11.4"
 dependencies = [
- "abi_stable 0.10.3 (git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref)",
+ "abi_stable 0.10.3 (git+https://github.com/rodrimati1992/abi_stable_crates.git)",
  "anyhow",
  "async-broadcast",
  "async-compat",
@@ -5012,7 +5012,7 @@ dependencies = [
 name = "tremor-script"
 version = "0.11.4"
 dependencies = [
- "abi_stable 0.10.3 (git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref)",
+ "abi_stable 0.10.3 (git+https://github.com/rodrimati1992/abi_stable_crates.git)",
  "atty",
  "base64 0.13.0",
  "beef",
