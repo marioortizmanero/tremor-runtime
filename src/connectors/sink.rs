@@ -35,10 +35,9 @@ use crate::url::ports::IN;
 use crate::url::TremorUrl;
 use abi_stable::{
     rvec,
-    RMut,
     std_types::{RBox, RResult::ROk, RStr, RVec, SendRBoxError},
-    StableAbi,
     type_level::downcasting::TD_Opaque,
+    RMut, StableAbi,
 };
 use async_std::channel::{bounded, unbounded, Receiver, Sender};
 use async_std::stream::StreamExt; // for .next() on PriorityMerge
@@ -51,7 +50,9 @@ use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Display;
 use tremor_common::time::nanotime;
-use tremor_pipeline::{CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID, pdk::Event as PdkEvent};
+use tremor_pipeline::{
+    pdk::Event as PdkEvent, CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID,
+};
 use tremor_script::{pdk::EventPayload as PdkEventPayload, EventPayload};
 
 use tremor_value::{pdk::Value as PdkValue, Value};
@@ -699,9 +700,7 @@ impl EventSerializerOpaque for EventSerializer {
     ) -> RResult<RVec<RVec<u8>>> {
         self.serialize_for_stream_inner(value, ingest_ns, stream_id)
             .map(|v1| v1.into_iter().map(|v2| v2.into()).collect()) // RVec<RVec<T>> -> Vec<Vec<T>>
-            .map_err(|e| {
-                SendRBoxError::new(e)
-            }) // RBoxError -> Error
+            .map_err(|e| SendRBoxError::new(e)) // RBoxError -> Error
             .into() // RResult -> Result
     }
 }
