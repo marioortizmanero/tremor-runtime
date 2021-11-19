@@ -109,7 +109,9 @@ tremor-otelapis = { version = "0.2.2" }
 qwal = { git = "https://github.com/tremor-rs/qwal" }
 
 # plugin system
-abi_stable = "0.10.3"
+# FIXME: update to upstream when this is merged:
+# https://github.com/rodrimati1992/abi_stable_crates/pull/68
+abi_stable = { version = "0.10.3", branch = "as_deref", git = "https://github.com/marioortizmanero/abi_stable_crates.git" }
 
 [dev-dependencies]
 matches = "0.1"

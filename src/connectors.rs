@@ -56,7 +56,7 @@ use abi_stable::{
         RBox,
         ROption::{self, RNone, RSome},
         RResult::{RErr, ROk},
-        RString, RVec,
+        RString, RVec, RStr
     },
     type_level::downcasting::TD_Opaque,
     StableAbi,
@@ -1094,8 +1094,7 @@ impl ConnectorContext {
     pub fn meta(&self, inner: Value<'static>) -> Value<'static> {
         let mut map = Value::object_with_capacity(1);
         let mut type_map = Value::object_with_capacity(1);
-        let type_name: String = self.type_name.clone().into();
-        type_map.try_insert(type_name, inner);
+        type_map.try_insert(self.type_name.clone().into(), inner);
         map.try_insert("connector", type_map);
         map
     }
@@ -1201,7 +1200,7 @@ pub trait RawConnector: Send {
     fn on_stop(&mut self, _ctx: &ConnectorContext) { }
 
     /// returns the default codec for this connector
-    fn default_codec(&self) -> &str;
+    fn default_codec(&self) -> RStr<'_>;
 }
 /// Alias for the FFI-safe dynamic connector type
 pub type BoxedRawConnector = RawConnector_TO<'static, RBox<()>>;

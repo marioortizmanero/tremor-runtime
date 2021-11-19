@@ -14,7 +14,7 @@
 
 use crate::errors::{Error, ErrorKind, Result};
 use abi_stable::{
-    std_types::{ROption::{self, RSome}, RString},
+    std_types::{ROption::{self, RNone, RSome}, RString},
     StableAbi,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -200,13 +200,7 @@ impl TremorUrl {
             let (scope, resource_type, artefact, instance, instance_port) = if relative {
                 // TODO: This is not correct!
                 match parts.as_slice() {
-                    [port] => (
-                        Scope::Servant,
-                        RNone,
-                        RNone,
-                        RNone,
-                        RSome(RString::from(*port)),
-                    ),
+                    [port] => (Scope::Servant, RNone, RNone, RNone, RSome(RString::from(*port))),
                     [instance, port] => (
                         Scope::Type,
                         RNone,
@@ -332,7 +326,7 @@ impl TremorUrl {
     where
         S: ToString + ?Sized,
     {
-        self.instance = RSome(i.to_string());
+        self.instance = RSome(i.to_string().into());
         if self.scope == Scope::Artefact {
             self.scope = Scope::Instance;
         }
@@ -345,7 +339,7 @@ impl TremorUrl {
     where
         S: ToString + ?Sized,
     {
-        self.instance_port = RSome(i.to_string());
+        self.instance_port = RSome(i.to_string().into());
         if self.scope == Scope::Servant {
             self.scope = Scope::Port;
         }
@@ -356,7 +350,7 @@ impl TremorUrl {
     where
         S: ToString + ?Sized,
     {
-        self.instance_port = RSome(i.to_string());
+        self.instance_port = RSome(i.to_string().into());
         if self.scope == Scope::Servant {
             self.scope = Scope::Port;
         }

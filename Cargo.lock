@@ -8,8 +8,27 @@ version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c8f0d5c8e09e8b591f6db9f56b006c9b9e7a44064acb274411ae51aaaa1364d"
 dependencies = [
- "abi_stable_derive",
- "abi_stable_shared",
+ "abi_stable_derive 0.10.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "abi_stable_shared 0.10.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "core_extensions",
+ "generational-arena",
+ "libloading",
+ "lock_api",
+ "parking_lot",
+ "paste",
+ "repr_offset",
+ "rustc_version 0.4.0",
+ "serde",
+ "serde_derive",
+]
+
+[[package]]
+name = "abi_stable"
+version = "0.10.3"
+source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref#3eeb657fb949976882f954f48f9f18adfff4826a"
+dependencies = [
+ "abi_stable_derive 0.10.3 (git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref)",
+ "abi_stable_shared 0.10.3 (git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref)",
  "core_extensions",
  "crossbeam-channel",
  "generational-arena",
@@ -30,8 +49,23 @@ version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b9810ef8debee5544010d92dac0b88b32853cd5bd5ca3298243c99e931da0f0"
 dependencies = [
- "abi_stable_shared",
- "as_derive_utils",
+ "abi_stable_shared 0.10.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "as_derive_utils 0.10.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "core_extensions",
+ "proc-macro2",
+ "quote",
+ "rustc_version 0.2.3",
+ "syn",
+ "typed-arena",
+]
+
+[[package]]
+name = "abi_stable_derive"
+version = "0.10.3"
+source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref#3eeb657fb949976882f954f48f9f18adfff4826a"
+dependencies = [
+ "abi_stable_shared 0.10.3 (git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref)",
+ "as_derive_utils 0.10.3 (git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref)",
  "core_extensions",
  "proc-macro2",
  "quote",
@@ -45,6 +79,14 @@ name = "abi_stable_shared"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ece9da89066e018d908b48755e17cdd08a46ce222f84b1f226e837f836f84a5f"
+dependencies = [
+ "core_extensions",
+]
+
+[[package]]
+name = "abi_stable_shared"
+version = "0.10.3"
+source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref#3eeb657fb949976882f954f48f9f18adfff4826a"
 dependencies = [
  "core_extensions",
 ]
@@ -197,6 +239,17 @@ name = "as_derive_utils"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0a26fa495cefb8c86d9ce183b3f39ad11678e54fb3c20e6b7dbd87770811d9b"
+dependencies = [
+ "core_extensions",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "as_derive_utils"
+version = "0.10.3"
+source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref#3eeb657fb949976882f954f48f9f18adfff4826a"
 dependencies = [
  "core_extensions",
  "proc-macro2",
@@ -1725,15 +1778,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "file-mode"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "773ea145485772b8d354624b32adbe20e776353d3e48c7b03ef44e3455e9815c"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "filetime"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2641,74 +2685,24 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
 name = "lexical"
-version = "6.0.1"
+version = "5.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c34e981f88d060a67815388470172638f1af16b3a12e581cb75142f190161bf9"
+checksum = "f404a90a744e32e8be729034fc33b90cf2a56418fbf594d69aa3c0214ad414e5"
 dependencies = [
+ "cfg-if 1.0.0",
  "lexical-core",
 ]
 
 [[package]]
 name = "lexical-core"
-version = "0.8.2"
+version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a3926d8f156019890be4abe5fd3785e0cff1001e06f59c597641fd513a5a284"
+checksum = "6607c62aa161d23d17a9072cc5da0be67cdfc89d3afb1e8d9c842bebc2525ffe"
 dependencies = [
- "lexical-parse-float",
- "lexical-parse-integer",
- "lexical-util",
- "lexical-write-float",
- "lexical-write-integer",
-]
-
-[[package]]
-name = "lexical-parse-float"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4d066d004fa762d9da995ed21aa8845bb9f6e4265f540d716fb4b315197bf0e"
-dependencies = [
- "lexical-parse-integer",
- "lexical-util",
- "static_assertions",
-]
-
-[[package]]
-name = "lexical-parse-integer"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2c92badda8cc0fc4f3d3cc1c30aaefafb830510c8781ce4e8669881f3ed53ac"
-dependencies = [
- "lexical-util",
- "static_assertions",
-]
-
-[[package]]
-name = "lexical-util"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ff669ccaae16ee33af90dc51125755efed17f1309626ba5c12052512b11e291"
-dependencies = [
- "static_assertions",
-]
-
-[[package]]
-name = "lexical-write-float"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b5186948c7b297abaaa51560f2581dae625e5ce7dfc2d8fdc56345adb6dc576"
-dependencies = [
- "lexical-util",
- "lexical-write-integer",
- "static_assertions",
-]
-
-[[package]]
-name = "lexical-write-integer"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ece956492e0e40fd95ef8658a34d53a3b8c2015762fdcaaff2167b28de1f56ef"
-dependencies = [
- "lexical-util",
+ "arrayvec",
+ "bitflags",
+ "cfg-if 1.0.0",
+ "ryu",
  "static_assertions",
 ]
 
@@ -2831,9 +2825,9 @@ dependencies = [
 
 [[package]]
 name = "lru"
-version = "0.7.0"
+version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c748cfe47cb8da225c37595b3108bea1c198c84aaae8ea0ba76d01dda9fc803"
+checksum = "7ea2d928b485416e8908cff2d97d621db22b27f7b3b6729e438bcf42c671ba91"
 dependencies = [
  "hashbrown 0.11.2",
 ]
@@ -3450,9 +3444,9 @@ checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 
 [[package]]
 name = "pretty_assertions"
-version = "1.0.0"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec0cfe1b2403f172ba0f234e500906ee0a3e493fb81092dac23ebefe129301cc"
+checksum = "1cab0e7c02cf376875e9335e0ba1da535775beb5450d21e1dffca068818ed98b"
 dependencies = [
  "ansi_term 0.12.1",
  "ctor",
@@ -4320,20 +4314,21 @@ checksum = "45456094d1983e2ee2a18fdfebce3189fa451699d0502cb8e3b49dba5ba41451"
 
 [[package]]
 name = "snmalloc-rs"
-version = "0.2.28"
+version = "0.2.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36acaace2719c972eab3ef6a6b3aee4495f0bf300f59715bb9cff6c5acf4ae20"
+checksum = "4b07b1a977d4739816484e7c9333c085d3ad5ccf0294078b55218faabd03837f"
 dependencies = [
  "snmalloc-sys",
 ]
 
 [[package]]
 name = "snmalloc-sys"
-version = "0.2.28"
+version = "0.2.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35a7e6e7d5fe756bee058ddedefc7e0a9f9c8dbaa9401b48ed3c17d6578e40b5"
+checksum = "73c59324cc36b140b6b46b1379f379eaa7ee9cfb06ec5d7dd0a650de35b9b902"
 dependencies = [
  "cmake",
+ "libc",
 ]
 
 [[package]]
@@ -4484,9 +4479,9 @@ checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 
 [[package]]
 name = "surf"
-version = "2.3.2"
+version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "718b1ae6b50351982dedff021db0def601677f2120938b070eadb10ba4038dd7"
+checksum = "73f856d60bdb4679fc9ec516c34093484e963431b5016a8429f85a8e74b5ccaa"
 dependencies = [
  "async-std",
  "async-trait",
@@ -4536,9 +4531,9 @@ dependencies = [
 
 [[package]]
 name = "syslog_loose"
-version = "0.16.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8417c2dcaef3d8016608956f3a5b70ad9cf4efe44b5546c93ca4934903c16749"
+checksum = "7fc28ec47233cf71236a9e0a43a2079da9bc57ac128dd76e37558f6015492747"
 dependencies = [
  "chrono",
  "nom 7.0.0",
@@ -5201,6 +5196,7 @@ dependencies = [
 name = "tremor-runtime"
 version = "0.11.4"
 dependencies = [
+ "abi_stable 0.10.3 (git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=as_deref)",
  "anyhow",
  "async-broadcast",
  "async-compat",
@@ -5214,12 +5210,10 @@ dependencies = [
  "bytes 1.1.0",
  "chrono",
  "ciborium",
- "csv",
  "either",
  "env_logger 0.9.0",
  "error-chain",
  "event-listener",
- "file-mode",
  "futures",
  "glob",
  "halfbrown",
@@ -5320,7 +5314,6 @@ dependencies = [
 name = "tremor-value"
 version = "0.3.2"
 dependencies = [
- "abi_stable",
  "base64 0.13.0",
  "beef",
  "float-cmp",
@@ -5497,7 +5490,7 @@ version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0393efdd7d82f856a927b0fcafa80bca45911f5c89ef6b9d80197bebc284f72e"
 dependencies = [
- "abi_stable",
+ "abi_stable 0.10.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "float-cmp",
  "halfbrown",
  "itoa",
