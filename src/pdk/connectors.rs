@@ -2,9 +2,9 @@
 //! TODO: move into a separate crate along  with the `RawConnector` trait and
 //! similars.
 
-use super::Value;
 use crate::connectors::BoxedRawConnector;
 use crate::url::TremorUrl;
+use tremor_value::pdk::Value;
 
 use abi_stable::{
     declare_root_module_statics,

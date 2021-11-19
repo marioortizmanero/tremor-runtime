@@ -1260,15 +1260,151 @@ impl SourceManager {
                 return Ok(());
             }
 
-            if self.should_pull_data() {
-                let mut pull_id = self.pull_counter;
-                let data = self.source.pull_data(&mut pull_id, &self.ctx).await;
-                self.handle_data(data, pull_id).await?;
-                self.pull_counter += 1;
-            };
-            if self.pull_wait_start.is_some() {
-                // sleep for a quick 10ms in order to stay responsive
-                task::sleep(DEFAULT_POLL_DURATION.min(self.pull_wait)).await;
+            if self.state.should_pull_data() && !self.pipelines_out.is_empty() {
+                match self.source.pull_data(pull_counter, &self.ctx).await {
+                    Ok(SourceReply::Data {
+                        origin_uri,
+                        data,
+                        meta,
+                        stream,
+                        port,
+                    }) => {
+                        let mut ingest_ns = nanotime();
+                        let stream_state = self.streams.get_or_create_stream(stream)?; // we fail if we cannot create a stream (due to misconfigured codec, preprocessors, ...) (should not happen)
+                        let port: Option<Cow<str>> = port.into().map(Into::into);
+                        let results = build_events(
+                            &self.ctx.url,
+                            stream_state,
+                            &mut ingest_ns,
+                            pull_counter,
+                            origin_uri,
+                            port.as_ref(),
+                            data.into(),
+                            &meta.into().map(Into::into).unwrap_or_else(Value::object),
+                            self.is_transactional,
+                        );
+                        if results.is_empty() {
+                            if let Err(e) = self
+                                .source
+                                .on_no_events(pull_counter, stream, &self.ctx)
+                                .await
+                            {
+                                error!(
+                                    "[Source::{}] Error on no events callback: {}",
+                                    &self.ctx.url, e
+                                );
+                            }
+                        } else {
+                            let error = self.route_events(results).await;
+                            if error {
+                                self.source.fail(stream, pull_counter).await;
+                            }
+                        }
+                    }
+                    Ok(SourceReply::BatchData {
+                        origin_uri,
+                        batch_data,
+                        stream,
+                        port,
+                    }) => {
+                        let mut ingest_ns = nanotime();
+                        let stream_state = self.streams.get_or_create_stream(stream)?; // we only error here due to misconfigured codec etc
+                        let connector_url = &self.ctx.url;
+
+                        let mut results = Vec::with_capacity(batch_data.len()); // assuming 1:1 mapping
+                        for Tuple2(data, meta) in batch_data {
+                            let port: Option<Cow<str>> = port.into().map(Into::into);
+                            let mut events = build_events(
+                                connector_url,
+                                stream_state,
+                                &mut ingest_ns,
+                                pull_counter,
+                                origin_uri.clone(), // TODO: use split_last on batch_data to avoid last clone
+                                port.as_ref(),
+                                data.into(),
+                                &meta.into().map(Into::into).unwrap_or_else(Value::object),
+                                self.is_transactional,
+                            );
+                            results.append(&mut events);
+                        }
+                        if results.is_empty() {
+                            if let Err(e) = self
+                                .source
+                                .on_no_events(pull_counter, stream, &self.ctx)
+                                .await
+                            {
+                                error!(
+                                    "[Source::{}] Error on no events callback: {}",
+                                    &self.ctx.url, e
+                                );
+                            }
+                        } else {
+                            let error = self.route_events(results).await;
+                            if error {
+                                self.source.fail(stream, pull_counter).await;
+                            }
+                        }
+                    }
+                    Ok(SourceReply::Structured {
+                        origin_uri,
+                        payload,
+                        stream,
+                        port,
+                    }) => {
+                        let ingest_ns = nanotime();
+                        let stream_state = self.streams.get_or_create_stream(stream)?;
+                        let event = build_event(
+                            stream_state,
+                            pull_counter,
+                            ingest_ns,
+                            payload.into(),
+                            origin_uri,
+                            self.is_transactional,
+                        );
+                        let port = port.into().map(Into::into);
+                        let error = self.route_events(vec![(port.unwrap_or(OUT), event)]).await;
+                        if error {
+                            self.source.fail(stream, pull_counter).await;
+                        }
+                    }
+                    Ok(SourceReply::StartStream(stream_id)) => {
+                        self.streams.start_stream(stream_id)?;
+                    } // failing here only due to misconfig, in that case, bail out, #yolo
+                    Ok(SourceReply::EndStream(stream_id)) => self.streams.end_stream(stream_id),
+                    Ok(SourceReply::Empty(wait_ms)) => {
+                        if self.state == SourceState::Draining {
+                            // this source has been fully drained
+                            self.state = SourceState::Drained;
+                            // send Drain signal
+                            let signal = Event::signal_drain(self.ctx.uid);
+                            if let Err(e) = self.send_signal(signal).await {
+                                error!(
+                                    "[Source::{}] Error sending DRAIN signal: {}",
+                                    &self.ctx.url, e
+                                );
+                            }
+                            // if we get a disconnect in between we might never receive every drain CB
+                            // but we will stop everything forcefully after a certain timeout at some point anyways
+                            // TODO: account for all connector uids that sent some Cb to us upon startup or so, to get the real number to wait for
+                            // otherwise there are cases (branching etc. where quiescence also would be too quick)
+                            self.expected_drained =
+                                self.pipelines_err.len() + self.pipelines_out.len();
+                            debug!(
+                                "[Source::{}] We are looking to drain {} connections.",
+                                self.ctx.url, self.expected_drained
+                            );
+                        } else {
+                            // wait for the given ms
+                            task::sleep(Duration::from_millis(wait_ms)).await;
+                        }
+                    }
+                    Err(e) => {
+                        warn!("[Source::{}] Error pulling data: {}", &self.ctx.url, e);
+                        // TODO: increment error metric
+                        // FIXME: emit event to err port
+                    }
+                }
+                pull_counter += 1;
             }
         }
     }
