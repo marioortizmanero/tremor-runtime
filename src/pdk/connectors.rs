@@ -2,13 +2,17 @@
 //! TODO: move into a separate crate along  with the `RawConnector` trait and
 //! similars.
 
+use super::Value;
 use crate::connectors::BoxedRawConnector;
 use crate::url::TremorUrl;
-use super::Value;
 
 use abi_stable::{
-    declare_root_module_statics, library::RootModule, package_version_strings,
-    sabi_types::VersionStrings, std_types::{RBox, ROption}, StableAbi,
+    declare_root_module_statics,
+    library::RootModule,
+    package_version_strings,
+    sabi_types::VersionStrings,
+    std_types::{RBox, ROption},
+    StableAbi,
 };
 
 /// The `new` function basically acts as the connector builder

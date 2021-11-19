@@ -76,8 +76,6 @@ mod std_lib;
 mod tilde;
 /// Utility functions
 pub mod utils;
-/// Types for the Plugin Development Kit
-pub mod pdk;
 
 pub use srs::{EventPayload, ValueAndMeta};
 

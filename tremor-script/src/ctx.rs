@@ -23,12 +23,11 @@ use abi_stable::{
 use std::default;
 use std::fmt;
 use url::Url;
-use abi_stable::{StableAbi, std_types::{RString, ROption::{self, RSome, RNone}, RVec}};
 
 /// Event origin URI
 #[repr(C)]
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, simd_json_derive::Serialize, simd_json_derive::Deserialize
+    Debug, Clone, PartialEq, Eq, Hash, simd_json_derive::Serialize, simd_json_derive::Deserialize,
 )]
 pub struct EventOriginUri {
     /// schema part

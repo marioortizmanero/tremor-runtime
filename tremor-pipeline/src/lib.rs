@@ -54,7 +54,6 @@ use std::iter::Iterator;
 use std::str::FromStr;
 use std::{fmt, sync::Mutex};
 use tremor_script::prelude::*;
-use abi_stable::{StableAbi, std_types::RVec};
 
 /// Pipeline Errors
 pub mod errors;
@@ -240,7 +239,13 @@ impl Default for NodeKind {
 /// A circuit breaker action
 #[repr(C)]
 #[derive(
-    Debug, Clone, Copy, PartialEq, simd_json_derive::Serialize, simd_json_derive::Deserialize, StableAbi
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    simd_json_derive::Serialize,
+    simd_json_derive::Deserialize,
+    StableAbi,
 )]
 pub enum CbAction {
     /// Nothing of note
@@ -302,7 +307,7 @@ impl CbAction {
 /// `EventId` also tracks min and max event ids for other events in order to support batched and grouped events
 /// and facilitate CB mechanics
 #[derive(
-    Debug, Clone, PartialEq, Default, simd_json_derive::Serialize, simd_json_derive::Deserialize
+    Debug, Clone, PartialEq, Default, simd_json_derive::Serialize, simd_json_derive::Deserialize,
 )]
 pub struct EventId {
     source_id: u64,
@@ -604,7 +609,13 @@ impl fmt::Display for EventId {
 
 #[repr(C)]
 #[derive(
-    Debug, Clone, PartialEq, Default, simd_json_derive::Serialize, simd_json_derive::Deserialize, StableAbi
+    Debug,
+    Clone,
+    PartialEq,
+    Default,
+    simd_json_derive::Serialize,
+    simd_json_derive::Deserialize,
+    StableAbi,
 )]
 /// tracked min and max pull id for a given source and stream
 ///
@@ -785,7 +796,13 @@ impl EventIdGenerator {
 /// The kind of signal this is
 #[repr(C)]
 #[derive(
-    Debug, Clone, Copy, PartialEq, simd_json_derive::Serialize, simd_json_derive::Deserialize, StableAbi
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    simd_json_derive::Serialize,
+    simd_json_derive::Deserialize,
+    StableAbi,
 )]
 pub enum SignalKind {
     // Lifecycle

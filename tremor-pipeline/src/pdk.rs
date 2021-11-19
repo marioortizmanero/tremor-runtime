@@ -3,12 +3,15 @@
 //! through the plugin interface. Thus, no functionality is implemented other
 //! than the conversion from and to the original type.
 
-use crate::{SignalKind, CbAction, PrimStr, TrackedPullIds};
+use crate::{CbAction, PrimStr, SignalKind, TrackedPullIds};
 
 use tremor_script::pdk::EventPayload;
 use tremor_value::pdk::Value;
 
-use abi_stable::{StableAbi, std_types::{ROption, RHashMap, RVec, RString}};
+use abi_stable::{
+    std_types::{RHashMap, ROption, RString, RVec},
+    StableAbi,
+};
 
 // FIXME: we can probably avoid this after `simd_json_derive` works for
 // `abi_stable`.
@@ -30,7 +33,7 @@ impl From<crate::OpMeta> for OpMeta {
                     let v: Value = v.into();
                     (k, v)
                 })
-                .collect()
+                .collect(),
         )
     }
 }
@@ -126,4 +129,3 @@ impl From<crate::Event> for Event {
         }
     }
 }
-
