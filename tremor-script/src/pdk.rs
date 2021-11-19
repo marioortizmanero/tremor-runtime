@@ -6,6 +6,7 @@
 use tremor_value::pdk::Value;
 
 use std::pin::Pin;
+use std::sync::Arc;
 
 use abi_stable::{
     std_types::{RArc, RVec},
@@ -13,7 +14,7 @@ use abi_stable::{
 };
 
 #[repr(C)]
-#[derive(StableAbi)]
+#[derive(Debug, Clone, StableAbi)]
 pub struct ValueAndMeta<'event> {
     v: Value<'event>,
     m: Value<'event>,
@@ -28,8 +29,17 @@ impl<'event> From<crate::ValueAndMeta<'event>> for ValueAndMeta<'event> {
     }
 }
 
+impl<'event> From<ValueAndMeta<'event>> for crate::ValueAndMeta<'event> {
+    fn from(original: ValueAndMeta<'event>) -> Self {
+        crate::ValueAndMeta {
+            v: original.v.into(),
+            m: original.m.into(),
+        }
+    }
+}
+
 #[repr(C)]
-#[derive(StableAbi)]
+#[derive(Debug, Clone, StableAbi)]
 pub struct EventPayload {
     /// The vector of raw input values
     raw: RVec<RArc<Pin<RVec<u8>>>>,
@@ -48,6 +58,24 @@ impl From<crate::EventPayload> for EventPayload {
             })
             .collect();
         EventPayload {
+            raw,
+            data: original.data.into(),
+        }
+    }
+}
+
+impl From<EventPayload> for crate::EventPayload {
+    fn from(original: EventPayload) -> Self {
+        let raw = original
+            .raw
+            .into_iter()
+            .map(|x| {
+                // FIXME: this conversion could probably be simpler
+                let x: Arc<Pin<Vec<u8>>> = Arc::new(Pin::new((**x).into()));
+                x
+            })
+            .collect();
+        crate::EventPayload {
             raw,
             data: original.data.into(),
         }

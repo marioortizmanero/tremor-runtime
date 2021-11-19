@@ -19,7 +19,7 @@ use abi_stable::{
 // was because of performance or anything similar, but `abi_stable` only has
 // hash maps so it's left that way for now.
 #[repr(C)]
-#[derive(StableAbi)]
+#[derive(Debug, Clone, StableAbi)]
 pub struct OpMeta(RHashMap<PrimStr<u64>, Value<'static>>);
 
 impl From<crate::OpMeta> for OpMeta {
@@ -41,7 +41,7 @@ impl From<crate::OpMeta> for OpMeta {
 // FIXME: we can probably avoid this after `simd_json_derive` works for
 // `abi_stable`.
 #[repr(C)]
-#[derive(StableAbi)]
+#[derive(Debug, Clone, StableAbi)]
 pub struct EventId {
     source_id: u64,
     stream_id: u64,
@@ -65,7 +65,7 @@ impl From<crate::EventId> for EventId {
 // FIXME: we can probably avoid this after `simd_json_derive` works for
 // `abi_stable`.
 #[repr(C)]
-#[derive(StableAbi)]
+#[derive(Debug, Clone, StableAbi)]
 pub struct EventOriginUri {
     /// schema part
     pub scheme: RString,
@@ -91,7 +91,7 @@ impl From<crate::EventOriginUri> for EventOriginUri {
 }
 
 #[repr(C)]
-#[derive(StableAbi)]
+#[derive(Debug, Clone, StableAbi)]
 pub struct Event {
     /// The event ID
     pub id: EventId,
