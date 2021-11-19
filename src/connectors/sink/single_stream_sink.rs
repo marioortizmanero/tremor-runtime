@@ -17,7 +17,7 @@
 //! With some shenanigans removed, compared to `ChannelSink`.
 
 use crate::connectors::{sink::SinkReply, ConnectorContext, StreamDone};
-use crate::errors::Result;
+use crate::errors::{Result, ErrorKind};
 use abi_stable::std_types::ROption::{RSome, RNone};
 use async_std::{
     channel::{bounded, Receiver, Sender},
@@ -137,7 +137,8 @@ impl SingleStreamSinkRuntime {
                 Ok(StreamDone::ConnectorClosed) => ctx
                     .notifier
                     .notify() /*.await*/
-                    .err(),
+                    .err()
+                    .map(|e| ErrorKind::PluginError(e).into()),
                 Ok(_) => RNone,
             };
             if let RSome(e) = error {

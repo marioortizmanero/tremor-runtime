@@ -15,7 +15,8 @@
 //! Tremor script scripting language
 
 // TODO: disable and cleanup with `cargo fix` automatically once done
-#![allow(unused_imports)]
+#![allow(unused)]
+#![allow(dead_code)]
 // TODO: turn back on
 // #![deny(missing_docs)]
 #![recursion_limit = "1024"]

@@ -9,7 +9,7 @@ use tremor_script::pdk::EventPayload;
 use tremor_value::pdk::Value;
 
 use abi_stable::{
-    std_types::{RHashMap, ROption, RString, RVec},
+    std_types::{RHashMap, ROption, RString, RVec, Tuple2},
     StableAbi,
 };
 
@@ -38,6 +38,22 @@ impl From<crate::OpMeta> for OpMeta {
     }
 }
 
+impl From<OpMeta> for crate::OpMeta {
+    fn from(original: OpMeta) -> Self {
+        crate::OpMeta(
+            original
+                .0
+                .into_iter()
+                .map(|Tuple2(k, v)| {
+                    let v: tremor_value::Value = v.into();
+                    let v: simd_json::OwnedValue = v.into();
+                    (k, v)
+                })
+                .collect(),
+        )
+    }
+}
+
 // FIXME: we can probably avoid this after `simd_json_derive` works for
 // `abi_stable`.
 #[repr(C)]
@@ -53,6 +69,18 @@ pub struct EventId {
 impl From<crate::EventId> for EventId {
     fn from(original: crate::EventId) -> Self {
         EventId {
+            source_id: original.source_id,
+            stream_id: original.stream_id,
+            event_id: original.event_id,
+            pull_id: original.pull_id,
+            tracked_pull_ids: original.tracked_pull_ids.into(),
+        }
+    }
+}
+
+impl From<EventId> for crate::EventId {
+    fn from(original: EventId) -> Self {
+        crate::EventId {
             source_id: original.source_id,
             stream_id: original.stream_id,
             event_id: original.event_id,
@@ -90,6 +118,17 @@ impl From<crate::EventOriginUri> for EventOriginUri {
     }
 }
 
+impl From<EventOriginUri> for crate::EventOriginUri {
+    fn from(original: EventOriginUri) -> Self {
+        crate::EventOriginUri {
+            scheme: original.scheme.into(),
+            host: original.host.into(),
+            port: original.port.into(),
+            path: original.path.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, StableAbi)]
 pub struct Event {
@@ -117,6 +156,22 @@ pub struct Event {
 impl From<crate::Event> for Event {
     fn from(original: crate::Event) -> Self {
         Event {
+            id: original.id.into(),
+            data: original.data.into(),
+            ingest_ns: original.ingest_ns,
+            origin_uri: original.origin_uri.map(Into::into).into(),
+            kind: original.kind.into(),
+            is_batch: original.is_batch,
+            cb: original.cb,
+            op_meta: original.op_meta.into(),
+            transactional: original.transactional,
+        }
+    }
+}
+
+impl From<Event> for crate::Event {
+    fn from(original: Event) -> Self {
+        crate::Event {
             id: original.id.into(),
             data: original.data.into(),
             ingest_ns: original.ingest_ns,
