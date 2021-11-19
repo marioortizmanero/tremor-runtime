@@ -37,7 +37,7 @@ pub fn load(registry: &mut Registry) {
                             None => Value::null(),
                         },
                         // TODO avoid uri path clone here?
-                        "path".into() => Value::from(uri.path()),
+                        "path".into() => Value::from(uri.path().to_vec()),
                     }
                 ))
             } else {
@@ -58,7 +58,7 @@ pub fn load(registry: &mut Registry) {
                 Value::null,
                 |uri| {
                     // TODO avoid uri path clone here?
-                    Value::from(uri.path())
+                    Value::from(uri.path().to_vec())
                 }
             ))
         }));
