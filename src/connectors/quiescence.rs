@@ -15,6 +15,8 @@
 use event_listener::Event;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::fmt;
+use abi_stable::std_types::RBox;
 
 #[derive(Debug)]
 struct Inner {
@@ -38,28 +40,41 @@ impl Default for Inner {
     }
 }
 /// use this beacon to check if tasks reading or writing from external connections should stop
-#[repr(C)]
 #[derive(Debug, Clone, Default)]
 #[allow(clippy::module_name_repetitions)]
-// TODO: figure out how to make repr-C compatible. Perhaps make it into an
-// opaque type?
 pub struct QuiescenceBeacon(Arc<Inner>);
 
+/// `QuiescenceBeacon` is used for the plugin system, so it must be `#[repr(C)]`
+/// in order to interact with it. However, since it uses complex types
+/// internally, it's easier to just make it available as an opaque type instead,
+/// with the help of `sabi_trait`.
+#[abi_stable::sabi_trait]
+pub trait QuiescenceBeaconOpaque: fmt::Debug + Clone + Send + Sync {
+    // TODO: async
+    /* async */ fn continue_reading(&self) -> bool;
+    /* async */ fn continue_writing(&self) -> bool;
+    fn stop_reading(&mut self);
+    fn pause(&mut self);
+    fn resume(&mut self);
+    fn full_stop(&mut self);
+}
 impl QuiescenceBeacon {
     // we have max 2 listeners at a time, checking this beacon
     // the sink and the source of the connector
     const MAX_LISTENERS: usize = 2;
+}
+impl QuiescenceBeaconOpaque for QuiescenceBeacon {
 
     /// returns `true` if consumers should continue reading
     /// doesn't return until the beacon is unpaused
-    pub async fn continue_reading(&self) -> bool {
+    fn continue_reading(&self) -> bool {
         loop {
             match self.0.state.load(Ordering::Acquire) {
                 Inner::RUNNING => break true,
                 Inner::PAUSED => {
                     // we wait to be notified
                     // if so, we re-enter the loop to check the new state
-                    self.0.resume_event.listen().await;
+                    self.0.resume_event.listen();
                 }
                 _ => break false, // STOP_ALL | STOP_READING | _
             }
@@ -68,12 +83,12 @@ impl QuiescenceBeacon {
 
     /// returns `true` if consumers should continue writing.
     ///
-    pub async fn continue_writing(&self) -> bool {
+    fn continue_writing(&self) -> bool {
         loop {
             match self.0.state.load(Ordering::Acquire) {
                 Inner::RUNNING | Inner::STOP_READING => break true,
                 Inner::PAUSED => {
-                    self.0.resume_event.listen().await;
+                    self.0.resume_event.listen();
                 }
                 _ => break false, // STOP_ALL | _
             }
@@ -81,13 +96,13 @@ impl QuiescenceBeacon {
     }
 
     /// notify consumers of this beacon that reading should be stopped
-    pub fn stop_reading(&mut self) {
+    fn stop_reading(&mut self) {
         self.0.state.store(Inner::STOP_READING, Ordering::Release);
         self.0.resume_event.notify(Self::MAX_LISTENERS); // we might have been paused, so notify here
     }
 
     /// pause both reading and writing
-    pub fn pause(&mut self) {
+    fn pause(&mut self) {
         let _ = self.0.state.compare_exchange(
             Inner::RUNNING,
             Inner::PAUSED,
@@ -99,7 +114,7 @@ impl QuiescenceBeacon {
     /// Resume both reading and writing.
     ///
     /// Has no effect if not currently paused.
-    pub fn resume(&mut self) {
+    fn resume(&mut self) {
         let _ = self.0.state.compare_exchange(
             Inner::PAUSED,
             Inner::RUNNING,
@@ -110,11 +125,13 @@ impl QuiescenceBeacon {
     }
 
     /// notify consumers of this beacon that reading and writing should be stopped
-    pub fn full_stop(&mut self) {
+    fn full_stop(&mut self) {
         self.0.state.store(Inner::STOP_ALL, Ordering::Release);
         self.0.resume_event.notify(Self::MAX_LISTENERS); // we might have been paused, so notify here
     }
 }
+/// Alias for the type used in FFI
+pub type BoxedQuiescenceBeacon = QuiescenceBeaconOpaque_TO<'static, RBox<()>>;
 
 #[cfg(test)]
 mod tests {

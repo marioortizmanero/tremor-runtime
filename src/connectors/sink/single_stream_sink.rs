@@ -25,6 +25,7 @@ use async_std::{
     task,
 };
 use tremor_common::time::nanotime;
+use abi_stable::std_types::ROption::RSome;
 
 use super::channel_sink::{NoMeta, SinkMeta, SinkMetaBehaviour};
 use super::{AsyncSinkReply, ContraflowData, EventSerializer, Sink, SinkContext, StreamWriter};
@@ -135,10 +136,10 @@ impl SingleStreamSinkRuntime {
             }
             let error = match writer.on_done(stream).await {
                 Err(e) => Some(e),
-                Ok(StreamDone::ConnectorClosed) => ctx.notifier.notify().await.err(),
+                Ok(StreamDone::ConnectorClosed) => ctx.notifier.notify()/*.await*/.err(),
                 Ok(_) => None,
             };
-            if let Some(e) = error {
+            if let RSome(e) = error {
                 error!(
                     "[Connector::{}] Error shutting down write half of stream {}: {}",
                     ctx.url, stream, e

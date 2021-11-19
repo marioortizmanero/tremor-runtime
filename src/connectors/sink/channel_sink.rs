@@ -31,6 +31,7 @@ use tremor_common::time::nanotime;
 use tremor_pipeline::{CbAction, Event, SignalKind};
 use tremor_value::Value;
 use value_trait::ValueAccess;
+use abi_stable::std_types::ROption::RSome;
 
 /// Behavioral trait for defining if a Channel Sink needs metadata or not
 pub trait SinkMetaBehaviour: Send + Sync {
@@ -250,7 +251,7 @@ where
                     start,
                 }),
             ) = (
-                ctx.quiescence_beacon.continue_writing().await,
+                ctx.quiescence_beacon.continue_writing()/*.await*/,
                 stream_rx.recv().await,
             ) {
                 let failed = writer.write(data, meta).await.is_err();
@@ -275,10 +276,10 @@ where
             }
             let error = match writer.on_done(stream).await {
                 Err(e) => Some(e),
-                Ok(StreamDone::ConnectorClosed) => ctx.notifier.notify().await.err(),
+                Ok(StreamDone::ConnectorClosed) => ctx.notifier.notify()/*.await*/.err(),
                 Ok(_) => None,
             };
-            if let Some(e) = error {
+            if let RSome(e) = error {
                 error!(
                     "[Connector::{}] Error shutting down write half of stream {}: {}",
                     ctx.url, stream, e

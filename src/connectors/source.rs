@@ -27,7 +27,6 @@ use crate::config::{Codec as CodecConfig, Connector as ConnectorConfig};
 use crate::connectors::Msg;
 use crate::errors::{Error, Result};
 use crate::pdk::{
-    MayPanic::{self, NoPanic},
     RResult,
 };
 use crate::pipeline;
@@ -40,7 +39,7 @@ use crate::{
 };
 use abi_stable::{
     rvec,
-    std_types::{RBox, RResult::ROk, RVec},
+    std_types::{RBox, RResult::{ROk, RErr}, RVec},
     StableAbi,
 };
 use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
@@ -52,7 +51,7 @@ use tremor_value::{literal, Value};
 use value_trait::Builder;
 
 use super::metrics::SourceReporter;
-use super::quiescence::QuiescenceBeacon;
+use super::quiescence::BoxedQuiescenceBeacon;
 use super::{ConnectorContext, StreamDone};
 
 /// The default poll interval for `try_recv` on channels in connectors
@@ -146,7 +145,7 @@ pub trait RawSource: Send {
     /// Pulls an event from the source if one exists
     /// `idgen` is passed in so the source can inspect what event id it would get if it was producing 1 event from the pulled data
     /* async */
-    fn pull_data(&mut self, pull_id: u64, ctx: &SourceContext) -> MayPanic<RResult<SourceReply>>;
+    fn pull_data(&mut self, pull_id: u64, ctx: &SourceContext) -> RResult<SourceReply>;
     /// This callback is called when the data provided from
     /// pull_event did not create any events, this is needed for
     /// linked sources that require a 1:1 mapping between requests
@@ -157,15 +156,13 @@ pub trait RawSource: Send {
         _pull_id: u64,
         _stream: u64,
         _ctx: &SourceContext,
-    ) -> MayPanic<RResult<()>> {
-        NoPanic(ROk(()))
+    ) -> RResult<()> {
+        ROk(())
     }
 
     /// Pulls custom metrics from the source
-    // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
-    // otherwise, rather than a function?
-    fn metrics(&mut self, _timestamp: u64) -> MayPanic<RVec<EventPayload>> {
-        NoPanic(rvec![])
+    fn metrics(&mut self, _timestamp: u64) -> RVec<EventPayload> {
+        rvec![]
     }
 
     ///////////////////////////
@@ -174,25 +171,17 @@ pub trait RawSource: Send {
 
     /// called when the source is started. This happens only once in the whole source lifecycle, before any other callbacks
     /* async */
-    fn on_start(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn on_start(&mut self, _ctx: &mut SourceContext) { }
     /// called when the source is explicitly paused as result of a user/operator interaction
     /// in contrast to `on_cb_close` which happens automatically depending on downstream pipeline or sink connector logic.
     /* async */
-    fn on_pause(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn on_pause(&mut self, _ctx: &mut SourceContext) { }
     /// called when the source is explicitly resumed from being paused
     /* async */
-    fn on_resume(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn on_resume(&mut self, _ctx: &mut SourceContext) { }
     /// called when the source is stopped. This happens only once in the whole source lifecycle, as the very last callback
     /* async */
-    fn on_stop(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn on_stop(&mut self, _ctx: &mut SourceContext) { }
 
     // circuit breaker callbacks
     /// called when we receive a `close` Circuit breaker event from any connected pipeline
@@ -200,46 +189,32 @@ pub trait RawSource: Send {
     /// Source implementations might want to close connections or signal a pause to the upstream entity it connects to if not done in the connector (the default)
     // TODO: add info of Cb event origin (port, origin_uri)?
     /* async */
-    fn on_cb_close(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn on_cb_close(&mut self, _ctx: &mut SourceContext) { }
     /// Called when we receive a `open` Circuit breaker event from any connected pipeline
     /// This means we can start/continue polling this source for messages
     /// Source implementations might want to start establishing connections if not done in the connector (the default)
     /* async */
-    fn on_cb_open(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn on_cb_open(&mut self, _ctx: &mut SourceContext) { }
 
     // guaranteed delivery callbacks
     /// an event has been acknowledged and can be considered delivered
     /// multiple acks for the same set of ids are always possible
     /* async */
-    fn ack(&mut self, _stream_id: u64, _pull_id: u64) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn ack(&mut self, _stream_id: u64, _pull_id: u64) { }
     /// an event has failed along its way and can be considered failed
     /// multiple fails for the same set of ids are always possible
     /* async */
-    fn fail(&mut self, _stream_id: u64, _pull_id: u64) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn fail(&mut self, _stream_id: u64, _pull_id: u64) { }
 
     // connectivity stuff
     /// called when connector lost connectivity
     /* async */
-    fn on_connection_lost(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn on_connection_lost(&mut self, _ctx: &mut SourceContext) { }
     /// called when connector re-established connectivity
     /* async */
-    fn on_connection_established(&mut self, _ctx: &mut SourceContext) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn on_connection_established(&mut self, _ctx: &mut SourceContext) { }
 
     /// Is this source transactional or can acks/fails be ignored
-    // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
-    // otherwise, rather than a function?
     fn is_transactional(&self) -> bool;
 }
 
@@ -254,7 +229,6 @@ impl Source {
     pub async fn pull_data(&mut self, pull_id: u64, ctx: &SourceContext) -> Result<SourceReply> {
         self.0
             .pull_data(pull_id, ctx)
-            .unwrap()
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -267,7 +241,6 @@ impl Source {
     ) -> Result<()> {
         self.0
             .on_no_events(pull_id, stream, ctx)
-            .unwrap()
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -275,51 +248,51 @@ impl Source {
     /// Pulls custom metrics from the source
     #[inline]
     pub fn metrics(&mut self, timestamp: u64) -> Vec<EventPayload> {
-        self.0.metrics(timestamp).unwrap().into()
+        self.0.metrics(timestamp).into()
     }
 
     #[inline]
     pub async fn on_start(&mut self, ctx: &mut SourceContext) {
-        self.0.on_start(ctx).unwrap()
+        self.0.on_start(ctx)
     }
     #[inline]
     pub async fn on_pause(&mut self, ctx: &mut SourceContext) {
-        self.0.on_pause(ctx).unwrap()
+        self.0.on_pause(ctx)
     }
     #[inline]
     pub async fn on_resume(&mut self, ctx: &mut SourceContext) {
-        self.0.on_resume(ctx).unwrap()
+        self.0.on_resume(ctx)
     }
     #[inline]
     pub async fn on_stop(&mut self, ctx: &mut SourceContext) {
-        self.0.on_stop(ctx).unwrap()
+        self.0.on_stop(ctx)
     }
 
     #[inline]
     pub async fn on_cb_close(&mut self, ctx: &mut SourceContext) {
-        self.0.on_cb_close(ctx).unwrap()
+        self.0.on_cb_close(ctx)
     }
     #[inline]
     pub async fn on_cb_open(&mut self, ctx: &mut SourceContext) {
-        self.0.on_cb_open(ctx).unwrap()
+        self.0.on_cb_open(ctx)
     }
 
     #[inline]
     pub async fn ack(&mut self, stream_id: u64, pull_id: u64) {
-        self.0.ack(stream_id, pull_id).unwrap()
+        self.0.ack(stream_id, pull_id)
     }
     #[inline]
     pub async fn fail(&mut self, stream_id: u64, pull_id: u64) {
-        self.0.fail(stream_id, pull_id).unwrap()
+        self.0.fail(stream_id, pull_id)
     }
 
     #[inline]
     pub async fn on_connection_lost(&mut self, ctx: &mut SourceContext) {
-        self.0.on_connection_lost(ctx).unwrap()
+        self.0.on_connection_lost(ctx)
     }
     #[inline]
     pub async fn on_connection_established(&mut self, ctx: &mut SourceContext) {
-        self.0.on_connection_established(ctx).unwrap()
+        self.0.on_connection_established(ctx)
     }
 
     #[inline]
@@ -392,7 +365,7 @@ impl ChannelSourceRuntime {
                 return;
             };
 
-            while ctx.quiescence_beacon.continue_reading().await {
+            while ctx.quiescence_beacon.continue_reading()/* .await */ {
                 let sc_data = timeout(Self::READ_TIMEOUT_MS, reader.read(stream)).await;
 
                 let sc_data = match sc_data {
@@ -409,7 +382,7 @@ impl ChannelSourceRuntime {
                 };
             }
             if reader.on_done(stream).await == StreamDone::ConnectorClosed {
-                if let Err(e) = ctx.notifier.notify().await {
+                if let RErr(e) = ctx.notifier.notify()/*.await*/ {
                     error!("[Connector::{}] Failed to notify connector: {}", ctx.url, e);
                 };
             }
@@ -427,7 +400,7 @@ pub struct SourceContext {
     /// connector url
     pub url: TremorUrl,
     /// The Quiescence Beacon
-    pub quiescence_beacon: QuiescenceBeacon,
+    pub quiescence_beacon: BoxedQuiescenceBeacon,
 }
 
 /// address of a source
