@@ -90,7 +90,7 @@ tremor-pipeline = { path = "tremor-pipeline" }
 tremor-script = { path = "tremor-script" }
 tremor-value = { path = "tremor-value" }
 url = "2.2"
-value-trait = "0.2.9"
+value-trait = { version = "0.2.9", features = ["c-abi"] }
 zstd = "0.9"
 
 mapr = "0.8"
@@ -109,9 +109,7 @@ tremor-otelapis = { version = "0.2.2" }
 qwal = { git = "https://github.com/tremor-rs/qwal" }
 
 # plugin system
-# FIXME: update to crates.io when this is added to a new version:
-# https://github.com/rodrimati1992/abi_stable_crates/pull/68
-abi_stable = { version = "0.10.3", git = "https://github.com/rodrimati1992/abi_stable_crates.git" }
+abi_stable = "0.10.3"
 
 [dev-dependencies]
 matches = "0.1"
@@ -138,6 +136,9 @@ es-integration = []
 [patch.crates-io]
 rust-bert = { git = 'https://github.com/mfelsche/rust-bert.git', rev = '1140989' }
 rust_tokenizers = { git = 'https://github.com/mfelsche/rust-tokenizers.git', rev = '5a7860d' }
+# FIXME: update to crates.io when this is added to a new version:
+# https://github.com/rodrimati1992/abi_stable_crates/pull/68
+abi_stable = { git = "https://github.com/rodrimati1992/abi_stable_crates.git" }
 
 # for use during debian packaging, via cargo-deb
 # https://github.com/mmstick/cargo-deb#packagemetadatadeb-options
