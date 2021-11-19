@@ -1,11 +1,16 @@
 use std::pin::Pin;
-use abi_stable::{StableAbi, std_types::{RVec, RArc, RVec}};
+use abi_stable::{StableAbi, std_types::{RVec, RArc}};
+use tremor_value::pdk;
 
+#[repr(C)]
+#[derive(StableAbi)]
 pub struct ValueAndMeta<'event> {
-    v: Value<'event>,
-    m: Value<'event>,
+    v: pdk::Value<'event>,
+    m: pdk::Value<'event>,
 }
 
+#[repr(C)]
+#[derive(StableAbi)]
 pub struct EventPayload {
     /// The vector of raw input values
     raw: RVec<RArc<Pin<RVec<u8>>>>,

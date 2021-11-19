@@ -100,7 +100,7 @@ pub type NodeLookupFn = fn(
 /// Stringified numeric key
 /// from <https://github.com/serde-rs/json-benchmark/blob/master/src/prim_str.rs>
 #[repr(C)]
-#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Debug, AbiStable)]
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Debug, StableAbi)]
 pub struct PrimStr<T>(T)
 where
     T: Copy + Ord + Display + FromStr;
