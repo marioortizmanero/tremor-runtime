@@ -50,7 +50,6 @@ use crate::connectors::sink::{BoxedRawSink, Sink, SinkAddr, SinkContext, SinkMsg
 use crate::connectors::source::{BoxedRawSource, Source, SourceAddr, SourceContext, SourceMsg};
 use crate::errors::{Error, ErrorKind, Result};
 use crate::pdk::{
-    MayPanic::{self, NoPanic},
     RResult,
 };
 use crate::pipeline;
@@ -65,6 +64,7 @@ use abi_stable::{
         RResult::{RErr, ROk},
         RString, RVec,
     },
+    type_level::downcasting::TD_Opaque,
     StableAbi,
 };
 use async_std::channel::{bounded, Sender};
@@ -74,7 +74,7 @@ use tremor_value::Value;
 use value_trait::{Builder, Mutable};
 
 use self::metrics::MetricsSender;
-use self::quiescence::QuiescenceBeacon;
+use self::quiescence::{BoxedQuiescenceBeacon, QuiescenceBeaconOpaque_TO, QuiescenceBeacon, QuiescenceBeaconOpaque};
 use self::reconnect::{Attempt, ReconnectRuntime};
 
 /// sender for connector manager messages
@@ -427,7 +427,7 @@ impl Manager {
         let source_ctx = SourceContext {
             uid,
             url: url.clone(),
-            quiescence_beacon: quiescence_beacon.clone(),
+            quiescence_beacon: QuiescenceBeaconOpaque_TO::from_value(quiescence_beacon.clone(), TD_Opaque),
         };
 
         let sink_metrics_reporter = MetricsSinkReporter::new(
@@ -462,9 +462,9 @@ impl Manager {
         let ctx = ConnectorContext {
             uid,
             url: url.clone(),
-            type_name: config.binding_type.clone(),
-            quiescence_beacon: quiescence_beacon.clone(),
-            notifier: notifier.clone(),
+            type_name: config.binding_type.clone().into(),
+            quiescence_beacon: QuiescenceBeaconOpaque_TO::from_value(quiescence_beacon.clone(), TD_Opaque),
+            notifier: reconnect::ConnectionLostNotifierOpaque_TO::from_value(notifier.clone(), TD_Opaque),
         };
 
         let send_addr = connector_addr.clone();
@@ -963,9 +963,9 @@ pub struct ConnectorContext {
     /// type name of the connector
     pub type_name: RString,
     /// The Quiescence Beacon
-    pub quiescence_beacon: QuiescenceBeacon,
+    pub quiescence_beacon: BoxedQuiescenceBeacon,
     /// Notifier
-    pub notifier: reconnect::ConnectionLostNotifier,
+    pub notifier: reconnect::BoxedConnectionLostNotifier,
 }
 
 impl ConnectorContext {
@@ -992,9 +992,6 @@ pub enum Connectivity {
     Disconnected,
 }
 
-/// Alias for the FFI-safe dynamic connector type
-pub type BoxedRawConnector = RawConnector_TO<'static, RBox<()>>;
-
 /// A Connector connects the tremor runtime to the outside world.
 ///
 /// It can be a source of events, as such it is polled for new data.
@@ -1014,8 +1011,6 @@ pub type BoxedRawConnector = RawConnector_TO<'static, RBox<()>>;
 pub trait RawConnector: Send {
     /// This connector works with structured data and does not allow the use
     /// of codecs.
-    // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
-    // otherwise, rather than a function?
     fn is_structured(&self) -> bool {
         false
     }
@@ -1028,8 +1023,8 @@ pub trait RawConnector: Send {
     fn create_source(
         &mut self,
         _source_context: SourceContext,
-    ) -> MayPanic<RResult<ROption<BoxedRawSource>>> {
-        NoPanic(ROk(RNone))
+    ) -> RResult<ROption<BoxedRawSource>> {
+        ROk(RNone)
     }
 
     /// Create a sink part for this connector if applicable
@@ -1040,8 +1035,8 @@ pub trait RawConnector: Send {
     fn create_sink(
         &mut self,
         _sink_context: SinkContext,
-    ) -> MayPanic<RResult<ROption<BoxedRawSink>>> {
-        NoPanic(ROk(RNone))
+    ) -> RResult<ROption<BoxedRawSink>> {
+        ROk(RNone)
     }
 
     /// Attempt to connect to the outside world.
@@ -1059,46 +1054,38 @@ pub trait RawConnector: Send {
     /// To know when to stop reading new data from the external connection, the `quiescence` beacon
     /// can be used. Call `.reading()` and `.writing()` to see if you should continue doing so, if not, just stop and rest.
     /* async */
-    fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> MayPanic<RResult<bool>>;
+    fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> RResult<bool>;
 
     /// called once when the connector is started
     /// `connect` will be called after this for the first time, leave connection attempts in `connect`.
     /* async */
-    fn on_start(&mut self, _ctx: &ConnectorContext) -> MayPanic<RResult<ConnectorState>> {
-        NoPanic(ROk(ConnectorState::Running))
+    fn on_start(&mut self, _ctx: &ConnectorContext) -> RResult<ConnectorState> {
+        ROk(ConnectorState::Running)
     }
 
     /// called when the connector pauses
     /* async */
-    fn on_pause(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn on_pause(&mut self, _ctx: &ConnectorContext) { }
     /// called when the connector resumes
     /* async */
-    fn on_resume(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn on_resume(&mut self, _ctx: &ConnectorContext) { }
 
     /// Drain
     ///
     /// Ensure no new events arrive at the source part of this connector when this function returns
     /// So we can safely send the `Drain` signal.
     /* async */
-    fn on_drain(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn on_drain(&mut self, _ctx: &ConnectorContext) { }
 
     /// called when the connector is stopped
     /* async */
-    fn on_stop(&mut self, _ctx: &ConnectorContext) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn on_stop(&mut self, _ctx: &ConnectorContext) { }
 
     /// returns the default codec for this connector
-    // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
-    // otherwise, rather than a function?
     fn default_codec(&self) -> &str;
 }
+/// Alias for the FFI-safe dynamic connector type
+pub type BoxedRawConnector = RawConnector_TO<'static, RBox<()>>;
 
 // The higher level connector interface, which wraps the raw connector from the
 // plugin.
@@ -1115,7 +1102,7 @@ impl Connector {
         source_context: SourceContext,
         builder: source::SourceManagerBuilder,
     ) -> Result<Option<source::SourceAddr>> {
-        match self.0.create_source(source_context.clone()).unwrap() {
+        match self.0.create_source(source_context.clone()) {
             ROk(RSome(raw_source)) => {
                 let wrapper = Source(raw_source);
                 builder.spawn(wrapper, source_context).map(Some)
@@ -1131,7 +1118,7 @@ impl Connector {
         sink_context: SinkContext,
         builder: sink::SinkManagerBuilder,
     ) -> Result<Option<sink::SinkAddr>> {
-        match self.0.create_sink(sink_context.clone()).unwrap() {
+        match self.0.create_sink(sink_context.clone()) {
             ROk(RSome(raw_sink)) => {
                 let wrapper = Sink(raw_sink);
                 builder.spawn(wrapper, sink_context).map(Some)
@@ -1145,7 +1132,6 @@ impl Connector {
     pub async fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> Result<bool> {
         self.0
             .connect(ctx, attempt)
-            .unwrap()
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -1154,29 +1140,28 @@ impl Connector {
     pub async fn on_start(&mut self, ctx: &ConnectorContext) -> Result<ConnectorState> {
         self.0
             .on_start(ctx)
-            .unwrap()
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
 
     #[inline]
     pub async fn on_pause(&mut self, ctx: &ConnectorContext) {
-        self.0.on_pause(ctx).unwrap()
+        self.0.on_pause(ctx)
     }
 
     #[inline]
     pub async fn on_resume(&mut self, ctx: &ConnectorContext) {
-        self.0.on_resume(ctx).unwrap()
+        self.0.on_resume(ctx)
     }
 
     #[inline]
     pub async fn on_drain(&mut self, ctx: &ConnectorContext) {
-        self.0.on_drain(ctx).unwrap()
+        self.0.on_drain(ctx)
     }
 
     #[inline]
     pub async fn on_stop(&mut self, ctx: &ConnectorContext) {
-        self.0.on_stop(ctx).unwrap()
+        self.0.on_stop(ctx)
     }
 
     #[inline]

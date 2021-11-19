@@ -25,7 +25,6 @@ use crate::config::{Codec as CodecConfig, Connector as ConnectorConfig};
 use crate::connectors::{Msg, StreamDone};
 use crate::errors::Result;
 use crate::pdk::{
-    MayPanic::{self, NoPanic},
     RResult,
 };
 use crate::permge::PriorityMerge;
@@ -164,7 +163,7 @@ pub trait RawSink: Send {
         ctx: &SinkContext,
         serializer: &mut EventSerializer,
         start: u64,
-    ) -> MayPanic<RResult<SinkReply>>;
+    ) -> RResult<SinkReply>;
     /// called when receiving a signal
     /* async */
     fn on_signal(
@@ -172,61 +171,45 @@ pub trait RawSink: Send {
         _signal: Event,
         _ctx: &SinkContext,
         _serializer: &mut EventSerializer,
-    ) -> MayPanic<RResult<SinkReply>> {
-        NoPanic(ROk(SinkReply::default()))
+    ) -> RResult<SinkReply> {
+        ROk(SinkReply::default())
     }
 
     /// Pull metrics from the sink
-    fn metrics(&mut self, _timestamp: u64) -> MayPanic<RVec<EventPayload>> {
-        NoPanic(rvec![])
+    fn metrics(&mut self, _timestamp: u64) -> RVec<EventPayload> {
+        rvec![]
     }
 
     // lifecycle stuff
     /// called when started
     /* async */
-    fn on_start(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn on_start(&mut self, _ctx: &mut SinkContext) { }
     /// called when paused
     /* async */
-    fn on_pause(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn on_pause(&mut self, _ctx: &mut SinkContext) { }
     /// called when resumed
     /* async */
-    fn on_resume(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn on_resume(&mut self, _ctx: &mut SinkContext) {}
     /// called when stopped
     /* async */
-    fn on_stop(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn on_stop(&mut self, _ctx: &mut SinkContext) { }
 
     // connectivity stuff
     /// called when sink lost connectivity
     /* async */
-    fn on_connection_lost(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn on_connection_lost(&mut self, _ctx: &mut SinkContext) { }
     /// called when sink re-established connectivity
     /* async */
-    fn on_connection_established(&mut self, _ctx: &mut SinkContext) -> MayPanic<()> {
-        NoPanic(())
-    }
+    fn on_connection_established(&mut self, _ctx: &mut SinkContext) { }
 
     /// if `true` events are acknowledged/failed automatically by the sink manager.
     /// Such sinks should return SinkReply::None from on_event or SinkReply::Fail if they fail immediately.
     ///
     /// if `false` events need to be acked/failed manually by the sink impl
-    // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
-    // otherwise, rather than a function?
     fn auto_ack(&self) -> bool;
 
     /// if true events are sent asynchronously, not necessarily when `on_event` returns.
     /// if false events can be considered delivered once `on_event` returns.
-    // FIXME: should this use `MayPanic<()>` as well? Shouldn't it be a constant
-    // otherwise, rather than a function?
     fn asynchronous(&self) -> bool {
         false
     }
@@ -247,7 +230,6 @@ impl Sink {
     ) -> Result<SinkReply> {
         self.0
             .on_event(input.into(), event, ctx, serializer, start)
-            .unwrap()
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -260,40 +242,39 @@ impl Sink {
     ) -> Result<SinkReply> {
         self.0
             .on_signal(signal, ctx, serializer)
-            .unwrap()
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
 
     #[inline]
     pub fn metrics(&mut self, timestamp: u64) -> Vec<EventPayload> {
-        self.0.metrics(timestamp).unwrap().into()
+        self.0.metrics(timestamp).into()
     }
 
     #[inline]
     pub async fn on_start(&mut self, ctx: &mut SinkContext) {
-        self.0.on_start(ctx).unwrap()
+        self.0.on_start(ctx)
     }
     #[inline]
     pub async fn on_pause(&mut self, ctx: &mut SinkContext) {
-        self.0.on_pause(ctx).unwrap()
+        self.0.on_pause(ctx)
     }
     #[inline]
     pub async fn on_resume(&mut self, ctx: &mut SinkContext) {
-        self.0.on_resume(ctx).unwrap()
+        self.0.on_resume(ctx)
     }
     #[inline]
     pub async fn on_stop(&mut self, ctx: &mut SinkContext) {
-        self.0.on_stop(ctx).unwrap()
+        self.0.on_stop(ctx)
     }
 
     #[inline]
     pub async fn on_connection_lost(&mut self, ctx: &mut SinkContext) {
-        self.0.on_connection_lost(ctx).unwrap()
+        self.0.on_connection_lost(ctx)
     }
     #[inline]
     pub async fn on_connection_established(&mut self, ctx: &mut SinkContext) {
-        self.0.on_connection_established(ctx).unwrap()
+        self.0.on_connection_established(ctx)
     }
 
     #[inline]

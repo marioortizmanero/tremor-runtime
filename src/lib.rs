@@ -17,6 +17,8 @@
 // TODO: turn back on
 // #![deny(warnings)]
 // #![deny(missing_docs)]
+// TODO: disable and cleanup with `cargo fix` automatically once done
+#![allow(unused_imports)]
 #![recursion_limit = "1024"]
 // TODO: turn back on
 // #![deny(
