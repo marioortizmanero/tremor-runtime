@@ -28,6 +28,7 @@ use crate::config::{Codec as CodecConfig, Connector as ConnectorConfig};
 use crate::connectors::{Msg, StreamDone};
 use crate::errors::Result;
 use crate::pdk::{
+    self,
     RResult,
 };
 use crate::permge::PriorityMerge;
@@ -182,7 +183,7 @@ pub trait RawSink: Send {
         input: RStr<'_>,
         event: Event,
         ctx: &SinkContext,
-        serializer: &mut EventSerializer,
+        serializer: &mut BoxedEventSerializer,
         start: u64,
     ) -> RResult<SinkReply>;
     /// called when receiving a signal
@@ -191,7 +192,7 @@ pub trait RawSink: Send {
         &mut self,
         _signal: Event,
         _ctx: &SinkContext,
-        _serializer: &mut EventSerializer,
+        _serializer: &mut BoxedEventSerializer,
     ) -> RResult<SinkReply> {
         ROk(SinkReply::default())
     }
@@ -609,16 +610,56 @@ impl EventSerializer {
         })
     }
 
-    // This is kept separate so that conversions are done only once later on
-    // FIXME: use a `try` block when they are stabilized
-    fn serialize_for_stream_inner(
+}
+
+/// Note that since `EventSerializer` is used for the plugin system, it
+/// must be `#[repr(C)]` in order to interact with it. However, since it uses
+/// complex types and it's easier to just make it available as an opaque type
+/// instead, with the help of `sabi_trait`.
+#[abi_stable::sabi_trait]
+pub trait EventSerializerOpaque {
+    fn drop_stream(&mut self, stream_id: u64);
+
+    /// clear out all streams - this can lead to data loss
+    /// only use when you are sure, all the streams are gone
+    fn clear(&mut self);
+
+    /// serialize event for the default stream
+    ///
+    /// # Errors
+    ///   * if serialization failed (codec or postprocessors)
+    fn serialize(&mut self, value: &Value, ingest_ns: u64) -> RResult<RVec<RVec<u8>>>;
+
+    /// serialize event for a certain stream
+    ///
+    /// # Errors
+    ///   * if serialization failed (codec or postprocessors)
+    fn serialize_for_stream(
         &mut self,
-        value: &PdkValue,
+        value: &pdk::Value,
         ingest_ns: u64,
         stream_id: u64,
-    ) -> Result<Vec<Vec<u8>>> {
-        // FIXME: super ugly clone here
-        let value: &Value = &value.clone().into();
+    ) -> RResult<RVec<RVec<u8>>>;
+}
+impl EventSerializerOpaque for EventSerializer {
+    fn drop_stream(&mut self, stream_id: u64) {
+        self.streams.remove(&stream_id);
+    }
+
+    fn clear(&mut self) {
+        self.streams.clear();
+    }
+
+    fn serialize(&mut self, value: &Value, ingest_ns: u64) -> RResult<RVec<RVec<u8>>> {
+        self.serialize_for_stream(value, ingest_ns, DEFAULT_STREAM_ID)
+    }
+
+    fn serialize_for_stream(
+        &mut self,
+        value: &pdk::Value,
+        ingest_ns: u64,
+        stream_id: u64,
+    ) -> RResult<RVec<RVec<u8>>> {
         if stream_id == DEFAULT_STREAM_ID {
             postprocess(
                 &mut self.postprocessors,
@@ -642,6 +683,8 @@ impl EventSerializer {
         }
     }
 }
+/// Alias for the type used in FFI
+pub type BoxedEventSerializer = EventSerializerOpaque_TO<'static, RBox<()>>;
 
 /// Note that since `EventSerializer` is used for the plugin system, it
 /// must be `#[repr(C)]` in order to interact with it. However, since it uses

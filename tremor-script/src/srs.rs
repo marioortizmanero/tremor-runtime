@@ -19,6 +19,7 @@ use crate::{
 };
 use query::{DefinitioalArgs, DefinitioalArgsWith};
 use std::{fmt::Debug, mem, pin::Pin, sync::Arc};
+use abi_stable::{StableAbi, std_types::{RArc, RVec}};
 
 ///! This file includes our self referential structs
 
@@ -804,11 +805,11 @@ impl Select {
 /// by the implementation logic to ensure they remain sane.
 ///
 #[repr(C)]
-#[derive(Clone, Default)]
+#[derive(Clone, Default, StableAbi)]
 pub struct EventPayload {
     /// The vector of raw input values
-    pub(crate) raw: Vec<Arc<Pin<Vec<u8>>>>,
-    pub(crate) data: ValueAndMeta<'static>,
+    raw: RVec<RArc<Pin<RVec<u8>>>>,
+    data: ValueAndMeta<'static>,
 }
 
 #[cfg(not(tarpaulin_include))] // this is a simple Debug implementation
