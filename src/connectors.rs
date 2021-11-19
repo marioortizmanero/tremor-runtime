@@ -985,7 +985,8 @@ impl ConnectorContext {
     pub fn meta(&self, inner: Value<'static>) -> Value<'static> {
         let mut map = Value::object_with_capacity(1);
         let mut type_map = Value::object_with_capacity(1);
-        type_map.try_insert(self.type_name.clone().into(), inner);
+        let type_name: String = self.type_name.clone().into();
+        type_map.try_insert(type_name, inner);
         map.try_insert("connector", type_map);
         map
     }

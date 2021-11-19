@@ -34,6 +34,7 @@ use abi_stable::{
     rvec,
     std_types::{RBox, RResult::ROk, RStr, RVec},
     StableAbi,
+    type_level::downcasting::TD_Opaque,
 };
 use async_std::channel::{bounded, unbounded, Receiver, Sender};
 use async_std::stream::StreamExt; // for .next() on PriorityMerge
@@ -46,7 +47,7 @@ use std::borrow::Borrow;
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashSet};
 use tremor_common::time::nanotime;
-use tremor_pipeline::{CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID};
+use tremor_pipeline::{CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID, pdk::Event as PdkEvent};
 use tremor_script::{pdk::EventPayload as PdkEventPayload, EventPayload};
 
 use tremor_value::{pdk::Value as PdkValue, Value};
@@ -62,7 +63,8 @@ use super::metrics::MetricsSinkReporter;
 /// circuit breaker events, guaranteed delivery events, etc.
 ///
 /// A response is an event generated from the sink delivery.
-#[derive(Clone, Debug, Default, Copy)]
+#[repr(C)]
+#[derive(Clone, Debug, Default, Copy, StableAbi)]
 pub struct SinkReply {
     pub ack: SinkAck,
     pub cb: CbAction,
@@ -112,7 +114,8 @@ impl From<bool> for SinkReply {
 
 /// stuff a sink replies back upon an event or a signal
 /// to the calling sink/connector manager
-#[derive(Clone, Debug, Copy)]
+#[repr(C)]
+#[derive(Clone, Debug, Copy, StableAbi)]
 pub enum SinkAck {
     /// no reply - maybe no reply yet, maybe replies come asynchronously...
     None,
@@ -157,7 +160,7 @@ pub trait RawSink: Send {
     fn on_event(
         &mut self,
         input: RStr<'_>,
-        event: Event,
+        event: PdkEvent,
         ctx: &SinkContext,
         serializer: &mut BoxedEventSerializer,
         start: u64,
@@ -166,7 +169,7 @@ pub trait RawSink: Send {
     /* async */
     fn on_signal(
         &mut self,
-        _signal: Event,
+        _signal: PdkEvent,
         _ctx: &SinkContext,
         _serializer: &mut BoxedEventSerializer,
     ) -> RResult<SinkReply> {
@@ -226,8 +229,9 @@ impl Sink {
         serializer: &mut EventSerializer,
         start: u64,
     ) -> Result<SinkReply> {
+        let mut serializer = BoxedEventSerializer::from_value(serializer, TD_Opaque);
         self.0
-            .on_event(input.into(), event, ctx, serializer, start)
+            .on_event(input.into(), event.into(), ctx, &mut serializer, start)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -238,8 +242,9 @@ impl Sink {
         ctx: &SinkContext,
         serializer: &mut EventSerializer,
     ) -> Result<SinkReply> {
+        let mut serializer = BoxedEventSerializer::from_value(serializer, TD_Opaque);
         self.0
-            .on_signal(signal, ctx, serializer)
+            .on_signal(signal.into(), ctx, &mut serializer)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -470,6 +475,38 @@ impl EventSerializer {
             streams: BTreeMap::new(),
         })
     }
+
+    // This is kept separate so that conversions are done only once later on
+    // FIXME: use a `try` block when they are stabilized
+    fn serialize_for_stream_inner(
+        &mut self,
+        value: &PdkValue,
+        ingest_ns: u64,
+        stream_id: u64,
+    ) -> Result<Vec<Vec<u8>>> {
+        let value = value.into();
+        if stream_id == DEFAULT_STREAM_ID {
+            postprocess(
+                &mut self.postprocessors,
+                ingest_ns,
+                self.codec.encode(value)?,
+            )
+        } else {
+            match self.streams.entry(stream_id) {
+                Entry::Occupied(mut entry) => {
+                    let (c, pps) = entry.get_mut();
+                    postprocess(pps, ingest_ns, c.encode(value)?)
+                }
+                Entry::Vacant(entry) => {
+                    let codec = codec::resolve(&self.codec_config)?;
+                    let pps = make_postprocessors(self.postprocessor_names.as_slice())?;
+                    // insert data for a new stream
+                    let (c, pps2) = entry.insert((codec, pps));
+                    postprocess(pps2, ingest_ns, c.encode(value)?)
+                }
+            }
+        }
+    }
 }
 
 /// Note that since `EventSerializer` is used for the plugin system, it
@@ -511,7 +548,7 @@ impl EventSerializerOpaque for EventSerializer {
     }
 
     fn serialize(&mut self, value: &Value, ingest_ns: u64) -> RResult<RVec<RVec<u8>>> {
-        self.serialize_for_stream(value, ingest_ns, DEFAULT_STREAM_ID)
+        self.serialize_for_stream(value.into(), ingest_ns, DEFAULT_STREAM_ID)
     }
 
     fn serialize_for_stream(
@@ -520,27 +557,9 @@ impl EventSerializerOpaque for EventSerializer {
         ingest_ns: u64,
         stream_id: u64,
     ) -> RResult<RVec<RVec<u8>>> {
-        if stream_id == DEFAULT_STREAM_ID {
-            postprocess(
-                &mut self.postprocessors,
-                ingest_ns,
-                self.codec.encode(value)?,
-            )
-        } else {
-            match self.streams.entry(stream_id) {
-                Entry::Occupied(mut entry) => {
-                    let (c, pps) = entry.get_mut();
-                    postprocess(pps, ingest_ns, c.encode(value)?)
-                }
-                Entry::Vacant(entry) => {
-                    let codec = codec::resolve(&self.codec_config)?;
-                    let pps = make_postprocessors(self.postprocessor_names.as_slice())?;
-                    // insert data for a new stream
-                    let (c, pps2) = entry.insert((codec, pps));
-                    postprocess(pps2, ingest_ns, c.encode(value)?)
-                }
-            }
-        }
+        self.serialize_for_stream_inner(value, ingest_ns, stream_id)
+            .into() // RResult -> Result
+            .map_err(Into::into) // RBoxError -> Error
     }
 }
 /// Alias for the type used in FFI

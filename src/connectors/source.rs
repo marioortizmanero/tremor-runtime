@@ -942,6 +942,7 @@ impl SourceManager {
                     }) => {
                         let mut ingest_ns = nanotime();
                         let stream_state = self.streams.get_or_create_stream(stream)?; // we fail if we cannot create a stream (due to misconfigured codec, preprocessors, ...) (should not happen)
+                        let port: Option<Cow<str>> = port.into().map(Into::into);
                         let results = build_events(
                             &self.ctx.url,
                             stream_state,
@@ -949,8 +950,8 @@ impl SourceManager {
                             pull_counter,
                             origin_uri,
                             port.as_ref(),
-                            data,
-                            &meta.unwrap_or_else(Value::object),
+                            data.into(),
+                            &meta.into().map(Into::into).unwrap_or_else(Value::object),
                             self.is_transactional,
                         );
                         if results.is_empty() {
@@ -982,7 +983,8 @@ impl SourceManager {
                         let connector_url = &self.ctx.url;
 
                         let mut results = Vec::with_capacity(batch_data.len()); // assuming 1:1 mapping
-                        for (data, meta) in batch_data {
+                        for Tuple2(data, meta) in batch_data {
+                            let port: Option<Cow<str>> = port.into().map(Into::into);
                             let mut events = build_events(
                                 connector_url,
                                 stream_state,
@@ -990,8 +992,8 @@ impl SourceManager {
                                 pull_counter,
                                 origin_uri.clone(), // TODO: use split_last on batch_data to avoid last clone
                                 port.as_ref(),
-                                data,
-                                &meta.unwrap_or_else(Value::object),
+                                data.into(),
+                                &meta.into().map(Into::into).unwrap_or_else(Value::object),
                                 self.is_transactional,
                             );
                             results.append(&mut events);
@@ -1026,10 +1028,11 @@ impl SourceManager {
                             stream_state,
                             pull_counter,
                             ingest_ns,
-                            payload,
+                            payload.into(),
                             origin_uri,
                             self.is_transactional,
                         );
+                        let port = port.into().map(Into::into);
                         let error = self.route_events(vec![(port.unwrap_or(OUT), event)]).await;
                         if error {
                             self.source.fail(stream, pull_counter).await;
