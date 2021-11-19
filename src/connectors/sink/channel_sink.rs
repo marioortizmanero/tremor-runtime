@@ -15,10 +15,10 @@
 //! Sink implementation that keeps track of multiple streams and keeps channels to send to each stream
 
 use crate::connectors::prelude::*;
-use crate::connectors::{ConnectorContext, StreamDone, sink::EventSerializerOpaque};
-use crate::errors::{Result, ErrorKind};
+use crate::connectors::{sink::EventSerializerOpaque, ConnectorContext, StreamDone};
+use crate::errors::{ErrorKind, Result};
 use crate::QSIZE;
-use abi_stable::std_types::ROption::{RSome, RNone};
+use abi_stable::std_types::ROption::{RNone, RSome};
 use async_std::channel::{bounded, Receiver, Sender};
 use async_std::task;
 use beef::Cow;

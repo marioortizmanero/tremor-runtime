@@ -47,8 +47,8 @@ use abi_stable::{
 use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
 use beef::Cow;
 use tremor_pipeline::{
-    CbAction, Event, EventId, EventIdGenerator, EventOriginUri, DEFAULT_STREAM_ID,
-    pdk::EventOriginUri as PdkEventOriginUri
+    pdk::EventOriginUri as PdkEventOriginUri, CbAction, Event, EventId, EventIdGenerator,
+    EventOriginUri, DEFAULT_STREAM_ID,
 };
 use tremor_value::{literal, pdk::Value as PdkValue, Value};
 use value_trait::Builder;
