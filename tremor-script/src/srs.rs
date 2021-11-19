@@ -410,7 +410,7 @@ impl Select {
 pub struct EventPayload {
     /// The vector of raw input values
     raw: RVec<RArc<Pin<RVec<u8>>>>,
-    data: ValueAndMeta<'static>,
+    data: pdk::ValueAndMeta<'static>,
 }
 
 #[cfg(not(tarpaulin_include))] // this is a simple Debug implementation
