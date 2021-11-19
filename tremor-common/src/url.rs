@@ -14,7 +14,7 @@
 
 use crate::errors::{Error, ErrorKind, Result};
 use abi_stable::{
-    std_types::{ROption, RString},
+    std_types::{ROption::{self, RSome}, RString},
     StableAbi,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -326,7 +326,7 @@ impl TremorUrl {
     where
         S: ToString + ?Sized,
     {
-        self.instance = Some(i.to_string());
+        self.instance = RSome(i.to_string());
         if self.scope == Scope::Artefact {
             self.scope = Scope::Instance;
         }
@@ -339,8 +339,8 @@ impl TremorUrl {
     where
         S: ToString + ?Sized,
     {
-        self.instance_port = Some(i.to_string());
-        if self.scope == Scope::Instance {
+        self.instance_port = RSome(i.to_string());
+        if self.scope == Scope::Servant {
             self.scope = Scope::Port;
         }
     }
@@ -350,8 +350,8 @@ impl TremorUrl {
     where
         S: ToString + ?Sized,
     {
-        self.instance_port = Some(i.to_string());
-        if self.scope == Scope::Instance {
+        self.instance_port = RSome(i.to_string());
+        if self.scope == Scope::Servant {
             self.scope = Scope::Port;
         }
         self
@@ -360,17 +360,17 @@ impl TremorUrl {
     /// Retrieves the instance
     #[must_use]
     pub fn instance(&self) -> Option<&str> {
-        self.instance.as_deref()
+        self.instance.as_deref().into()
     }
     /// Retrieves the artefact
     #[must_use]
     pub fn artefact(&self) -> Option<&str> {
-        self.artefact.as_deref()
+        self.artefact.as_deref().into()
     }
     /// Retrieves the port
     #[must_use]
     pub fn instance_port(&self) -> Option<&str> {
-        self.instance_port.as_deref()
+        self.instance_port.as_deref().into()
     }
     /// Retrieves the port
     ///
@@ -383,7 +383,7 @@ impl TremorUrl {
     /// Retrieves the type
     #[must_use]
     pub fn resource_type(&self) -> Option<ResourceType> {
-        self.resource_type
+        self.resource_type.into()
     }
     /// Retrieves the scope
     #[must_use]

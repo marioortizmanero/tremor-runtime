@@ -17,7 +17,8 @@ use crate::config::Reconnect;
 use crate::connectors::{Addr, Connectivity, Connector, ConnectorContext, Msg};
 use crate::errors::Result;
 use crate::url::TremorUrl;
-use abi_stable::StableAbi;
+use crate::pdk::RResult;
+use abi_stable::{StableAbi, std_types::{RBox, RResult::ROk}};
 use async_std::channel::Sender;
 use async_std::task;
 use futures::future::{join3, ready, FutureExt};
@@ -148,17 +149,31 @@ pub(crate) struct ReconnectRuntime {
 #[derive(Clone)]
 pub struct ConnectionLostNotifier(Sender<Msg>);
 
-impl ConnectionLostNotifier {
-    /// constructor
-    pub fn new(tx: Sender<Msg>) -> Self {
-        Self(tx)
-    }
+/// Note that since `ConnectionLostNotifier` is used for the plugin system, it
+/// must be `#[repr(C)]` in order to interact with it. However, since it uses a
+/// complex type such as a channel, it's easier to just make it available as an
+/// opaque type instead, with the help of `sabi_trait`.
+#[abi_stable::sabi_trait]
+pub trait ConnectionLostNotifierOpaque: Clone + Send + Sync {
     /// notify the runtime that this connector lost its connection
-    pub async fn notify(&self) -> Result<()> {
-        self.0.send(Msg::ConnectionLost).await?;
-        Ok(())
+    /// TODO: async
+    /* async */ fn notify(&self) -> RResult<()>;
+}
+impl ConnectionLostNotifierOpaque for ConnectionLostNotifier {
+    /* async */ fn notify(&self) -> RResult<()> {
+        async_std::task::block_on(async {
+            self.0.send(Msg::ConnectionLost).await
+        })
+        .map_err(|e| {
+            // First converting to our own error type, and then to abi_stable's
+            let e: crate::errors::Error = e.into();
+            e.into()
+        })
+        .into()
     }
 }
+/// Alias for the type used in FFI
+pub type BoxedConnectionLostNotifier = ConnectionLostNotifierOpaque_TO<'static, RBox<()>>;
 
 impl ReconnectRuntime {
     pub(crate) fn notifier(&self) -> ConnectionLostNotifier {

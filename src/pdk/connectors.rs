@@ -8,7 +8,7 @@ use super::Value;
 
 use abi_stable::{
     declare_root_module_statics, library::RootModule, package_version_strings,
-    sabi_types::VersionStrings, std_types::RBox, StableAbi,
+    sabi_types::VersionStrings, std_types::{RBox, ROption}, StableAbi,
 };
 
 /// The `new` function basically acts as the connector builder
