@@ -21,6 +21,9 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "tremor_script"
 
 [dependencies]
+# FIXME: update to upstream when this is merged:
+# https://github.com/rodrimati1992/abi_stable_crates/pull/68
+abi_stable = { version = "0.10.3", branch = "as_deref", git = "https://github.com/marioortizmanero/abi_stable_crates.git" }
 atty = "0.2"
 base64 = "0.13"
 beef = { version="0.5", features=["impl_serde"] }

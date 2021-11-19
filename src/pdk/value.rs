@@ -67,30 +67,3 @@ fn conv_u8(cow: beef::Cow<[u8]>) -> RCow<[u8]> {
     let cow: std::borrow::Cow<[u8]> = cow.into();
     cow.into()
 }
-
-pub struct ValueAndMeta<'event> {
-    v: Value<'event>,
-    m: Value<'event>,
-}
-
-pub struct EventPayload {
-    /// The vector of raw input values
-    raw: RVec<RArc<Pin<RVec<u8>>>>,
-    data: ValueAndMeta<'static>,
-}
-
-impl From<tremor_script::EventPayload> for EventPayload {
-    fn from(original: tremor_script::EventPayload) -> Self {
-        EventPayload {
-            raw: original.raw.into_iter().map(|x| {
-                x.into_iter().map(|y| {
-                    y.into()
-                })
-            }).collect(),
-            data: ValueAndMeta {
-                v: original.data.value().into(),
-                m: original.data.meta().into()
-            }
-        }
-    }
-}
