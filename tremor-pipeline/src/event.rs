@@ -12,16 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{CbAction, EventId, OpMeta, SignalKind, pdk};
+use crate::{pdk, CbAction, EventId, OpMeta, SignalKind};
+use abi_stable::{
+    std_types::ROption::{self, RSome},
+    StableAbi,
+};
 use std::mem::swap;
 use tremor_common::time::nanotime;
 use tremor_script::prelude::*;
 use tremor_script::{literal, EventOriginUri, EventPayload, Value};
-use abi_stable::{StableAbi, std_types::ROption::{self, RSome}};
 
 /// A tremor event
 #[derive(
-    Debug, Clone, PartialEq, Default, simd_json_derive::Serialize, simd_json_derive::Deserialize
+    Debug, Clone, PartialEq, Default, simd_json_derive::Serialize, simd_json_derive::Deserialize,
 )]
 pub struct Event {
     /// The event ID

@@ -18,13 +18,13 @@
 
 use crate::connectors::{sink::SinkReply, ConnectorContext, StreamDone};
 use crate::errors::Result;
+use abi_stable::std_types::ROption::RSome;
 use async_std::{
     channel::{bounded, Receiver, Sender},
     task,
 };
 use std::marker::PhantomData;
 use tremor_common::time::nanotime;
-use abi_stable::std_types::ROption::RSome;
 
 use super::channel_sink::{NoMeta, SinkMeta, SinkMetaBehaviour, WithMeta};
 use super::{AsyncSinkReply, ContraflowData, EventSerializer, Sink, SinkContext, StreamWriter};
@@ -134,7 +134,10 @@ impl SingleStreamSinkRuntime {
             }
             let error = match writer.on_done(stream).await {
                 Err(e) => Some(e),
-                Ok(StreamDone::ConnectorClosed) => ctx.notifier.notify()/*.await*/.err(),
+                Ok(StreamDone::ConnectorClosed) => ctx
+                    .notifier
+                    .notify() /*.await*/
+                    .err(),
                 Ok(_) => None,
             };
             if let RSome(e) = error {

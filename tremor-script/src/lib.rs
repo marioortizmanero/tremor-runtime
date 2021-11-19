@@ -58,6 +58,8 @@ pub mod lexer;
 pub(crate) mod parser;
 /// Support for module paths
 pub mod path;
+/// Types for the Plugin Development Kit
+pub mod pdk;
 /// Tremor Script Position
 pub mod pos;
 /// Prelude module with important exports
@@ -74,8 +76,6 @@ mod std_lib;
 mod tilde;
 /// Utility functions
 pub mod utils;
-/// Types for the Plugin Development Kit
-pub mod pdk;
 
 pub use srs::{EventPayload, ValueAndMeta};
 

@@ -7,7 +7,10 @@ use tremor_value::pdk::Value;
 
 use std::pin::Pin;
 
-use abi_stable::{StableAbi, std_types::{RVec, RArc}};
+use abi_stable::{
+    std_types::{RArc, RVec},
+    StableAbi,
+};
 
 #[repr(C)]
 #[derive(StableAbi)]

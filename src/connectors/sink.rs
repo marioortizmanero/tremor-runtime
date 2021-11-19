@@ -27,9 +27,7 @@ use crate::codec::{self, Codec};
 use crate::config::{Codec as CodecConfig, Connector as ConnectorConfig};
 use crate::connectors::{Msg, StreamDone};
 use crate::errors::Result;
-use crate::pdk::{
-    RResult,
-};
+use crate::pdk::RResult;
 use crate::permge::PriorityMerge;
 use crate::pipeline;
 use crate::postprocessor::{make_postprocessors, postprocess, Postprocessors};
@@ -52,9 +50,9 @@ use std::collections::{BTreeMap, HashSet};
 use std::fmt::Display;
 use tremor_common::time::nanotime;
 use tremor_pipeline::{CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID};
-use tremor_script::{EventPayload, pdk::EventPayload as PdkEventPayload};
+use tremor_script::{pdk::EventPayload as PdkEventPayload, EventPayload};
 
-use tremor_value::{Value, pdk::Value as PdkValue};
+use tremor_value::{pdk::Value as PdkValue, Value};
 
 pub use self::channel_sink::SinkMeta;
 
@@ -202,24 +200,24 @@ pub trait RawSink: Send {
     // lifecycle stuff
     /// called when started
     /* async */
-    fn on_start(&mut self, _ctx: &mut SinkContext) { }
+    fn on_start(&mut self, _ctx: &mut SinkContext) {}
     /// called when paused
     /* async */
-    fn on_pause(&mut self, _ctx: &mut SinkContext) { }
+    fn on_pause(&mut self, _ctx: &mut SinkContext) {}
     /// called when resumed
     /* async */
     fn on_resume(&mut self, _ctx: &mut SinkContext) {}
     /// called when stopped
     /* async */
-    fn on_stop(&mut self, _ctx: &mut SinkContext) { }
+    fn on_stop(&mut self, _ctx: &mut SinkContext) {}
 
     // connectivity stuff
     /// called when sink lost connectivity
     /* async */
-    fn on_connection_lost(&mut self, _ctx: &mut SinkContext) { }
+    fn on_connection_lost(&mut self, _ctx: &mut SinkContext) {}
     /// called when sink re-established connectivity
     /* async */
-    fn on_connection_established(&mut self, _ctx: &mut SinkContext) { }
+    fn on_connection_established(&mut self, _ctx: &mut SinkContext) {}
 
     /// if `true` events are acknowledged/failed automatically by the sink manager.
     /// Such sinks should return SinkReply::None from on_event or SinkReply::Fail if they fail immediately.
@@ -531,7 +529,6 @@ impl EventSerializer {
             streams: BTreeMap::new(),
         })
     }
-
 }
 
 /// Note that since `EventSerializer` is used for the plugin system, it
