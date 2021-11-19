@@ -623,7 +623,7 @@ impl EventSerializer {
         ingest_ns: u64,
         stream_id: u64,
     ) -> Result<Vec<Vec<u8>>> {
-        let value = value.into();
+        let value: &Value = value.into();
         if stream_id == DEFAULT_STREAM_ID {
             postprocess(
                 &mut self.postprocessors,
@@ -664,7 +664,7 @@ pub trait EventSerializerOpaque {
     ///
     /// # Errors
     ///   * if serialization failed (codec or postprocessors)
-    fn serialize(&mut self, value: &Value, ingest_ns: u64) -> RResult<RVec<RVec<u8>>>;
+    fn serialize(&mut self, value: &PdkValue, ingest_ns: u64) -> RResult<RVec<RVec<u8>>>;
 
     /// serialize event for a certain stream
     ///
@@ -686,7 +686,7 @@ impl EventSerializerOpaque for EventSerializer {
         self.streams.clear();
     }
 
-    fn serialize(&mut self, value: &Value, ingest_ns: u64) -> RResult<RVec<RVec<u8>>> {
+    fn serialize(&mut self, value: &PdkValue, ingest_ns: u64) -> RResult<RVec<RVec<u8>>> {
         self.serialize_for_stream(value.into(), ingest_ns, DEFAULT_STREAM_ID)
     }
 
