@@ -20,28 +20,26 @@ use tremor_script::{literal, EventOriginUri, EventPayload, Value};
 use abi_stable::{StableAbi, std_types::ROption::{self, RSome}};
 
 /// A tremor event
-#[repr(C)]
 #[derive(
-    Debug, Clone, PartialEq, Default, simd_json_derive::Serialize, simd_json_derive::Deserialize, StableAbi
+    Debug, Clone, PartialEq, Default, simd_json_derive::Serialize, simd_json_derive::Deserialize
 )]
 pub struct Event {
     /// The event ID
     pub id: EventId,
     /// The event Data
-    pub data: pdk::EventPayload,
+    pub data: EventPayload,
     /// Nanoseconds at when the event was ingested
     pub ingest_ns: u64,
     /// URI to identify the origin of the event
-    pub origin_uri: ROption<EventOriginUri>,
+    pub origin_uri: Option<EventOriginUri>,
     /// The kind of the event
-    pub kind: ROption<SignalKind>,
+    pub kind: Option<SignalKind>,
     /// If this event is batched (containing multiple events itself)
     pub is_batch: bool,
 
     /// Circuit breaker action
     pub cb: CbAction,
     /// Metadata for operators
-    /// FIXME: this is complicated to convert...
     pub op_meta: OpMeta,
     /// this needs transactional data
     pub transactional: bool,
@@ -53,7 +51,7 @@ impl Event {
     pub fn signal_tick() -> Self {
         Self {
             ingest_ns: nanotime(),
-            kind: RSome(SignalKind::Tick),
+            kind: Some(SignalKind::Tick),
             ..Self::default()
         }
     }
@@ -63,7 +61,7 @@ impl Event {
     pub fn signal_drain(uid: u64) -> Self {
         Self {
             ingest_ns: nanotime(),
-            kind: RSome(SignalKind::Drain(uid)),
+            kind: Some(SignalKind::Drain(uid)),
             ..Self::default()
         }
     }
@@ -73,7 +71,7 @@ impl Event {
     pub fn signal_start(uid: u64) -> Self {
         Self {
             ingest_ns: nanotime(),
-            kind: RSome(SignalKind::Start(uid)),
+            kind: Some(SignalKind::Start(uid)),
             ..Self::default()
         }
     }

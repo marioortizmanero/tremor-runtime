@@ -26,7 +26,7 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::time::{Duration, Instant};
 use tremor_common::time::nanotime;
-use tremor_script::{pdk::EventPayload as PdkEventPayload, EventPayload, ValueAndMeta};
+use tremor_script::{EventPayload, pdk::EventPayload as PdkEventPayload, ValueAndMeta};
 
 use crate::config::{Codec as CodecConfig, Connector as ConnectorConfig};
 use crate::connectors::Msg;
@@ -120,7 +120,7 @@ pub enum SourceReply {
     },
     /// an already structured event payload
     Structured {
-        origin_uri: PdkEventOriginUri,
+        origin_uri: EventOriginUri,
         payload: PdkEventPayload,
         stream: u64,
         /// Port to send to, defaults to `out`
@@ -182,7 +182,7 @@ pub trait RawSource: Send {
     }
 
     /// Pulls custom metrics from the source
-    fn metrics(&mut self, _timestamp: u64) -> RVec<EventPayload> {
+    fn metrics(&mut self, _timestamp: u64) -> RVec<PdkEventPayload> {
         rvec![]
     }
 
@@ -355,7 +355,11 @@ impl Source {
     /// Pulls custom metrics from the source
     #[inline]
     pub fn metrics(&mut self, timestamp: u64) -> Vec<EventPayload> {
-        self.0.metrics(timestamp).into()
+        self.0
+            .metrics(timestamp)
+            .into_iter()
+            .map(Into::into)
+            .collect()
     }
 
     #[inline]

@@ -52,7 +52,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::fmt::Display;
 use tremor_common::time::nanotime;
 use tremor_pipeline::{CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID};
-use tremor_script::EventPayload;
+use tremor_script::{EventPayload, pdk::EventPayload as PdkEventPayload};
 
 use tremor_value::{Value, pdk::Value as PdkValue};
 
@@ -197,7 +197,7 @@ pub trait RawSink: Send {
     }
 
     /// Pull metrics from the sink
-    fn metrics(&mut self, _timestamp: u64) -> RVec<EventPayload> {
+    fn metrics(&mut self, _timestamp: u64) -> RVec<PdkEventPayload> {
         rvec![]
     }
 
@@ -269,7 +269,11 @@ impl Sink {
 
     #[inline]
     pub fn metrics(&mut self, timestamp: u64) -> Vec<EventPayload> {
-        self.0.metrics(timestamp).into()
+        self.0
+            .metrics(timestamp)
+            .into_iter()
+            .map(Into::into)
+            .collect()
     }
 
     #[inline]
