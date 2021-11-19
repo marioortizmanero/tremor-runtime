@@ -15,10 +15,10 @@
 //! Sink implementation that keeps track of multiple streams and keeps channels to send to each stream
 
 use crate::connectors::prelude::*;
-use crate::connectors::{ConnectorContext, StreamDone};
+use crate::connectors::{ConnectorContext, StreamDone, sink::EventSerializerOpaque};
 use crate::errors::Result;
 use crate::QSIZE;
-use abi_stable::std_types::ROption::RSome;
+use abi_stable::std_types::ROption::{RSome, RNone};
 use async_std::channel::{bounded, Receiver, Sender};
 use async_std::task;
 use beef::Cow;
@@ -275,12 +275,12 @@ where
                 }
             }
             let error = match writer.on_done(stream).await {
-                Err(e) => Some(e),
+                Err(e) => RSome(e),
                 Ok(StreamDone::ConnectorClosed) => ctx
                     .notifier
                     .notify() /*.await*/
                     .err(),
-                Ok(_) => None,
+                Ok(_) => RNone,
             };
             if let RSome(e) = error {
                 error!(

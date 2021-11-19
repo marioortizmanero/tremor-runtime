@@ -48,6 +48,7 @@ use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
 use beef::Cow;
 use tremor_pipeline::{
     CbAction, Event, EventId, EventIdGenerator, EventOriginUri, DEFAULT_STREAM_ID,
+    pdk::EventOriginUri as PdkEventOriginUri
 };
 use tremor_value::{literal, pdk::Value as PdkValue, Value};
 use value_trait::Builder;
@@ -101,7 +102,7 @@ pub enum SourceReply {
     /// A normal data event with a `Vec<u8>` for data
     Data {
         /// origin uri
-        origin_uri: EventOriginUri,
+        origin_uri: PdkEventOriginUri,
         /// the data
         data: RVec<u8>,
         /// metadata associated with this data
@@ -113,7 +114,7 @@ pub enum SourceReply {
     },
     // an already structured event payload
     Structured {
-        origin_uri: EventOriginUri,
+        origin_uri: PdkEventOriginUri,
         payload: PdkEventPayload,
         stream: u64,
         /// Port to send to, defaults to `out`
@@ -122,7 +123,7 @@ pub enum SourceReply {
     // a bunch of separated `Vec<u8>` with optional metadata
     // for when the source knows where boundaries are, maybe because it receives chunks already
     BatchData {
-        origin_uri: EventOriginUri,
+        origin_uri: PdkEventOriginUri,
         batch_data: RVec<Tuple2<RVec<u8>, ROption<PdkValue<'static>>>>,
         /// Port to send to, defaults to `out`
         port: ROption<RCow<'static, str>>,
@@ -586,6 +587,13 @@ impl SourceState {
     }
 }
 
+// FIXME: make prettier or avoid duplication in pdk mod? It's a bit out of place
+// for now.
+fn conv_cow_str(cow: RCow<str>) -> beef::Cow<str> {
+    let cow: std::borrow::Cow<str> = cow.into();
+    cow.into()
+}
+
 /// entity driving the source task
 /// and keeping the source state around
 pub(crate) struct SourceManager {
@@ -942,16 +950,17 @@ impl SourceManager {
                     }) => {
                         let mut ingest_ns = nanotime();
                         let stream_state = self.streams.get_or_create_stream(stream)?; // we fail if we cannot create a stream (due to misconfigured codec, preprocessors, ...) (should not happen)
-                        let port: Option<Cow<str>> = port.into().map(Into::into);
+                        let port: Option<Cow<str>> = port.map(conv_cow_str).into();
+                        let meta: Option<Value> = meta.map(Value::from).into();
                         let results = build_events(
                             &self.ctx.url,
                             stream_state,
                             &mut ingest_ns,
                             pull_counter,
-                            origin_uri,
+                            origin_uri.into(),
                             port.as_ref(),
                             data.into(),
-                            &meta.into().map(Into::into).unwrap_or_else(Value::object),
+                            &meta.unwrap_or_else(Value::object),
                             self.is_transactional,
                         );
                         if results.is_empty() {
@@ -982,18 +991,19 @@ impl SourceManager {
                         let stream_state = self.streams.get_or_create_stream(stream)?; // we only error here due to misconfigured codec etc
                         let connector_url = &self.ctx.url;
 
+                        let port: Option<Cow<str>> = port.map(conv_cow_str).into();
                         let mut results = Vec::with_capacity(batch_data.len()); // assuming 1:1 mapping
                         for Tuple2(data, meta) in batch_data {
-                            let port: Option<Cow<str>> = port.into().map(Into::into);
+                            let meta: Option<Value> = meta.map(Value::from).into();
                             let mut events = build_events(
                                 connector_url,
                                 stream_state,
                                 &mut ingest_ns,
                                 pull_counter,
-                                origin_uri.clone(), // TODO: use split_last on batch_data to avoid last clone
+                                origin_uri.clone().into(), // TODO: use split_last on batch_data to avoid last clone
                                 port.as_ref(),
                                 data.into(),
-                                &meta.into().map(Into::into).unwrap_or_else(Value::object),
+                                &meta.unwrap_or_else(Value::object),
                                 self.is_transactional,
                             );
                             results.append(&mut events);
@@ -1028,12 +1038,14 @@ impl SourceManager {
                             stream_state,
                             pull_counter,
                             ingest_ns,
-                            payload.into(),
-                            origin_uri,
+                            EventPayload::from(payload),
+                            origin_uri.into(),
                             self.is_transactional,
                         );
-                        let port = port.into().map(Into::into);
-                        let error = self.route_events(vec![(port.unwrap_or(OUT), event)]).await;
+
+                        let port: Cow<'static, str> = port.map(conv_cow_str).unwrap_or(OUT);
+
+                        let error = self.route_events(vec![(port, event)]).await;
                         if error {
                             self.source.fail(stream, pull_counter).await;
                         }

@@ -20,7 +20,7 @@ use std::marker::PhantomData;
 
 use crate::connectors::{sink::SinkReply, ConnectorContext, StreamDone};
 use crate::errors::Result;
-use abi_stable::std_types::ROption::RSome;
+use abi_stable::std_types::ROption::{RSome, RNone};
 use async_std::{
     channel::{bounded, Receiver, Sender},
     task,
@@ -115,7 +115,7 @@ impl SingleStreamSinkRuntime {
                     start,
                 }),
             ) = (
-                ctx.quiescence_beacon.continue_writing().await,
+                ctx.quiescence_beacon.continue_writing()/*.await*/,
                 rx.recv().await,
             ) {
                 let failed = writer.write(data, meta).await.is_err();
@@ -135,12 +135,12 @@ impl SingleStreamSinkRuntime {
                 };
             }
             let error = match writer.on_done(stream).await {
-                Err(e) => Some(e),
+                Err(e) => RSome(e),
                 Ok(StreamDone::ConnectorClosed) => ctx
                     .notifier
                     .notify() /*.await*/
                     .err(),
-                Ok(_) => None,
+                Ok(_) => RNone,
             };
             if let RSome(e) = error {
                 error!(
