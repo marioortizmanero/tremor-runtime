@@ -21,14 +21,12 @@ use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::time::Duration;
 use tremor_common::time::nanotime;
-use tremor_script::{EventPayload, pdk::EventPayload as PdkEventPayload, ValueAndMeta};
+use tremor_script::{pdk::EventPayload as PdkEventPayload, EventPayload, ValueAndMeta};
 
 use crate::config::{Codec as CodecConfig, Connector as ConnectorConfig};
 use crate::connectors::Msg;
 use crate::errors::{Error, Result};
-use crate::pdk::{
-    RResult,
-};
+use crate::pdk::RResult;
 use crate::pipeline;
 use crate::preprocessor::{make_preprocessors, preprocess, Preprocessors};
 use crate::url::ports::{ERR, OUT};
@@ -39,7 +37,11 @@ use crate::{
 };
 use abi_stable::{
     rvec,
-    std_types::{RBox, RResult::{ROk, RErr}, RVec, ROption, RCow, Tuple2},
+    std_types::{
+        RBox, RCow, ROption,
+        RResult::{RErr, ROk},
+        RVec, Tuple2,
+    },
     StableAbi,
 };
 use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
@@ -47,7 +49,7 @@ use beef::Cow;
 use tremor_pipeline::{
     CbAction, Event, EventId, EventIdGenerator, EventOriginUri, DEFAULT_STREAM_ID,
 };
-use tremor_value::{literal, Value, pdk::Value as PdkValue};
+use tremor_value::{literal, pdk::Value as PdkValue, Value};
 use value_trait::Builder;
 
 use super::metrics::SourceReporter;
@@ -152,12 +154,7 @@ pub trait RawSource: Send {
     /// linked sources that require a 1:1 mapping between requests
     /// and responses, we're looking at you REST
     /* async */
-    fn on_no_events(
-        &mut self,
-        _pull_id: u64,
-        _stream: u64,
-        _ctx: &SourceContext,
-    ) -> RResult<()> {
+    fn on_no_events(&mut self, _pull_id: u64, _stream: u64, _ctx: &SourceContext) -> RResult<()> {
         ROk(())
     }
 
@@ -172,17 +169,17 @@ pub trait RawSource: Send {
 
     /// called when the source is started. This happens only once in the whole source lifecycle, before any other callbacks
     /* async */
-    fn on_start(&mut self, _ctx: &mut SourceContext) { }
+    fn on_start(&mut self, _ctx: &mut SourceContext) {}
     /// called when the source is explicitly paused as result of a user/operator interaction
     /// in contrast to `on_cb_close` which happens automatically depending on downstream pipeline or sink connector logic.
     /* async */
-    fn on_pause(&mut self, _ctx: &mut SourceContext) { }
+    fn on_pause(&mut self, _ctx: &mut SourceContext) {}
     /// called when the source is explicitly resumed from being paused
     /* async */
-    fn on_resume(&mut self, _ctx: &mut SourceContext) { }
+    fn on_resume(&mut self, _ctx: &mut SourceContext) {}
     /// called when the source is stopped. This happens only once in the whole source lifecycle, as the very last callback
     /* async */
-    fn on_stop(&mut self, _ctx: &mut SourceContext) { }
+    fn on_stop(&mut self, _ctx: &mut SourceContext) {}
 
     // circuit breaker callbacks
     /// called when we receive a `close` Circuit breaker event from any connected pipeline
@@ -190,30 +187,30 @@ pub trait RawSource: Send {
     /// Source implementations might want to close connections or signal a pause to the upstream entity it connects to if not done in the connector (the default)
     // TODO: add info of Cb event origin (port, origin_uri)?
     /* async */
-    fn on_cb_close(&mut self, _ctx: &mut SourceContext) { }
+    fn on_cb_close(&mut self, _ctx: &mut SourceContext) {}
     /// Called when we receive a `open` Circuit breaker event from any connected pipeline
     /// This means we can start/continue polling this source for messages
     /// Source implementations might want to start establishing connections if not done in the connector (the default)
     /* async */
-    fn on_cb_open(&mut self, _ctx: &mut SourceContext) { }
+    fn on_cb_open(&mut self, _ctx: &mut SourceContext) {}
 
     // guaranteed delivery callbacks
     /// an event has been acknowledged and can be considered delivered
     /// multiple acks for the same set of ids are always possible
     /* async */
-    fn ack(&mut self, _stream_id: u64, _pull_id: u64) { }
+    fn ack(&mut self, _stream_id: u64, _pull_id: u64) {}
     /// an event has failed along its way and can be considered failed
     /// multiple fails for the same set of ids are always possible
     /* async */
-    fn fail(&mut self, _stream_id: u64, _pull_id: u64) { }
+    fn fail(&mut self, _stream_id: u64, _pull_id: u64) {}
 
     // connectivity stuff
     /// called when connector lost connectivity
     /* async */
-    fn on_connection_lost(&mut self, _ctx: &mut SourceContext) { }
+    fn on_connection_lost(&mut self, _ctx: &mut SourceContext) {}
     /// called when connector re-established connectivity
     /* async */
-    fn on_connection_established(&mut self, _ctx: &mut SourceContext) { }
+    fn on_connection_established(&mut self, _ctx: &mut SourceContext) {}
 
     /// Is this source transactional or can acks/fails be ignored
     fn is_transactional(&self) -> bool;
@@ -370,7 +367,9 @@ impl ChannelSourceRuntime {
                 return;
             };
 
-            while ctx.quiescence_beacon.continue_reading()/* .await */ {
+            while ctx.quiescence_beacon.continue_reading()
+            /* .await */
+            {
                 let sc_data = timeout(Self::READ_TIMEOUT_MS, reader.read(stream)).await;
 
                 let sc_data = match sc_data {
@@ -387,7 +386,9 @@ impl ChannelSourceRuntime {
                 };
             }
             if reader.on_done(stream).await == StreamDone::ConnectorClosed {
-                if let RErr(e) = ctx.notifier.notify()/*.await*/ {
+                if let RErr(e) = ctx.notifier.notify()
+                /*.await*/
+                {
                     error!("[Connector::{}] Failed to notify connector: {}", ctx.url, e);
                 };
             }

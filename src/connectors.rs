@@ -49,9 +49,7 @@ use crate::connectors::metrics::{MetricsSinkReporter, SourceReporter};
 use crate::connectors::sink::{BoxedRawSink, Sink, SinkAddr, SinkContext, SinkMsg};
 use crate::connectors::source::{BoxedRawSource, Source, SourceAddr, SourceContext, SourceMsg};
 use crate::errors::{Error, ErrorKind, Result};
-use crate::pdk::{
-    RResult,
-};
+use crate::pdk::RResult;
 use crate::pipeline;
 use crate::system::World;
 use crate::url::ports::{ERR, IN, OUT};
@@ -62,7 +60,7 @@ use abi_stable::{
         RBox,
         ROption::{self, RNone, RSome},
         RResult::{RErr, ROk},
-        RString, RVec, RStr
+        RStr, RString, RVec,
     },
     type_level::downcasting::TD_Opaque,
     StableAbi,
@@ -74,7 +72,9 @@ use tremor_value::Value;
 use value_trait::{Builder, Mutable};
 
 use self::metrics::MetricsSender;
-use self::quiescence::{BoxedQuiescenceBeacon, QuiescenceBeaconOpaque_TO, QuiescenceBeacon, QuiescenceBeaconOpaque};
+use self::quiescence::{
+    BoxedQuiescenceBeacon, QuiescenceBeacon, QuiescenceBeaconOpaque, QuiescenceBeaconOpaque_TO,
+};
 use self::reconnect::{Attempt, ReconnectRuntime};
 
 /// sender for connector manager messages
@@ -427,7 +427,10 @@ impl Manager {
         let source_ctx = SourceContext {
             uid,
             url: url.clone(),
-            quiescence_beacon: QuiescenceBeaconOpaque_TO::from_value(quiescence_beacon.clone(), TD_Opaque),
+            quiescence_beacon: QuiescenceBeaconOpaque_TO::from_value(
+                quiescence_beacon.clone(),
+                TD_Opaque,
+            ),
         };
 
         let sink_metrics_reporter = MetricsSinkReporter::new(
@@ -463,8 +466,14 @@ impl Manager {
             uid,
             url: url.clone(),
             type_name: config.binding_type.clone().into(),
-            quiescence_beacon: QuiescenceBeaconOpaque_TO::from_value(quiescence_beacon.clone(), TD_Opaque),
-            notifier: reconnect::ConnectionLostNotifierOpaque_TO::from_value(notifier.clone(), TD_Opaque),
+            quiescence_beacon: QuiescenceBeaconOpaque_TO::from_value(
+                quiescence_beacon.clone(),
+                TD_Opaque,
+            ),
+            notifier: reconnect::ConnectionLostNotifierOpaque_TO::from_value(
+                notifier.clone(),
+                TD_Opaque,
+            ),
         };
 
         let send_addr = connector_addr.clone();
@@ -1032,10 +1041,7 @@ pub trait RawConnector: Send {
     /// This function is called exactly once upon connector creation.
     /// If this connector does not act as a sink, return `Ok(None)`.
     /* async */
-    fn create_sink(
-        &mut self,
-        _sink_context: SinkContext,
-    ) -> RResult<ROption<BoxedRawSink>> {
+    fn create_sink(&mut self, _sink_context: SinkContext) -> RResult<ROption<BoxedRawSink>> {
         ROk(RNone)
     }
 
@@ -1065,21 +1071,21 @@ pub trait RawConnector: Send {
 
     /// called when the connector pauses
     /* async */
-    fn on_pause(&mut self, _ctx: &ConnectorContext) { }
+    fn on_pause(&mut self, _ctx: &ConnectorContext) {}
     /// called when the connector resumes
     /* async */
-    fn on_resume(&mut self, _ctx: &ConnectorContext) { }
+    fn on_resume(&mut self, _ctx: &ConnectorContext) {}
 
     /// Drain
     ///
     /// Ensure no new events arrive at the source part of this connector when this function returns
     /// So we can safely send the `Drain` signal.
     /* async */
-    fn on_drain(&mut self, _ctx: &ConnectorContext) { }
+    fn on_drain(&mut self, _ctx: &ConnectorContext) {}
 
     /// called when the connector is stopped
     /* async */
-    fn on_stop(&mut self, _ctx: &ConnectorContext) { }
+    fn on_stop(&mut self, _ctx: &ConnectorContext) {}
 
     /// returns the default codec for this connector
     fn default_codec(&self) -> RStr<'_>;
