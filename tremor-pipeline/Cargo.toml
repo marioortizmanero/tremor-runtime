@@ -9,7 +9,7 @@ version = "0.11.4"
 [dependencies]
 # FIXME: update to crates.io when this is added to a new version:
 # https://github.com/rodrimati1992/abi_stable_crates/pull/68
-abi_stable = { version = "0.10.3", git = "https://github.com/rodrimati1992/abi_stable_crates.git" }
+abi_stable = "0.10.3"
 beef = { version = "0.5", features = ["impl_serde"] }
 byteorder = "1"
 error-chain = "0.12"

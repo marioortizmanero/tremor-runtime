@@ -807,8 +807,8 @@ impl Select {
 #[derive(Clone, Default)]
 pub struct EventPayload {
     /// The vector of raw input values
-    raw: Vec<Arc<Pin<Vec<u8>>>>,
-    data: ValueAndMeta<'static>,
+    pub(crate) raw: Vec<Arc<Pin<Vec<u8>>>>,
+    pub(crate) data: ValueAndMeta<'static>,
 }
 
 #[cfg(not(tarpaulin_include))] // this is a simple Debug implementation
