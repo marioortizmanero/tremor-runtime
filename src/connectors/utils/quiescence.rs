@@ -17,6 +17,8 @@ use event_listener::Event;
 use std::fmt;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::fmt;
+use abi_stable::std_types::RBox;
 
 #[derive(Debug)]
 struct Inner {
@@ -40,11 +42,8 @@ impl Default for Inner {
     }
 }
 /// use this beacon to check if tasks reading or writing from external connections should stop
-#[repr(C)]
 #[derive(Debug, Clone, Default)]
 #[allow(clippy::module_name_repetitions)]
-// TODO: figure out how to make repr-C compatible. Perhaps make it into an
-// opaque type?
 pub struct QuiescenceBeacon(Arc<Inner>);
 
 /// `QuiescenceBeacon` is used for the plugin system, so it must be `#[repr(C)]`
@@ -54,10 +53,8 @@ pub struct QuiescenceBeacon(Arc<Inner>);
 #[abi_stable::sabi_trait]
 pub trait QuiescenceBeaconOpaque: fmt::Debug + Clone + Send + Sync {
     // TODO: async
-    /* async */
-    fn continue_reading(&self) -> bool;
-    /* async */
-    fn continue_writing(&self) -> bool;
+    /* async */ fn continue_reading(&self) -> bool;
+    /* async */ fn continue_writing(&self) -> bool;
     fn stop_reading(&mut self);
     fn pause(&mut self);
     fn resume(&mut self);
@@ -69,6 +66,7 @@ impl QuiescenceBeacon {
     const MAX_LISTENERS: usize = 2;
 }
 impl QuiescenceBeaconOpaque for QuiescenceBeacon {
+
     /// returns `true` if consumers should continue reading
     /// doesn't return until the beacon is unpaused
     fn continue_reading(&self) -> bool {

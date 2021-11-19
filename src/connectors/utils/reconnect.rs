@@ -18,7 +18,8 @@ use crate::connectors::{Addr, Connectivity, Connector, ConnectorContext, Msg};
 use crate::errors::Result;
 use crate::pdk::RResult;
 use crate::url::TremorUrl;
-use abi_stable::StableAbi;
+use crate::pdk::RResult;
+use abi_stable::{StableAbi, std_types::{RBox, RResult::ROk}};
 use async_std::channel::Sender;
 use async_std::task;
 use futures::future::{join3, ready, FutureExt};
@@ -157,19 +158,19 @@ pub struct ConnectionLostNotifier(Sender<Msg>);
 pub trait ConnectionLostNotifierOpaque: Clone + Send + Sync {
     /// notify the runtime that this connector lost its connection
     /// TODO: async
-    /* async */
-    fn notify(&self) -> RResult<()>;
+    /* async */ fn notify(&self) -> RResult<()>;
 }
 impl ConnectionLostNotifierOpaque for ConnectionLostNotifier {
-    /* async */
-    fn notify(&self) -> RResult<()> {
-        async_std::task::block_on(async { self.0.send(Msg::ConnectionLost).await })
-            .map_err(|e| {
-                // First converting to our own error type, and then to abi_stable's
-                let e: crate::errors::Error = e.into();
-                SendRBoxError::new(e)
-            })
-            .into()
+    /* async */ fn notify(&self) -> RResult<()> {
+        async_std::task::block_on(async {
+            self.0.send(Msg::ConnectionLost).await
+        })
+        .map_err(|e| {
+            // First converting to our own error type, and then to abi_stable's
+            let e: crate::errors::Error = e.into();
+            e.into()
+        })
+        .into()
     }
 }
 /// Alias for the type used in FFI

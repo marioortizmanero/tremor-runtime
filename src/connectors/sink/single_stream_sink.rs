@@ -25,6 +25,7 @@ use async_std::{
 };
 use std::marker::PhantomData;
 use tremor_common::time::nanotime;
+use abi_stable::std_types::ROption::RSome;
 
 use super::channel_sink::{NoMeta, SinkMeta, SinkMetaBehaviour, WithMeta};
 use super::{AsyncSinkReply, ContraflowData, EventSerializer, Sink, SinkContext, StreamWriter};
@@ -133,13 +134,9 @@ impl SingleStreamSinkRuntime {
                 };
             }
             let error = match writer.on_done(stream).await {
-                Err(e) => RSome(e),
-                Ok(StreamDone::ConnectorClosed) => ctx
-                    .notifier
-                    .notify() /*.await*/
-                    .err()
-                    .map(|e| ErrorKind::PluginError(e).into()),
-                Ok(_) => RNone,
+                Err(e) => Some(e),
+                Ok(StreamDone::ConnectorClosed) => ctx.notifier.notify()/*.await*/.err(),
+                Ok(_) => None,
             };
             if let RSome(e) = error {
                 error!(

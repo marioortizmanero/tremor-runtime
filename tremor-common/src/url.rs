@@ -14,7 +14,7 @@
 
 use crate::errors::{Error, ErrorKind, Result};
 use abi_stable::{
-    std_types::{ROption, RString},
+    std_types::{ROption::{self, RSome}, RString},
     StableAbi,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -332,7 +332,7 @@ impl TremorUrl {
     where
         S: ToString + ?Sized,
     {
-        self.instance = RSome(i.to_string().into());
+        self.instance = RSome(i.to_string());
         if self.scope == Scope::Artefact {
             self.scope = Scope::Instance;
         }
@@ -345,7 +345,7 @@ impl TremorUrl {
     where
         S: ToString + ?Sized,
     {
-        self.instance_port = RSome(i.to_string().into());
+        self.instance_port = RSome(i.to_string());
         if self.scope == Scope::Servant {
             self.scope = Scope::Port;
         }
@@ -356,7 +356,7 @@ impl TremorUrl {
     where
         S: ToString + ?Sized,
     {
-        self.instance_port = RSome(i.to_string().into());
+        self.instance_port = RSome(i.to_string());
         if self.scope == Scope::Servant {
             self.scope = Scope::Port;
         }
