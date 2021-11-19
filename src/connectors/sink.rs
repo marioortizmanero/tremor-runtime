@@ -33,7 +33,7 @@ use crate::url::TremorUrl;
 use abi_stable::{
     rvec,
     RMut,
-    std_types::{RBox, RResult::ROk, RStr, RVec},
+    std_types::{RBox, RResult::ROk, RStr, RVec, SendRBoxError},
     StableAbi,
     type_level::downcasting::TD_Opaque,
 };
@@ -485,7 +485,8 @@ impl EventSerializer {
         ingest_ns: u64,
         stream_id: u64,
     ) -> Result<Vec<Vec<u8>>> {
-        let value: &Value = value.into();
+        // FIXME: super ugly clone here
+        let value: &Value = &value.clone().into();
         if stream_id == DEFAULT_STREAM_ID {
             postprocess(
                 &mut self.postprocessors,
@@ -559,8 +560,11 @@ impl EventSerializerOpaque for EventSerializer {
         stream_id: u64,
     ) -> RResult<RVec<RVec<u8>>> {
         self.serialize_for_stream_inner(value, ingest_ns, stream_id)
+            .map(|v1| v1.into_iter().map(|v2| v2.into()).collect()) // RVec<RVec<T>> -> Vec<Vec<T>>
+            .map_err(|e| {
+                SendRBoxError::new(e)
+            }) // RBoxError -> Error
             .into() // RResult -> Result
-            .map_err(Into::into) // RBoxError -> Error
     }
 }
 /// Alias for the types used in FFI (box and mutable reference)
