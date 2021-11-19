@@ -28,7 +28,6 @@ use crate::config::{Codec as CodecConfig, Connector as ConnectorConfig};
 use crate::connectors::{Msg, StreamDone};
 use crate::errors::Result;
 use crate::pdk::{
-    self,
     RResult,
 };
 use crate::permge::PriorityMerge;
@@ -55,7 +54,7 @@ use tremor_common::time::nanotime;
 use tremor_pipeline::{CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID};
 use tremor_script::EventPayload;
 
-use tremor_value::{pdk::Value as PdkValue, Value};
+use tremor_value::{Value, pdk::Value as PdkValue};
 
 pub use self::channel_sink::SinkMeta;
 
@@ -636,7 +635,7 @@ pub trait EventSerializerOpaque {
     ///   * if serialization failed (codec or postprocessors)
     fn serialize_for_stream(
         &mut self,
-        value: &pdk::Value,
+        value: &PdkValue,
         ingest_ns: u64,
         stream_id: u64,
     ) -> RResult<RVec<RVec<u8>>>;
@@ -656,7 +655,7 @@ impl EventSerializerOpaque for EventSerializer {
 
     fn serialize_for_stream(
         &mut self,
-        value: &pdk::Value,
+        value: &PdkValue,
         ingest_ns: u64,
         stream_id: u64,
     ) -> RResult<RVec<RVec<u8>>> {

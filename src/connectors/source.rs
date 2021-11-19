@@ -42,7 +42,7 @@ use crate::{
 };
 use abi_stable::{
     rvec,
-    std_types::{RBox, RResult::{ROk, RErr}, RVec},
+    std_types::{RBox, RResult::{ROk, RErr}, RVec, ROption, RCow, Tuple2},
     StableAbi,
 };
 use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
@@ -52,7 +52,7 @@ use tremor_pipeline::{
     pdk::EventOriginUri as PdkEventOriginUri, CbAction, Event, EventId, EventIdGenerator,
     EventOriginUri, DEFAULT_STREAM_ID,
 };
-use tremor_value::{literal, pdk::Value as PdkValue, Value};
+use tremor_value::{literal, Value, pdk::Value as PdkValue};
 use value_trait::Builder;
 
 use super::metrics::SourceReporter;
@@ -129,7 +129,7 @@ pub enum SourceReply {
     /// a bunch of separated `Vec<u8>` with optional metadata
     /// for when the source knows where boundaries are, maybe because it receives chunks already
     BatchData {
-        origin_uri: PdkEventOriginUri,
+        origin_uri: EventOriginUri,
         batch_data: RVec<Tuple2<RVec<u8>, ROption<PdkValue<'static>>>>,
         /// Port to send to, defaults to `out`
         port: ROption<RCow<'static, str>>,
