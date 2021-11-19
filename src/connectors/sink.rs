@@ -35,6 +35,7 @@ use crate::url::ports::IN;
 use crate::url::TremorUrl;
 use abi_stable::{
     rvec,
+    RMut,
     std_types::{RBox, RResult::ROk, RStr, RVec},
     StableAbi,
     type_level::downcasting::TD_Opaque,
@@ -181,7 +182,7 @@ pub trait RawSink: Send {
         input: RStr<'_>,
         event: PdkEvent,
         ctx: &SinkContext,
-        serializer: &mut BoxedEventSerializer,
+        serializer: MutEventSerializer,
         start: u64,
     ) -> RResult<SinkReply>;
     /// called when receiving a signal
@@ -190,7 +191,7 @@ pub trait RawSink: Send {
         &mut self,
         _signal: PdkEvent,
         _ctx: &SinkContext,
-        _serializer: &mut BoxedEventSerializer,
+        _serializer: MutEventSerializer,
     ) -> RResult<SinkReply> {
         ROk(SinkReply::default())
     }
@@ -248,9 +249,9 @@ impl Sink {
         serializer: &mut EventSerializer,
         start: u64,
     ) -> Result<SinkReply> {
-        let mut serializer = BoxedEventSerializer::from_value(serializer, TD_Opaque);
+        let serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
         self.0
-            .on_event(input.into(), event.into(), ctx, &mut serializer, start)
+            .on_event(input.into(), event.into(), ctx, serializer, start)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -261,9 +262,9 @@ impl Sink {
         ctx: &SinkContext,
         serializer: &mut EventSerializer,
     ) -> Result<SinkReply> {
-        let mut serializer = BoxedEventSerializer::from_value(serializer, TD_Opaque);
+        let serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
         self.0
-            .on_signal(signal.into(), ctx, &mut serializer)
+            .on_signal(signal.into(), ctx, serializer)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -621,8 +622,9 @@ impl EventSerializerOpaque for EventSerializer {
             .map_err(Into::into) // RBoxError -> Error
     }
 }
-/// Alias for the type used in FFI
+/// Alias for the types used in FFI (box and mutable reference)
 pub type BoxedEventSerializer = EventSerializerOpaque_TO<'static, RBox<()>>;
+pub type MutEventSerializer<'a> = EventSerializerOpaque_TO<'static, RMut<'a, ()>>;
 
 #[derive(Debug, PartialEq)]
 enum SinkState {
