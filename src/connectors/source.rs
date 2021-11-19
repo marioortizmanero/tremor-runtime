@@ -39,7 +39,7 @@ use crate::{
 };
 use abi_stable::{
     rvec,
-    std_types::{RBox, RResult::{ROk, RErr}, RVec},
+    std_types::{RBox, RResult::{ROk, RErr}, RVec, ROption, RCow, Tuple2},
     StableAbi,
 };
 use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
@@ -47,7 +47,7 @@ use beef::Cow;
 use tremor_pipeline::{
     CbAction, Event, EventId, EventIdGenerator, EventOriginUri, DEFAULT_STREAM_ID,
 };
-use tremor_value::{literal, Value};
+use tremor_value::{literal, Value, pdk::Value as PdkValue};
 use value_trait::Builder;
 
 use super::metrics::SourceReporter;
@@ -93,20 +93,21 @@ pub enum SourceMsg {
 }
 
 /// reply from `Source::on_event`
-#[derive(Debug)]
+#[repr(C)]
+#[derive(Debug, StableAbi)]
 pub enum SourceReply {
     /// A normal data event with a `Vec<u8>` for data
     Data {
         /// origin uri
         origin_uri: EventOriginUri,
         /// the data
-        data: Vec<u8>,
+        data: RVec<u8>,
         /// metadata associated with this data
-        meta: Option<Value<'static>>,
+        meta: ROption<PdkValue<'static>>,
         /// stream id of the data
         stream: u64,
         /// Port to send to, defaults to `out`
-        port: Option<Cow<'static, str>>,
+        port: ROption<RCow<'static, str>>,
     },
     // an already structured event payload
     Structured {
@@ -114,15 +115,15 @@ pub enum SourceReply {
         payload: EventPayload,
         stream: u64,
         /// Port to send to, defaults to `out`
-        port: Option<Cow<'static, str>>,
+        port: ROption<RCow<'static, str>>,
     },
     // a bunch of separated `Vec<u8>` with optional metadata
     // for when the source knows where boundaries are, maybe because it receives chunks already
     BatchData {
         origin_uri: EventOriginUri,
-        batch_data: Vec<(Vec<u8>, Option<Value<'static>>)>,
+        batch_data: RVec<Tuple2<RVec<u8>, ROption<PdkValue<'static>>>>,
         /// Port to send to, defaults to `out`
-        port: Option<Cow<'static, str>>,
+        port: ROption<RCow<'static, str>>,
         stream: u64,
     },
     /// A stream is opened
