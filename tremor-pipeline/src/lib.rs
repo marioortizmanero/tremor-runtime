@@ -15,7 +15,8 @@
 //! Tremor event processing pipeline
 
 // TODO: disable and cleanup with `cargo fix` automatically once done
-#![allow(unused_imports)]
+#![allow(dead_code)]
+#![allow(unused)]
 // TODO: turn back on
 // #![deny(warnings)]
 // #![deny(missing_docs)]

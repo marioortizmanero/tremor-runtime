@@ -16,7 +16,7 @@
 
 use crate::connectors::prelude::*;
 use crate::connectors::{ConnectorContext, StreamDone, sink::EventSerializerOpaque};
-use crate::errors::Result;
+use crate::errors::{Result, ErrorKind};
 use crate::QSIZE;
 use abi_stable::std_types::ROption::{RSome, RNone};
 use async_std::channel::{bounded, Receiver, Sender};
@@ -314,7 +314,8 @@ where
                 Ok(StreamDone::ConnectorClosed) => ctx
                     .notifier
                     .notify() /*.await*/
-                    .err(),
+                    .err()
+                    .map(|e| ErrorKind::PluginError(e).into()),
                 Ok(_) => RNone,
             };
             if let RSome(e) = error {

@@ -114,7 +114,7 @@ error_chain! {
         MsgPackEncoderError(rmp_serde::encode::Error);
         ParseIntError(std::num::ParseIntError);
         ParseFloatError(std::num::ParseFloatError);
-        PluginError(abi_stable::std_types::RBoxError);
+        PluginError(abi_stable::std_types::SendRBoxError);
         RegexError(regex::Error);
         SinkDequeueError(async_sink::SinkDequeueError);
         SinkEnqueueError(async_sink::SinkEnqueueError);
