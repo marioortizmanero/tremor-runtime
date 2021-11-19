@@ -1,6 +1,5 @@
-use std::pin::Pin;
 use abi_stable::{
-    std_types::{RBox, RCow, RHashMap, RVec, RArc},
+    std_types::{RBox, RCow, RHashMap, RVec},
     StableAbi,
 };
 use value_trait::StaticNode;
@@ -12,8 +11,7 @@ pub type Bytes<'value> = RCow<'value, [u8]>;
 
 /// FFI-safe `Value` type to communicate with the plugins. It's meant to be
 /// converted to/from the original `crate::Value` type and back so that it can
-/// can be passed through the plugin interface. Thus, no functionality is
-/// implemented other than the conversion from and to the original type.
+/// be passed through the plugin interface.
 #[repr(C)]
 #[derive(Debug, Clone, StableAbi)]
 pub enum Value<'value> {
