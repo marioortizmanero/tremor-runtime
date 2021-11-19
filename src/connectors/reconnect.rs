@@ -19,7 +19,7 @@ use crate::errors::Result;
 use crate::pdk::RResult;
 use crate::url::TremorUrl;
 use abi_stable::{
-    std_types::{RBox, RResult::ROk, RBoxError},
+    std_types::{RBox, RResult::ROk, SendRBoxError},
     StableAbi,
 };
 use async_std::channel::Sender;
@@ -167,7 +167,7 @@ impl ConnectionLostNotifierOpaque for ConnectionLostNotifier {
             .map_err(|e| {
                 // First converting to our own error type, and then to abi_stable's
                 let e: crate::errors::Error = e.into();
-                RBoxError::new(e)
+                SendRBoxError::new(e)
             })
             .into()
     }
