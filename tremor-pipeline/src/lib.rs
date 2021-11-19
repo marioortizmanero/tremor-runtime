@@ -14,15 +14,23 @@
 
 //! Tremor event processing pipeline
 
-#![deny(warnings)]
-#![deny(missing_docs)]
+// TODO: disable and cleanup with `cargo fix` automatically once done
+#![allow(unused_imports)]
+// TODO: turn back on
+// #![deny(warnings)]
+// #![deny(missing_docs)]
 #![recursion_limit = "1024"]
-#![deny(
-    clippy::all,
-    clippy::unwrap_used,
-    clippy::unnecessary_unwrap,
-    clippy::pedantic
-)]
+// TODO: turn back on
+// #![deny(
+//     clippy::all,
+//     clippy::unwrap_used,
+//     clippy::unnecessary_unwrap,
+//     clippy::pedantic
+// )]
+// TODO this is needed due to a false positive in clippy
+// https://github.com/rust-lang/rust/issues/83125
+// we will need this in 1.53.1
+#![allow(proc_macro_back_compat)]
 
 #[macro_use]
 extern crate serde_derive;
@@ -43,12 +51,16 @@ use std::fmt::Display;
 use std::iter::Iterator;
 use std::str::FromStr;
 use std::{fmt, sync::Mutex};
-use tremor_script::{ast::Helper, prelude::*};
+use tremor_script::prelude::*;
+use abi_stable::{StableAbi, std_types::RVec};
 
 /// Pipeline Errors
 pub mod errors;
 mod event;
 mod executable_graph;
+
+/// Types specific to the Plugin Development Kit
+pub mod pdk;
 
 #[macro_use]
 mod macros;
@@ -87,7 +99,8 @@ pub type NodeLookupFn = fn(
 
 /// Stringified numeric key
 /// from <https://github.com/serde-rs/json-benchmark/blob/master/src/prim_str.rs>
-#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Debug)]
+#[repr(C)]
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Debug, AbiStable)]
 pub struct PrimStr<T>(T)
 where
     T: Copy + Ord + Display + FromStr;
@@ -220,8 +233,9 @@ impl Default for NodeKind {
 }
 
 /// A circuit breaker action
+#[repr(C)]
 #[derive(
-    Debug, Clone, Copy, PartialEq, simd_json_derive::Serialize, simd_json_derive::Deserialize,
+    Debug, Clone, Copy, PartialEq, simd_json_derive::Serialize, simd_json_derive::Deserialize, StableAbi
 )]
 pub enum CbAction {
     /// Nothing of note
@@ -282,15 +296,16 @@ impl CbAction {
 ///
 /// `EventId` also tracks min and max event ids for other events in order to support batched and grouped events
 /// and facilitate CB mechanics
+#[repr(C)]
 #[derive(
-    Debug, Clone, PartialEq, Default, simd_json_derive::Serialize, simd_json_derive::Deserialize,
+    Debug, Clone, PartialEq, Default, simd_json_derive::Serialize, simd_json_derive::Deserialize, StableAbi
 )]
 pub struct EventId {
     source_id: u64,
     stream_id: u64,
     event_id: u64,
     pull_id: u64,
-    tracked_pull_ids: Vec<TrackedPullIds>,
+    tracked_pull_ids: RVec<TrackedPullIds>,
 }
 
 /// default stream id if streams dont make sense
@@ -307,7 +322,7 @@ impl EventId {
             stream_id,
             event_id,
             pull_id,
-            tracked_pull_ids: Vec::with_capacity(0),
+            tracked_pull_ids: RVec::with_capacity(0),
         }
     }
 
@@ -763,8 +778,9 @@ impl EventIdGenerator {
 }
 
 /// The kind of signal this is
+#[repr(C)]
 #[derive(
-    Debug, Clone, Copy, PartialEq, simd_json_derive::Serialize, simd_json_derive::Deserialize,
+    Debug, Clone, Copy, PartialEq, simd_json_derive::Serialize, simd_json_derive::Deserialize, StableAbi
 )]
 pub enum SignalKind {
     // Lifecycle

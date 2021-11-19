@@ -12,33 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{CbAction, EventId, OpMeta, SignalKind};
+use crate::{CbAction, EventId, OpMeta, SignalKind, pdk};
 use std::mem::swap;
 use tremor_common::time::nanotime;
 use tremor_script::prelude::*;
 use tremor_script::{literal, EventOriginUri, EventPayload, Value};
+use abi_stable::{StableAbi, std_types::ROption::{self, RSome}};
 
 /// A tremor event
+#[repr(C)]
 #[derive(
-    Debug, Clone, PartialEq, Default, simd_json_derive::Serialize, simd_json_derive::Deserialize,
+    Debug, Clone, PartialEq, Default, simd_json_derive::Serialize, simd_json_derive::Deserialize, StableAbi
 )]
 pub struct Event {
     /// The event ID
     pub id: EventId,
     /// The event Data
-    pub data: EventPayload,
+    pub data: pdk::EventPayload,
     /// Nanoseconds at when the event was ingested
     pub ingest_ns: u64,
     /// URI to identify the origin of the event
-    pub origin_uri: Option<EventOriginUri>,
+    pub origin_uri: ROption<EventOriginUri>,
     /// The kind of the event
-    pub kind: Option<SignalKind>,
+    pub kind: ROption<SignalKind>,
     /// If this event is batched (containing multiple events itself)
     pub is_batch: bool,
 
     /// Circuit breaker action
     pub cb: CbAction,
     /// Metadata for operators
+    /// FIXME: this is complicated to convert...
     pub op_meta: OpMeta,
     /// this needs transactional data
     pub transactional: bool,
@@ -50,7 +53,7 @@ impl Event {
     pub fn signal_tick() -> Self {
         Self {
             ingest_ns: nanotime(),
-            kind: Some(SignalKind::Tick),
+            kind: RSome(SignalKind::Tick),
             ..Self::default()
         }
     }
@@ -60,7 +63,7 @@ impl Event {
     pub fn signal_drain(uid: u64) -> Self {
         Self {
             ingest_ns: nanotime(),
-            kind: Some(SignalKind::Drain(uid)),
+            kind: RSome(SignalKind::Drain(uid)),
             ..Self::default()
         }
     }
@@ -70,7 +73,7 @@ impl Event {
     pub fn signal_start(uid: u64) -> Self {
         Self {
             ingest_ns: nanotime(),
-            kind: Some(SignalKind::Start(uid)),
+            kind: RSome(SignalKind::Start(uid)),
             ..Self::default()
         }
     }
