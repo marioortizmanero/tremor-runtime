@@ -1,6 +1,5 @@
-use std::pin::Pin;
 use abi_stable::{
-    std_types::{RBox, RCow, RHashMap, RVec, RArc},
+    std_types::{RBox, RCow, RHashMap, RVec},
     StableAbi,
 };
 use value_trait::StaticNode;
