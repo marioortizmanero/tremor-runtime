@@ -18,6 +18,7 @@ use crate::connectors::prelude::*;
 use crate::connectors::{ConnectorContext, StreamDone};
 use crate::errors::Result;
 use crate::QSIZE;
+use abi_stable::std_types::ROption::RSome;
 use async_std::channel::{bounded, Receiver, Sender};
 use async_std::task;
 use beef::Cow;
@@ -31,7 +32,6 @@ use tremor_common::time::nanotime;
 use tremor_pipeline::{CbAction, Event, SignalKind};
 use tremor_value::Value;
 use value_trait::ValueAccess;
-use abi_stable::std_types::ROption::RSome;
 
 /// Behavioral trait for defining if a Channel Sink needs metadata or not
 pub trait SinkMetaBehaviour: Send + Sync {
@@ -251,7 +251,7 @@ where
                     start,
                 }),
             ) = (
-                ctx.quiescence_beacon.continue_writing()/*.await*/,
+                ctx.quiescence_beacon.continue_writing(), /*.await*/
                 stream_rx.recv().await,
             ) {
                 let failed = writer.write(data, meta).await.is_err();
@@ -276,7 +276,10 @@ where
             }
             let error = match writer.on_done(stream).await {
                 Err(e) => Some(e),
-                Ok(StreamDone::ConnectorClosed) => ctx.notifier.notify()/*.await*/.err(),
+                Ok(StreamDone::ConnectorClosed) => ctx
+                    .notifier
+                    .notify() /*.await*/
+                    .err(),
                 Ok(_) => None,
             };
             if let RSome(e) = error {

@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use abi_stable::std_types::RBox;
 use event_listener::Event;
+use std::fmt;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
-use std::fmt;
-use abi_stable::std_types::RBox;
 
 #[derive(Debug)]
 struct Inner {
@@ -51,8 +51,10 @@ pub struct QuiescenceBeacon(Arc<Inner>);
 #[abi_stable::sabi_trait]
 pub trait QuiescenceBeaconOpaque: fmt::Debug + Clone + Send + Sync {
     // TODO: async
-    /* async */ fn continue_reading(&self) -> bool;
-    /* async */ fn continue_writing(&self) -> bool;
+    /* async */
+    fn continue_reading(&self) -> bool;
+    /* async */
+    fn continue_writing(&self) -> bool;
     fn stop_reading(&mut self);
     fn pause(&mut self);
     fn resume(&mut self);
@@ -64,7 +66,6 @@ impl QuiescenceBeacon {
     const MAX_LISTENERS: usize = 2;
 }
 impl QuiescenceBeaconOpaque for QuiescenceBeacon {
-
     /// returns `true` if consumers should continue reading
     /// doesn't return until the beacon is unpaused
     fn continue_reading(&self) -> bool {
