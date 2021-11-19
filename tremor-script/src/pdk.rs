@@ -3,6 +3,10 @@
 //! through the plugin interface. Thus, no functionality is implemented other
 //! than the conversion from and to the original type.
 
+use tremor_value::pdk::Value;
+
+use std::pin::Pin;
+
 use abi_stable::{StableAbi, std_types::{RVec, RArc}};
 
 #[repr(C)]
@@ -22,7 +26,7 @@ impl<'event> From<crate::ValueAndMeta<'event>> for ValueAndMeta<'event> {
 }
 
 #[repr(C)]
-#[derive(Clone, Default, StableAbi)]
+#[derive(StableAbi)]
 pub struct EventPayload {
     /// The vector of raw input values
     raw: RVec<RArc<Pin<RVec<u8>>>>,
@@ -31,9 +35,18 @@ pub struct EventPayload {
 
 impl From<crate::EventPayload> for EventPayload {
     fn from(original: crate::EventPayload) -> Self {
+        let raw = original
+            .raw
+            .into_iter()
+            .map(|x| {
+                // FIXME: this conversion could probably be simpler
+                let x: RArc<Pin<RVec<u8>>> = RArc::new(Pin::new((**x).into()));
+                x
+            })
+            .collect();
         EventPayload {
-            raw: original.raw.into(),
-            data: original.data.into,
+            raw,
+            data: original.data.into(),
         }
     }
 }

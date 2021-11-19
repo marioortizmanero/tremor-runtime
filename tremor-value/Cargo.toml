@@ -19,7 +19,7 @@ halfbrown = { version = "0.1", features = ["fxhash"] }
 serde = "1.0"
 simd-json = "0.4.8"
 simd-json-derive = "0.2"
-value-trait = { version="0.2", features=["custom-types", "c-abi"] }
+value-trait = { version="0.2.9", features=["custom-types", "c-abi"] }
 
 [dev-dependencies]
 float-cmp = "0.9"

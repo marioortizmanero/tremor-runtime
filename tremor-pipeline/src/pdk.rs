@@ -3,11 +3,31 @@
 //! through the plugin interface. Thus, no functionality is implemented other
 //! than the conversion from and to the original type.
 
-use crate::{EventId, EventOriginUri, SignalKind, CbAction, OpMeta};
+use crate::{EventId, EventOriginUri, SignalKind, CbAction, PrimStr};
 
 use tremor_script::pdk::EventPayload;
+use tremor_value::pdk::Value;
 
 use abi_stable::{StableAbi, std_types::ROption};
+
+// FIXME: this used to be a binary tree map, not a hash map. Not sure if that
+// was because of performance or anything similar, but `abi_stable` only has
+// hash maps so it's left that way for now.
+#[repr(C)]
+#[derive(StableAbi)]
+pub struct OpMeta(RHashMap<PrimStr<u64>, Value>);
+
+impl From<crate::OpMeta> for OpMeta {
+    fn from(original: crate::OpMeta) -> Self {
+        OpMeta(
+            original
+                .0
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect()
+        )
+    }
+}
 
 #[repr(C)]
 #[derive(StableAbi)]
@@ -43,8 +63,9 @@ impl From<crate::Event> for Event {
             kind: original.kind.into(),
             is_batch: original.is_batch,
             cb: original.cb,
-            op_meta: original.op_meta,
+            op_meta: original.op_meta.into(),
             transactional: original.transactional,
         }
     }
 }
+
