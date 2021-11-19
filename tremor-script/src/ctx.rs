@@ -20,19 +20,18 @@ use abi_stable::{StableAbi, std_types::{RString, ROption::{self, RSome, RNone}, 
 
 /// Event origin URI
 #[repr(C)]
-// FIXME: this used to be `simd_json_derive` for `Serialize` and `Deserialize`
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, StableAbi
+    Debug, Clone, PartialEq, Eq, Hash, simd_json_derive::Serialize, simd_json_derive::Deserialize
 )]
 pub struct EventOriginUri {
     /// schema part
-    pub scheme: RString,
+    pub scheme: String,
     /// host part
-    pub host: RString,
+    pub host: String,
     /// port part
-    pub port: ROption<u16>,
+    pub port: Option<u16>,
     /// path part
-    pub path: RVec<RString>,
+    pub path: Vec<String>,
     // implement query params if we find a good usecase for it
     //pub query: Hashmap<String, String>
 }
@@ -51,12 +50,12 @@ impl EventOriginUri {
                     // TODO add an error kind here
                     .ok_or_else(|| Error::from("EventOriginUri Parse Error: Missing host"))?;
                 Ok(Self {
-                    scheme: RString::from(r.scheme()),
-                    host: RString::from(host),
-                    port: r.port().into(),
+                    scheme: String::from(r.scheme()),
+                    host: String::from(host),
+                    port: r.port(),
                     path: r
                         .path_segments()
-                        .map_or_else(RVec::new, |segs| segs.map(RString::from).collect()),
+                        .map_or_else(Vec::new, |segs| segs.map(String::from).collect()),
                 })
             }
             Err(e) => Err(e.into()),
@@ -78,22 +77,19 @@ impl EventOriginUri {
     /// return the port
     #[must_use]
     pub fn port(&self) -> Option<u16> {
-        self.port.into()
+        self.port
     }
 
     /// return the path
     #[must_use]
-    pub fn path(&self) -> Vec<String> {
-        self.path
-            .iter()
-            .map(|rs| rs.to_string())
-            .collect()
+    pub fn path(&self) -> &[String] {
+        &self.path
     }
 
     /// Format as host and port
     #[must_use]
     pub fn host_port(&self) -> String {
-        if let RSome(port) = self.port {
+        if let Some(port) = self.port {
             format!("{}:{}", self.host(), port)
         } else {
             self.host().to_string()
@@ -104,7 +100,7 @@ impl EventOriginUri {
 impl fmt::Display for EventOriginUri {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}://{}", self.scheme, self.host)?;
-        if let RSome(port) = self.port {
+        if let Some(port) = self.port {
             write!(f, ":{}", port)?;
         }
         let maybe_sep = if self.path.is_empty() { "" } else { "/" };
@@ -115,10 +111,10 @@ impl fmt::Display for EventOriginUri {
 impl default::Default for EventOriginUri {
     fn default() -> Self {
         Self {
-            scheme: RString::from("tremor-script"),
-            host: RString::from("localhost"),
-            port: RNone,
-            path: RVec::new(),
+            scheme: String::from("tremor-script"),
+            host: String::from("localhost"),
+            port: None,
+            path: Vec::new(),
         }
     }
 }
@@ -126,8 +122,7 @@ impl default::Default for EventOriginUri {
 // TODO check if we need all of these derives here still
 
 /// Context in that an event is executed
-// FIXME: this used to be `simd_json_derive` for `Serialize`
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, serde::Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, simd_json_derive::Serialize)]
 pub struct EventContext<'run> {
     at: u64,
     /// URI of the origin
