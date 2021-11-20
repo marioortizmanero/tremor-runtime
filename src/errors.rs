@@ -76,12 +76,6 @@ impl<P> From<std::sync::PoisonError<P>> for Error {
     }
 }
 
-impl<F> From<rental::RentalError<F, Box<Vec<u8>>>> for Error {
-    fn from(_e: rental::RentalError<F, Box<Vec<u8>>>) -> Self {
-        Self::from("Rental Error".to_string())
-    }
-}
-
 #[cfg(test)]
 impl PartialEq for Error {
     fn eq(&self, _other: &Self) -> bool {
@@ -115,9 +109,7 @@ error_chain! {
         ParseFloatError(std::num::ParseFloatError);
         PluginError(abi_stable::std_types::SendRBoxError);
         RegexError(regex::Error);
-        ReqwestError(reqwest::Error);
         RustlsError(rustls::TLSError);
-        Sled(sled::Error);
         SnappyError(snap::Error);
         Timeout(async_std::future::TimeoutError);
         TryFromIntError(std::num::TryFromIntError);

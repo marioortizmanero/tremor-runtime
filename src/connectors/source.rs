@@ -143,9 +143,9 @@ pub enum SourceReply {
     /// This might result in additional events being flushed from
     /// preprocessors, that is why we have `origin_uri` and `meta`
     EndStream {
-        origin_uri: EventOriginUri,
+        origin_uri: PdkEventOriginUri,
         stream_id: u64,
-        meta: Option<Value<'static>>,
+        meta: ROption<PdkValue<'static>>,
     },
     /// no new data/event, wait for the given ms
     Empty(u64),
@@ -289,47 +289,74 @@ impl Source {
     }
 
     #[inline]
-    pub async fn on_start(&mut self, ctx: &mut SourceContext) {
-        self.0.on_start(ctx)
+    pub async fn on_start(&mut self, ctx: &mut SourceContext) -> Result<()> {
+        self.0
+            .on_start(ctx)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
     #[inline]
-    pub async fn on_pause(&mut self, ctx: &mut SourceContext) {
-        self.0.on_pause(ctx)
+    pub async fn on_pause(&mut self, ctx: &mut SourceContext) -> Result<()> {
+        self.0
+            .on_pause(ctx)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
     #[inline]
-    pub async fn on_resume(&mut self, ctx: &mut SourceContext) {
-        self.0.on_resume(ctx)
+    pub async fn on_resume(&mut self, ctx: &mut SourceContext) -> Result<()> {
+        self.0
+            .on_resume(ctx)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
     #[inline]
-    pub async fn on_stop(&mut self, ctx: &mut SourceContext) {
-        self.0.on_stop(ctx)
+    pub async fn on_stop(&mut self, ctx: &mut SourceContext) -> Result<()> {
+        self.0
+            .on_stop(ctx)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]
-    pub async fn on_cb_close(&mut self, ctx: &mut SourceContext) {
-        self.0.on_cb_close(ctx)
+    pub async fn on_cb_close(&mut self, ctx: &mut SourceContext) -> Result<()> {
+        self.0
+            .on_cb_close(ctx)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
     #[inline]
-    pub async fn on_cb_open(&mut self, ctx: &mut SourceContext) {
+    pub async fn on_cb_open(&mut self, ctx: &mut SourceContext) -> Result<()> {
         self.0.on_cb_open(ctx)
     }
 
     #[inline]
-    pub async fn ack(&mut self, stream_id: u64, pull_id: u64) {
-        self.0.ack(stream_id, pull_id)
+    pub async fn ack(&mut self, stream_id: u64, pull_id: u64) -> Result<()> {
+        self.0
+            .ack(stream_id, pull_id)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
     #[inline]
-    pub async fn fail(&mut self, stream_id: u64, pull_id: u64) {
-        self.0.fail(stream_id, pull_id)
+    pub async fn fail(&mut self, stream_id: u64, pull_id: u64) -> Result<()> {
+        self.0
+            .fail(stream_id, pull_id)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]
-    pub async fn on_connection_lost(&mut self, ctx: &mut SourceContext) {
-        self.0.on_connection_lost(ctx)
+    pub async fn on_connection_lost(&mut self, ctx: &mut SourceContext) -> Result<()> {
+        self.0
+            .on_connection_lost(ctx)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
     #[inline]
-    pub async fn on_connection_established(&mut self, ctx: &mut SourceContext) {
-        self.0.on_connection_established(ctx)
+    pub async fn on_connection_established(&mut self, ctx: &mut SourceContext) -> Result<()> {
+        self.0
+            .on_connection_established(ctx)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]
@@ -1074,7 +1101,7 @@ impl SourceManager {
                     &self.ctx.url,
                     stream_state,
                     &mut ingest_ns,
-                    pull_counter,
+                    self.pull_counter,
                     origin_uri.into(),
                     port.as_ref(),
                     data.into(),
@@ -1120,7 +1147,7 @@ impl SourceManager {
                         connector_url,
                         stream_state,
                         &mut ingest_ns,
-                        pull_counter,
+                        self.pull_counter,
                         origin_uri.clone().into(), // TODO: use split_last on batch_data to avoid last clone
                         port.as_ref(),
                         data.into(),
@@ -1160,7 +1187,7 @@ impl SourceManager {
                 let stream_state = self.streams.get_or_create_stream(stream)?;
                 let event = build_event(
                     stream_state,
-                    pull_counter,
+                    self.pull_counter,
                     ingest_ns,
                     EventPayload::from(payload),
                     origin_uri.into(),

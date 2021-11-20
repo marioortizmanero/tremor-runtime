@@ -82,6 +82,9 @@ pub mod binding;
 /// Tremor connector extensions
 pub mod connectors;
 
+/// Plugin Development Kit
+pub mod pdk;
+
 /// Metrics instance name
 pub static mut INSTANCE: &str = "tremor";
 
