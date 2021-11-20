@@ -75,7 +75,7 @@ impl QuiescenceBeaconOpaque for QuiescenceBeacon {
                 Inner::PAUSED => {
                     // we wait to be notified
                     // if so, we re-enter the loop to check the new state
-                    self.0.resume_event.listen();
+                    self.0.resume_event.listen() /* .await */;
                 }
                 _ => break false, // STOP_ALL | STOP_READING | _
             }
@@ -89,7 +89,7 @@ impl QuiescenceBeaconOpaque for QuiescenceBeacon {
             match self.0.state.load(Ordering::Acquire) {
                 Inner::RUNNING | Inner::STOP_READING => break true,
                 Inner::PAUSED => {
-                    self.0.resume_event.listen();
+                    self.0.resume_event.listen() /* .await */;
                 }
                 _ => break false, // STOP_ALL | _
             }

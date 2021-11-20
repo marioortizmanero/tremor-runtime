@@ -50,6 +50,7 @@ use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Display;
 use tremor_common::time::nanotime;
+use tremor_common::url::{ports::IN, TremorUrl};
 use tremor_pipeline::{
     pdk::Event as PdkEvent, CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID,
 };

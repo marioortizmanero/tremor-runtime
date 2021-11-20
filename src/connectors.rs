@@ -21,10 +21,12 @@ pub mod sink;
 /// source parts
 pub mod source;
 
-/// opentelemetry
-pub(crate) mod otel;
-/// protobuf helpers
-pub(crate) mod pb;
+// FIXME: this should be reorganized after the pdk is moved to a separate crate
+pub use crate::utils::hostname;
+pub use tremor_common::time::nanotime;
+pub use tremor_pipeline::DEFAULT_STREAM_ID;
+pub use tremor_script::EventPayload;
+pub use tremor_value::literal;
 
 /// Home of the famous metrics collector
 pub(crate) mod metrics;
