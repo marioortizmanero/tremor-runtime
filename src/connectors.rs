@@ -27,10 +27,10 @@ pub(crate) mod source;
 pub(crate) mod utils;
 
 // FIXME: this should be reorganized after the pdk is moved to a separate crate
+pub use crate::utils::hostname;
+pub use tremor_common::time::nanotime;
 pub use tremor_pipeline::DEFAULT_STREAM_ID;
 pub use tremor_script::EventPayload;
-pub use tremor_common::time::nanotime;
-pub use crate::utils::hostname;
 pub use tremor_value::literal;
 
 use std::fmt::Display;
