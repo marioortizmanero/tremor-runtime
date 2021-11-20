@@ -1127,7 +1127,7 @@ version = "3.0.0-beta.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d9b1abef93569f290952eff3c4a0a92d6767bb5158db095b4dc9a512b1c3643"
 dependencies = [
- "clap 3.0.0-beta.4",
+ "clap 3.0.0-beta.5",
 ]
 
 [[package]]
@@ -4804,7 +4804,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc6844de72e57df1980054b38be3a9f4702aba4858be64dd700181a8a6d0e1b6"
 dependencies = [
  "rustls",
- "tokio 1.14.0",
+ "tokio 1.13.0",
  "webpki",
 ]
 
@@ -4816,7 +4816,7 @@ checksum = "50145484efff8818b5ccd256697f36863f587da82cf8b409c53adf1e840798e3"
 dependencies = [
  "futures-core",
  "pin-project-lite 0.2.7",
- "tokio 1.14.0",
+ "tokio 1.13.0",
 ]
 
 [[package]]
@@ -4854,7 +4854,7 @@ dependencies = [
  "futures-sink",
  "log",
  "pin-project-lite 0.2.7",
- "tokio 1.14.0",
+ "tokio 1.13.0",
 ]
 
 [[package]]
@@ -5057,6 +5057,7 @@ dependencies = [
  "tremor-pipeline",
  "tremor-runtime",
  "tremor-script",
+ "tremor-value",
  "url",
 ]
 
@@ -5066,6 +5067,8 @@ version = "0.11.4"
 dependencies = [
  "async-std",
  "rand 0.8.4",
+ "serde",
+ "url",
 ]
 
 [[package]]
@@ -5154,10 +5157,12 @@ dependencies = [
  "bytes 1.1.0",
  "chrono",
  "ciborium",
+ "csv",
  "either",
  "env_logger 0.9.0",
  "error-chain",
  "event-listener",
+ "file-mode",
  "futures",
  "glob",
  "halfbrown",
@@ -5173,6 +5178,7 @@ dependencies = [
  "lz4",
  "mapr",
  "matches",
+ "memchr",
  "pin-project-lite 0.2.7",
  "port_scanner",
  "pretty_assertions",

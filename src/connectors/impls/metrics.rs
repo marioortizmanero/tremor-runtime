@@ -85,6 +85,59 @@ impl MetricsConnector {
     }
 }
 
+/// builder for the metrics connector
+
+#[derive(Debug, Default)]
+pub(crate) struct Builder {}
+#[async_trait::async_trait]
+impl ConnectorBuilder for Builder {
+    fn connector_type(&self) -> ConnectorType {
+        "metrics".into()
+    }
+    async fn from_config(
+        &self,
+        _id: &TremorUrl,
+        _config: &Option<serde_yaml::Value>,
+    ) -> Result<Box<dyn Connector>> {
+        Ok(Box::new(MetricsConnector::new()))
+    }
+}
+
+#[async_trait::async_trait()]
+impl Connector for MetricsConnector {
+    fn is_structured(&self) -> bool {
+        true
+    }
+
+    async fn connect(&mut self, _ctx: &ConnectorContext, _attempt: &Attempt) -> Result<bool> {
+        Ok(!self.tx.is_closed())
+    }
+
+    async fn create_source(
+        &mut self,
+        source_context: SourceContext,
+        builder: SourceManagerBuilder,
+    ) -> Result<Option<SourceAddr>> {
+        let source = MetricsSource::new(self.rx.clone());
+        let addr = builder.spawn(source, source_context)?;
+        Ok(Some(addr))
+    }
+
+    async fn create_sink(
+        &mut self,
+        sink_context: SinkContext,
+        builder: SinkManagerBuilder,
+    ) -> Result<Option<SinkAddr>> {
+        let sink = MetricsSink::new(self.tx.clone());
+        let addr = builder.spawn(sink, sink_context)?;
+        Ok(Some(addr))
+    }
+
+    fn default_codec(&self) -> &str {
+        "json"
+    }
+}
+
 pub(crate) struct MetricsSource {
     rx: Receiver<Msg>,
     origin_uri: EventOriginUri,
@@ -101,6 +154,26 @@ impl MetricsSource {
                 path: vec![],
             },
         }
+    }
+}
+
+#[async_trait::async_trait()]
+impl Source for MetricsSource {
+    async fn pull_data(&mut self, _pull_id: u64, _ctx: &SourceContext) -> Result<SourceReply> {
+        match self.rx.try_recv() {
+            Ok(msg) => Ok(SourceReply::Structured {
+                payload: msg.payload,
+                origin_uri: msg.origin_uri.unwrap_or_else(|| self.origin_uri.clone()),
+                stream: DEFAULT_STREAM_ID,
+                port: None,
+            }),
+            Err(TryRecvError::Closed) => Err(TryRecvError::Closed.into()),
+            Err(TryRecvError::Empty) => Ok(SourceReply::Empty(10)),
+        }
+    }
+
+    fn is_transactional(&self) -> bool {
+        false
     }
 }
 
@@ -138,4 +211,47 @@ pub(crate) fn verify_metrics_value(value: &Value<'_>) -> Result<()> {
             }
         })
         .ok_or_else(|| ErrorKind::InvalidMetricsData.into())
+}
+
+/// passing events through to the source channel
+#[async_trait::async_trait()]
+impl Sink for MetricsSink {
+    fn auto_ack(&self) -> bool {
+        true
+    }
+
+    /// entrypoint for custom metrics events
+    async fn on_event(
+        &mut self,
+        _input: &str,
+        event: tremor_pipeline::Event,
+        _ctx: &SinkContext,
+        _serializer: &mut EventSerializer,
+        _start: u64,
+    ) -> Result<SinkReply> {
+        // verify event format
+        for (value, _meta) in event.value_meta_iter() {
+            // if it fails here an error event is sent to the ERR port of this connector
+            verify_metrics_value(value)?;
+        }
+
+        let Event {
+            origin_uri, data, ..
+        } = event;
+
+        let metrics_msg = Msg::new(data, origin_uri);
+        let ack_or_fail = match self.tx.try_broadcast(metrics_msg) {
+            Err(TrySendError::Closed(_)) => {
+                // channel is closed
+                SinkReply {
+                    ack: SinkAck::Fail,
+                    cb: CbAction::Close,
+                }
+            }
+            Err(TrySendError::Full(_)) => SinkReply::FAIL,
+            _ => SinkReply::ACK,
+        };
+
+        Ok(ack_or_fail)
+    }
 }
