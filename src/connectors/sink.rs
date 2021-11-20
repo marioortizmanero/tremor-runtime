@@ -360,29 +360,44 @@ impl Sink {
     }
 
     #[inline]
-    pub async fn on_start(&mut self, ctx: &mut SinkContext) {
-        self.0.on_start(ctx)
+    pub async fn on_start(&mut self, ctx: &mut SinkContext) -> Result<()> {
+        self.0.on_start(ctx).map_err(Into::into).into()
     }
     #[inline]
-    pub async fn on_pause(&mut self, ctx: &mut SinkContext) {
-        self.0.on_pause(ctx)
+    pub async fn on_pause(&mut self, ctx: &mut SinkContext) -> Result<()> {
+        self.0
+            .on_pause(ctx)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
     #[inline]
-    pub async fn on_resume(&mut self, ctx: &mut SinkContext) {
-        self.0.on_resume(ctx)
+    pub async fn on_resume(&mut self, ctx: &mut SinkContext) -> Result<()> {
+        self.0
+            .on_resume(ctx)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
     #[inline]
-    pub async fn on_stop(&mut self, ctx: &mut SinkContext) {
-        self.0.on_stop(ctx)
+    pub async fn on_stop(&mut self, ctx: &mut SinkContext) -> Result<()> {
+        self.0
+            .on_stop(ctx)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]
-    pub async fn on_connection_lost(&mut self, ctx: &mut SinkContext) {
-        self.0.on_connection_lost(ctx)
+    pub async fn on_connection_lost(&mut self, ctx: &mut SinkContext) -> Result<()> {
+        self.0
+            .on_connection_lost(ctx)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
     #[inline]
-    pub async fn on_connection_established(&mut self, ctx: &mut SinkContext) {
-        self.0.on_connection_established(ctx)
+    pub async fn on_connection_established(&mut self, ctx: &mut SinkContext) -> Result<()> {
+        self.0
+            .on_connection_established(ctx)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]

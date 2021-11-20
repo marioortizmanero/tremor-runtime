@@ -76,12 +76,6 @@ impl<P> From<std::sync::PoisonError<P>> for Error {
     }
 }
 
-impl<T: std::fmt::Debug> From<aws_sdk_s3::SdkError<T>> for Error {
-    fn from(e: aws_sdk_s3::SdkError<T>) -> Self {
-        Self::from(ErrorKind::S3Error(format!("{:?}", e)))
-    }
-}
-
 #[cfg(test)]
 impl PartialEq for Error {
     fn eq(&self, _other: &Self) -> bool {
@@ -116,8 +110,7 @@ error_chain! {
         ParseFloatError(std::num::ParseFloatError);
         PluginError(abi_stable::std_types::SendRBoxError);
         RegexError(regex::Error);
-        SinkDequeueError(async_sink::SinkDequeueError);
-        SinkEnqueueError(async_sink::SinkEnqueueError);
+        RustlsError(rustls::TLSError);
         SnappyError(snap::Error);
         Timeout(async_std::future::TimeoutError);
         TryFromIntError(std::num::TryFromIntError);

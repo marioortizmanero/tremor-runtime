@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::errors::{Error, ErrorKind, Result};
+use crate::errors::{Error, Result};
 use abi_stable::{
     std_types::{
         ROption::{self, RNone, RSome},
@@ -51,19 +51,17 @@ pub enum Scope {
 
 /// module for standard port names
 pub mod ports {
-    use beef::Cow;
-
     /// standard input port
-    pub const IN: Cow<'static, str> = Cow::const_str("in");
+    pub const IN: &str = "in";
 
     /// standard output port
-    pub const OUT: Cow<'static, str> = Cow::const_str("out");
+    pub const OUT: &str = "out";
 
     /// standard err port
-    pub const ERR: Cow<'static, str> = Cow::const_str("err");
+    pub const ERR: &str = "err";
 
     /// standard metrics port
-    pub const METRICS: Cow<'static, str> = Cow::const_str("metrics");
+    pub const METRICS: &str = "metrics";
 }
 
 /// A tremor URL identifying an entity in tremor

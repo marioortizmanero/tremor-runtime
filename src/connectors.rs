@@ -52,11 +52,12 @@ use crate::pipeline;
 use crate::system::World;
 use crate::OpConfig;
 use abi_stable::{
+    rslice,
     std_types::{
-        RBox,
+        RBox, RCow,
         ROption::{self, RNone, RSome},
         RResult::{RErr, ROk},
-        RStr, RString, RVec,
+        RStr, RString, RVec, RSlice
     },
     type_level::downcasting::TD_Opaque,
     StableAbi,
@@ -1122,6 +1123,11 @@ pub enum Connectivity {
     Disconnected,
 }
 
+const IN_PORTS: [&str; 1] = [IN];
+const IN_PORTS_REF: &'static [&str; 1] = &IN_PORTS;
+const OUT_PORTS: [&str; 2] = [OUT, ERR];
+const OUT_PORTS_REF: &'static [&str; 2] = &OUT_PORTS;
+
 /// A Connector connects the tremor runtime to the outside world.
 ///
 /// It can be a source of events, as such it is polled for new data.
@@ -1139,6 +1145,37 @@ pub enum Connectivity {
 /// plugin system. The `Connector` type wraps it up for ease of use.
 #[abi_stable::sabi_trait]
 pub trait RawConnector: Send {
+    /// Valid input ports for the connector, by default this is `in`
+    fn input_ports(&self) -> RVec<RCow<'static, str>> {
+        IN_PORTS_REF.into_iter().map(|s| RCow::Borrowed(s)).collect()
+    }
+    /// Valid output ports for the connector, by default this is `out` and `err`
+    fn output_ports(&self) -> RVec<RCow<'static, str>> {
+        OUT_PORTS_REF.into_iter().map(|s| RCow::Borrowed(s)).collect()
+    }
+
+    /// Tests if a input port is valid, by default does a case insensitive search against
+    /// `self.input_ports()`
+    fn is_valid_input_port(&self, port: RStr<'_>) -> bool {
+        for valid in self.input_ports() {
+            if port.eq_ignore_ascii_case(valid.as_ref()) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Tests if a input port is valid, by default does a case insensitive search against
+    /// `self.output_ports()`
+    fn is_valid_output_port(&self, port: RStr<'_>) -> bool {
+        for valid in self.output_ports() {
+            if port.eq_ignore_ascii_case(valid.as_ref()) {
+                return true;
+            }
+        }
+        false
+    }
+
     /// This connector works with structured data and does not allow the use
     /// of codecs.
     fn is_structured(&self) -> bool {
@@ -1206,7 +1243,9 @@ pub trait RawConnector: Send {
 
     /// called when the connector is stopped
     /* async */
-    fn on_stop(&mut self, _ctx: &ConnectorContext) {}
+    fn on_stop(&mut self, _ctx: &ConnectorContext) -> RResult<()> {
+        ROk(())
+    }
 
     /// returns the default codec for this connector
     fn default_codec(&self) -> RStr<'_>;
@@ -1218,6 +1257,25 @@ pub type BoxedRawConnector = RawConnector_TO<'static, RBox<()>>;
 // plugin.
 pub struct Connector(pub BoxedRawConnector);
 impl Connector {
+    #[inline]
+    fn input_ports(&self) -> Vec<Cow<'static, str>> {
+        self.0.input_ports().into_iter().map(Into::into).collect()
+    }
+    #[inline]
+    fn output_ports(&self) -> Vec<Cow<'static, str>> {
+        self.0.output_ports().into_iter().map(Into::into).collect()
+    }
+
+    #[inline]
+    fn is_valid_input_port(&self, port: &str) -> bool {
+        self.0.is_valid_input_port(port.into())
+    }
+
+    #[inline]
+    fn is_valid_output_port(&self, port: &str) -> bool {
+        self.0.is_valid_output_port(port.into())
+    }
+
     #[inline]
     fn is_structured(&self) -> bool {
         self.0.is_structured()
@@ -1264,7 +1322,7 @@ impl Connector {
     }
 
     #[inline]
-    pub async fn on_start(&mut self, ctx: &ConnectorContext) -> Result<ConnectorState> {
+    pub async fn on_start(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
             .on_start(ctx)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
@@ -1272,28 +1330,84 @@ impl Connector {
     }
 
     #[inline]
-    pub async fn on_pause(&mut self, ctx: &ConnectorContext) {
-        self.0.on_pause(ctx)
+    pub async fn on_pause(&mut self, ctx: &ConnectorContext) -> Result<()> {
+        self.0
+            .on_pause(ctx)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]
-    pub async fn on_resume(&mut self, ctx: &ConnectorContext) {
-        self.0.on_resume(ctx)
+    pub async fn on_resume(&mut self, ctx: &ConnectorContext) -> Result<()> {
+        self.0
+            .on_resume(ctx)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]
-    pub async fn on_drain(&mut self, ctx: &ConnectorContext) {
-        self.0.on_drain(ctx)
+    pub async fn on_drain(&mut self, ctx: &ConnectorContext) -> Result<()> {
+        self.0
+            .on_drain(ctx)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]
-    pub async fn on_stop(&mut self, ctx: &ConnectorContext) {
-        self.0.on_stop(ctx)
+    pub async fn on_stop(&mut self, ctx: &ConnectorContext) -> Result<()> {
+        self.0
+            .on_stop(ctx)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]
     pub fn default_codec(&self) -> &str {
         self.0.default_codec().into()
+    }
+}
+
+/// the type of a connector
+#[repr(C)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, StableAbi)]
+pub struct ConnectorType(RString);
+
+impl From<ConnectorType> for RString {
+    fn from(ct: ConnectorType) -> Self {
+        ct.0
+    }
+}
+
+impl From<ConnectorType> for String {
+    fn from(ct: ConnectorType) -> Self {
+        ct.0.into()
+    }
+}
+
+impl Display for ConnectorType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0.as_str())
+    }
+}
+
+impl From<RString> for ConnectorType {
+    fn from(s: RString) -> Self {
+        Self(s)
+    }
+}
+
+impl From<String> for ConnectorType {
+    fn from(s: String) -> Self {
+        Self(s.into())
+    }
+}
+
+impl<T> From<&T> for ConnectorType
+where
+    T: ToString + ?Sized,
+{
+    fn from(s: &T) -> Self {
+        Self(s.to_string().into())
     }
 }
 
