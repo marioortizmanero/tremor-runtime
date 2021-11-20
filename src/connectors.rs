@@ -59,7 +59,7 @@ use crate::connectors::metrics::{MetricsSinkReporter, SourceReporter};
 use crate::connectors::sink::{BoxedRawSink, Sink, SinkAddr, SinkContext, SinkMsg};
 use crate::connectors::source::{BoxedRawSource, Source, SourceAddr, SourceContext, SourceMsg};
 use crate::errors::{Error, ErrorKind, Result};
-use crate::pdk::RResult;
+use crate::pdk::{RResult, ConnectorMod_Ref};
 use crate::pipeline;
 use crate::system::World;
 use crate::url::ports::{ERR, IN, OUT};
@@ -74,6 +74,7 @@ use abi_stable::{
     },
     type_level::downcasting::TD_Opaque,
     StableAbi,
+    library::RootModule,
 };
 use async_std::channel::{bounded, Sender};
 use halfbrown::{Entry, HashMap};
@@ -246,7 +247,7 @@ pub enum ManagerMsg {
         /// the type of connector
         connector_type: String,
         /// the builder
-        builder: Box<dyn ConnectorBuilder>,
+        builder: ConnectorMod_Ref,
         /// if this one is a builtin connector
         builtin: bool,
     },
@@ -1208,5 +1209,13 @@ pub trait ConnectorBuilder: Sync + Send {
 #[cfg(not(tarpaulin_include))]
 pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
     // TODO load dynamically
+
+    let path = "plugins/connectors/metronome/target/debug/libconnector_metronome.so";
+    // let path = std::env::var("TREMOR_PATH")
+    //     .unwrap_or_else(|_| String::from(tremor_script::path::DEFAULT));
+
+    let builder = ConnectorMod_Ref::load_from_file(std::path::Path::new(path))?;
+    world.register_builtin_connector_type(builder).await?;
+
     Ok(())
 }

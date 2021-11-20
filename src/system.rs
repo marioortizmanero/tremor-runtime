@@ -310,7 +310,7 @@ impl World {
     pub(crate) async fn register_builtin_connector_type(
         &self,
         type_name: &'static str,
-        builder: Box<dyn connectors::ConnectorBuilder>,
+        builder: pdk::connectors::ConnectorMod_Ref,
     ) -> Result<()> {
         self.system
             .send(ManagerMsg::Connector(connectors::ManagerMsg::Register {
