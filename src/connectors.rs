@@ -15,12 +15,15 @@
 /// prelude with commonly needed stuff imported
 pub(crate) mod prelude;
 /// Sink part of a connector
-pub(crate) mod sink;
+// FIXME: this should be pub(crate) after the pdk is moved to a separate crate
+pub mod sink;
 /// source part of a connector
-pub(crate) mod source;
+// FIXME: this should be pub(crate) after the pdk is moved to a separate crate
+pub mod source;
 
 /// reconnect logic for connectors
-pub(crate) mod reconnect;
+// FIXME: this should be pub(crate) after the pdk is moved to a separate crate
+pub mod reconnect;
 
 /// home for connector specific function
 pub(crate) mod functions;
@@ -38,6 +41,13 @@ pub(crate) mod metrics;
 
 /// quiescence stuff
 pub(crate) mod quiescence;
+
+// FIXME: this should be reorganized after the pdk is moved to a separate crate
+pub use tremor_pipeline::DEFAULT_STREAM_ID;
+pub use tremor_script::EventPayload;
+pub use tremor_common::time::nanotime;
+pub use crate::utils::hostname;
+pub use tremor_value::literal;
 
 use std::fmt::Display;
 

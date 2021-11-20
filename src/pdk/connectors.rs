@@ -1,7 +1,3 @@
-//! TODO: this should probably export a `ConnectorBuilder` instead.
-//! TODO: move into a separate crate along  with the `RawConnector` trait and
-//! similars.
-
 use crate::connectors::BoxedRawConnector;
 use crate::url::TremorUrl;
 use tremor_value::pdk::Value;
