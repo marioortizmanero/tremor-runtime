@@ -27,9 +27,7 @@ use tremor_script::{pdk::EventPayload as PdkEventPayload, EventPayload, ValueAnd
 use crate::config::{
     Codec as CodecConfig, Connector as ConnectorConfig, Preprocessor as PreprocessorConfig,
 };
-use crate::connectors::{
-    ConnectorType, Context, Msg, QuiescenceBeacon,
-};
+use crate::connectors::{ConnectorType, Context, Msg, QuiescenceBeacon};
 use crate::errors::{Error, Result};
 use crate::pdk::RResult;
 use crate::pipeline;
@@ -325,7 +323,10 @@ impl Source {
     }
     #[inline]
     pub async fn on_cb_open(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0.on_cb_open(ctx)
+        self.0
+            .on_cb_open(ctx)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]
@@ -766,9 +767,9 @@ impl SourceManager {
                 port,
                 mut pipelines,
             } => {
-                let pipes = if port.eq_ignore_ascii_case(OUT.as_ref()) {
+                let pipes = if port.eq_ignore_ascii_case(OUT) {
                     &mut self.pipelines_out
-                } else if port.eq_ignore_ascii_case(ERR.as_ref()) {
+                } else if port.eq_ignore_ascii_case(ERR) {
                     &mut self.pipelines_err
                 } else {
                     error!("{} Tried to connect to invalid port: {}", &self.ctx, &port);
@@ -789,9 +790,9 @@ impl SourceManager {
                 Ok(Control::Continue)
             }
             SourceMsg::Unlink { id, port } => {
-                let pipelines = if port.eq_ignore_ascii_case(OUT.as_ref()) {
+                let pipelines = if port.eq_ignore_ascii_case(OUT) {
                     &mut self.pipelines_out
-                } else if port.eq_ignore_ascii_case(ERR.as_ref()) {
+                } else if port.eq_ignore_ascii_case(ERR) {
                     &mut self.pipelines_err
                 } else {
                     error!(
@@ -993,10 +994,10 @@ impl SourceManager {
         let mut send_error = false;
 
         for (port, event) in events {
-            let pipelines = if port.eq_ignore_ascii_case(OUT.as_ref()) {
+            let pipelines = if port.eq_ignore_ascii_case(OUT) {
                 self.metrics_reporter.increment_out();
                 &mut self.pipelines_out
-            } else if port.eq_ignore_ascii_case(ERR.as_ref()) {
+            } else if port.eq_ignore_ascii_case(ERR) {
                 self.metrics_reporter.increment_err();
                 &mut self.pipelines_err
             } else {
@@ -1193,7 +1194,7 @@ impl SourceManager {
                     self.is_transactional,
                 );
 
-                let port: Cow<'static, str> = port.map(conv_cow_str).unwrap_or(OUT);
+                let port: Cow<'static, str> = port.map(conv_cow_str).unwrap_or(Cow::from(OUT));
 
                 let error = self.route_events(vec![(port, event)]).await;
                 if error {
@@ -1221,9 +1222,9 @@ impl SourceManager {
                         &mut stream_state,
                         &mut ingest_ns,
                         self.pull_counter,
-                        origin_uri,
+                        origin_uri.into(),
                         None,
-                        &meta.unwrap_or_else(Value::object),
+                        &meta.map(Into::into).unwrap_or_else(Value::object),
                         self.is_transactional,
                     );
                     if results.is_empty() {
@@ -1357,9 +1358,12 @@ fn build_events(
                     }
                 });
                 let (port, payload) = match line_value {
-                    Ok(decoded) => (port.unwrap_or(&OUT).clone(), decoded),
+                    Ok(decoded) => (port.unwrap_or(&Cow::from(OUT)).clone(), decoded),
                     Err(None) => continue,
-                    Err(Some(e)) => (ERR, make_error(url, &e, stream_state.stream_id, pull_id)),
+                    Err(Some(e)) => (
+                        Cow::from(ERR),
+                        make_error(url, &e, stream_state.stream_id, pull_id),
+                    ),
                 };
                 let event = build_event(
                     stream_state,
@@ -1384,7 +1388,7 @@ fn build_events(
                 origin_uri,
                 is_transactional,
             );
-            vec![(ERR, event)]
+            vec![(Cow::from(ERR), event)]
         }
     }
 }
@@ -1417,9 +1421,12 @@ fn build_last_events(
                     }
                 });
                 let (port, payload) = match line_value {
-                    Ok(decoded) => (port.unwrap_or(&OUT).clone(), decoded),
+                    Ok(decoded) => (port.unwrap_or(&Cow::from(OUT)).clone(), decoded),
                     Err(None) => continue,
-                    Err(Some(e)) => (ERR, make_error(url, &e, stream_state.stream_id, pull_id)),
+                    Err(Some(e)) => (
+                        Cow::from(ERR),
+                        make_error(url, &e, stream_state.stream_id, pull_id),
+                    ),
                 };
                 let event = build_event(
                     stream_state,
@@ -1444,7 +1451,7 @@ fn build_last_events(
                 origin_uri,
                 is_transactional,
             );
-            vec![(ERR, event)]
+            vec![(Cow::from(ERR), event)]
         }
     }
 }

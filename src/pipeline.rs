@@ -653,9 +653,9 @@ impl Manager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_std::prelude::*;
     use tremor_common::url::ports::IN;
     use tremor_common::url::ports::OUT;
-    use async_std::prelude::*;
     use tremor_pipeline::EventId;
     use tremor_pipeline::FN_REGISTRY;
 

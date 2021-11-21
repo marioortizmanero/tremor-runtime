@@ -42,11 +42,10 @@ use async_std::task::{self, JoinHandle};
 use beef::Cow;
 
 use self::metrics::{MetricsSender, SinkReporter, SourceReporter};
-use self::sink::{SinkAddr, SinkContext, SinkMsg, Sink, BoxedRawSink};
-use self::source::{SourceAddr, SourceContext, SourceMsg, Source, BoxedRawSource};
+use self::sink::{BoxedRawSink, Sink, SinkAddr, SinkContext, SinkMsg};
+use self::source::{BoxedRawSource, Source, SourceAddr, SourceContext, SourceMsg};
 use self::utils::quiescence::QuiescenceBeacon;
 use crate::config::Connector as ConnectorConfig;
-use crate::connectors::metrics::MetricsSinkReporter;
 use crate::errors::{Error, ErrorKind, Result};
 use crate::pdk::RResult;
 use crate::pipeline;
@@ -59,7 +58,7 @@ use abi_stable::{
         RBox, RCow,
         ROption::{self, RNone, RSome},
         RResult::{RErr, ROk},
-        RStr, RString, RVec, RSlice
+        RSlice, RStr, RString, RVec,
     },
     type_level::downcasting::TD_Opaque,
     StableAbi,
@@ -75,12 +74,17 @@ use tremor_value::Value;
 use utils::reconnect::{Attempt, ReconnectRuntime};
 use value_trait::{Builder, Mutable};
 
-use self::quiescence::{
-    BoxedQuiescenceBeacon, QuiescenceBeaconOpaque, QuiescenceBeaconOpaque_TO,
-};
+use self::quiescence::{BoxedQuiescenceBeacon, QuiescenceBeaconOpaque, QuiescenceBeaconOpaque_TO};
 
 /// sender for connector manager messages
 pub type ManagerSender = Sender<ManagerMsg>;
+
+// FIXME: make prettier or avoid duplication in pdk mod? It's a bit out of place
+// for now.
+fn conv_cow_str(cow: RCow<str>) -> beef::Cow<str> {
+    let cow: std::borrow::Cow<str> = cow.into();
+    cow.into()
+}
 
 /// connector address
 #[derive(Clone, Debug)]
@@ -231,9 +235,9 @@ pub struct ConnectorContext {
     /// type of the connector
     pub connector_type: ConnectorType,
     /// The Quiescence Beacon
-    pub quiescence_beacon: QuiescenceBeacon,
+    pub quiescence_beacon: BoxedQuiescenceBeacon,
     /// Notifier
-    pub notifier: reconnect::ConnectionLostNotifier,
+    pub notifier: reconnect::BoxedConnectionLostNotifier,
 }
 
 impl Display for ConnectorContext {
@@ -1083,11 +1087,13 @@ const OUT_PORTS_REF: &'static [&str; 2] = &OUT_PORTS;
 pub trait RawConnector: Send {
     /// Valid input ports for the connector, by default this is `in`
     fn input_ports(&self) -> RVec<RCow<'static, str>> {
-        IN_PORTS_REF.into_iter().map(|s| RCow::from(s)).collect()
+        // FIXME: make static? `RCow` can't be const, I think.
+        IN_PORTS_REF.into_iter().map(|s| RCow::from(*s)).collect()
     }
     /// Valid output ports for the connector, by default this is `out` and `err`
     fn output_ports(&self) -> RVec<RCow<'static, str>> {
-        OUT_PORTS_REF.into_iter().map(|s| RCow::from(s)).collect()
+        // FIXME: make static? `RCow` can't be const, I think.
+        OUT_PORTS_REF.into_iter().map(|s| RCow::from(*s)).collect()
     }
 
     /// Tests if a input port is valid, by default does a case insensitive search against
@@ -1201,11 +1207,15 @@ pub struct Connector(pub BoxedRawConnector);
 impl Connector {
     #[inline]
     fn input_ports(&self) -> Vec<Cow<'static, str>> {
-        self.0.input_ports().into_iter().map(Into::into).collect()
+        self.0.input_ports().into_iter().map(conv_cow_str).collect()
     }
     #[inline]
     fn output_ports(&self) -> Vec<Cow<'static, str>> {
-        self.0.output_ports().into_iter().map(Into::into).collect()
+        self.0
+            .output_ports()
+            .into_iter()
+            .map(conv_cow_str)
+            .collect()
     }
 
     #[inline]
