@@ -42,10 +42,12 @@ use std::fmt::Display;
 use async_std::task::{self, JoinHandle};
 use beef::Cow;
 
+use self::metrics::{MetricsSender, SinkReporter, SourceReporter};
+use self::sink::{SinkAddr, SinkContext, SinkMsg, Sink, BoxedRawSink};
+use self::source::{SourceAddr, SourceContext, SourceMsg, Source, BoxedRawSource};
+use self::utils::quiescence::QuiescenceBeacon;
 use crate::config::Connector as ConnectorConfig;
-use crate::connectors::metrics::{MetricsSinkReporter, SourceReporter};
-use crate::connectors::sink::{BoxedRawSink, Sink, SinkAddr, SinkContext, SinkMsg};
-use crate::connectors::source::{BoxedRawSource, Source, SourceAddr, SourceContext, SourceMsg};
+use crate::connectors::metrics::MetricsSinkReporter;
 use crate::errors::{Error, ErrorKind, Result};
 use crate::pdk::RResult;
 use crate::pipeline;
@@ -77,11 +79,9 @@ use tremor_value::Value;
 use utils::reconnect::{Attempt, ConnectionLostNotifier, ReconnectRuntime};
 use value_trait::{Builder, Mutable};
 
-use self::metrics::MetricsSender;
 use self::quiescence::{
-    BoxedQuiescenceBeacon, QuiescenceBeacon, QuiescenceBeaconOpaque, QuiescenceBeaconOpaque_TO,
+    BoxedQuiescenceBeacon, QuiescenceBeaconOpaque, QuiescenceBeaconOpaque_TO,
 };
-use self::reconnect::{Attempt, ReconnectRuntime};
 
 /// sender for connector manager messages
 pub type ManagerSender = Sender<ManagerMsg>;
@@ -274,7 +274,8 @@ pub trait Context: Display + Clone {
 }
 
 /// connector context
-#[derive(Clone)]
+#[repr(C)]
+#[derive(Clone, StableAbi)]
 pub struct ConnectorContext {
     /// unique identifier
     pub uid: u64,
@@ -1147,11 +1148,11 @@ const OUT_PORTS_REF: &'static [&str; 2] = &OUT_PORTS;
 pub trait RawConnector: Send {
     /// Valid input ports for the connector, by default this is `in`
     fn input_ports(&self) -> RVec<RCow<'static, str>> {
-        IN_PORTS_REF.into_iter().map(|s| RCow::Borrowed(s)).collect()
+        IN_PORTS_REF.into_iter().map(|s| RCow::from(s)).collect()
     }
     /// Valid output ports for the connector, by default this is `out` and `err`
     fn output_ports(&self) -> RVec<RCow<'static, str>> {
-        OUT_PORTS_REF.into_iter().map(|s| RCow::Borrowed(s)).collect()
+        OUT_PORTS_REF.into_iter().map(|s| RCow::from(s)).collect()
     }
 
     /// Tests if a input port is valid, by default does a case insensitive search against

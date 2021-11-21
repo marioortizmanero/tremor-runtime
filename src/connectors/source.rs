@@ -28,8 +28,12 @@ use std::time::{Duration, Instant};
 use tremor_common::time::nanotime;
 use tremor_script::{pdk::EventPayload as PdkEventPayload, EventPayload, ValueAndMeta};
 
-use crate::config::{Codec as CodecConfig, Connector as ConnectorConfig};
-use crate::connectors::Msg;
+use crate::config::{
+    Codec as CodecConfig, Connector as ConnectorConfig, Preprocessor as PreprocessorConfig,
+};
+use crate::connectors::{
+    ConnectorType, Context, Msg, QuiescenceBeacon,
+};
 use crate::errors::{Error, Result};
 use crate::pdk::RResult;
 use crate::pipeline;
@@ -186,17 +190,25 @@ pub trait RawSource: Send {
 
     /// called when the source is started. This happens only once in the whole source lifecycle, before any other callbacks
     /* async */
-    fn on_start(&mut self, _ctx: &mut SourceContext) {}
+    fn on_start(&mut self, _ctx: &SourceContext) -> RResult<()> {
+        ROk(())
+    }
     /// called when the source is explicitly paused as result of a user/operator interaction
     /// in contrast to `on_cb_close` which happens automatically depending on downstream pipeline or sink connector logic.
     /* async */
-    fn on_pause(&mut self, _ctx: &mut SourceContext) {}
+    fn on_pause(&mut self, _ctx: &SourceContext) -> RResult<()> {
+        ROk(())
+    }
     /// called when the source is explicitly resumed from being paused
     /* async */
-    fn on_resume(&mut self, _ctx: &mut SourceContext) {}
+    fn on_resume(&mut self, _ctx: &SourceContext) -> RResult<()> {
+        ROk(())
+    }
     /// called when the source is stopped. This happens only once in the whole source lifecycle, as the very last callback
     /* async */
-    fn on_stop(&mut self, _ctx: &mut SourceContext) {}
+    fn on_stop(&mut self, _ctx: &SourceContext) -> RResult<()> {
+        ROk(())
+    }
 
     // circuit breaker callbacks
     /// called when we receive a `close` Circuit breaker event from any connected pipeline
@@ -204,12 +216,16 @@ pub trait RawSource: Send {
     /// Source implementations might want to close connections or signal a pause to the upstream entity it connects to if not done in the connector (the default)
     // TODO: add info of Cb event origin (port, origin_uri)?
     /* async */
-    fn on_cb_close(&mut self, _ctx: &mut SourceContext) {}
+    fn on_cb_close(&mut self, _ctx: &SourceContext) -> RResult<()> {
+        ROk(())
+    }
     /// Called when we receive a `open` Circuit breaker event from any connected pipeline
     /// This means we can start/continue polling this source for messages
     /// Source implementations might want to start establishing connections if not done in the connector (the default)
     /* async */
-    fn on_cb_open(&mut self, _ctx: &mut SourceContext) {}
+    fn on_cb_open(&mut self, _ctx: &SourceContext) -> RResult<()> {
+        ROk(())
+    }
 
     // guaranteed delivery callbacks
     /// an event has been acknowledged and can be considered delivered
@@ -224,10 +240,14 @@ pub trait RawSource: Send {
     // connectivity stuff
     /// called when connector lost connectivity
     /* async */
-    fn on_connection_lost(&mut self, _ctx: &mut SourceContext) {}
+    fn on_connection_lost(&mut self, _ctx: &SourceContext) -> RResult<()> {
+        ROk(())
+    }
     /// called when connector re-established connectivity
     /* async */
-    fn on_connection_established(&mut self, _ctx: &mut SourceContext) {}
+    fn on_connection_established(&mut self, _ctx: &SourceContext) -> RResult<()> {
+        ROk(())
+    }
 
     /// Is this source transactional or can acks/fails be ignored
     fn is_transactional(&self) -> bool;
@@ -357,28 +377,28 @@ impl Source {
     }
 
     #[inline]
-    pub async fn on_start(&mut self, ctx: &mut SourceContext) -> Result<()> {
+    pub async fn on_start(&mut self, ctx: &SourceContext) -> Result<()> {
         self.0
             .on_start(ctx)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
     #[inline]
-    pub async fn on_pause(&mut self, ctx: &mut SourceContext) -> Result<()> {
+    pub async fn on_pause(&mut self, ctx: &SourceContext) -> Result<()> {
         self.0
             .on_pause(ctx)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
     #[inline]
-    pub async fn on_resume(&mut self, ctx: &mut SourceContext) -> Result<()> {
+    pub async fn on_resume(&mut self, ctx: &SourceContext) -> Result<()> {
         self.0
             .on_resume(ctx)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
     #[inline]
-    pub async fn on_stop(&mut self, ctx: &mut SourceContext) -> Result<()> {
+    pub async fn on_stop(&mut self, ctx: &SourceContext) -> Result<()> {
         self.0
             .on_stop(ctx)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
@@ -386,14 +406,14 @@ impl Source {
     }
 
     #[inline]
-    pub async fn on_cb_close(&mut self, ctx: &mut SourceContext) -> Result<()> {
+    pub async fn on_cb_close(&mut self, ctx: &SourceContext) -> Result<()> {
         self.0
             .on_cb_close(ctx)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
     #[inline]
-    pub async fn on_cb_open(&mut self, ctx: &mut SourceContext) -> Result<()> {
+    pub async fn on_cb_open(&mut self, ctx: &SourceContext) -> Result<()> {
         self.0.on_cb_open(ctx)
     }
 
@@ -413,14 +433,14 @@ impl Source {
     }
 
     #[inline]
-    pub async fn on_connection_lost(&mut self, ctx: &mut SourceContext) -> Result<()> {
+    pub async fn on_connection_lost(&mut self, ctx: &SourceContext) -> Result<()> {
         self.0
             .on_connection_lost(ctx)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
     #[inline]
-    pub async fn on_connection_established(&mut self, ctx: &mut SourceContext) -> Result<()> {
+    pub async fn on_connection_established(&mut self, ctx: &SourceContext) -> Result<()> {
         self.0
             .on_connection_established(ctx)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>

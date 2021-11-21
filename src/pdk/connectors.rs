@@ -3,7 +3,7 @@
 //! similars.
 
 use crate::connectors::BoxedRawConnector;
-use crate::url::TremorUrl;
+use tremor_common::url::TremorUrl;
 use tremor_value::pdk::Value;
 
 use abi_stable::{

@@ -16,7 +16,9 @@
 //!
 //! With some shenanigans removed, compared to `ChannelSink`.
 
-use crate::connectors::{sink::SinkReply, ConnectorContext, StreamDone};
+use std::marker::PhantomData;
+
+use crate::connectors::{sink::SinkReply, ConnectorContext, StreamDone, reconnect::ConnectionLostNotifierOpaque, QuiescenceBeaconOpaque};
 use crate::errors::{ErrorKind, Result};
 use abi_stable::std_types::ROption::{RNone, RSome};
 use async_std::{
