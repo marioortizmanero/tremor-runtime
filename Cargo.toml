@@ -113,9 +113,10 @@ qwal = { git = "https://github.com/tremor-rs/qwal" }
 # plugin system
 abi_stable = "0.10.3"
 
-# TODO: these can be maybe removed when separating the crate for the pdk
+# FIXME: these can be maybe removed when separating the crate for the pdk
 rustls = "0.19"
 rustls-native-certs = "0.5"
+smol = "1.2.5"
 
 [dev-dependencies]
 matches = "0.1"

@@ -17,7 +17,6 @@ use crate::config::Reconnect;
 use crate::connectors::{Addr, Connectivity, Connector, ConnectorContext, Msg};
 use crate::errors::Result;
 use crate::pdk::RResult;
-use crate::url::TremorUrl;
 use abi_stable::{
     std_types::{RBox, RResult::ROk, SendRBoxError},
     StableAbi,

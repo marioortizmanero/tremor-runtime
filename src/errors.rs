@@ -97,6 +97,7 @@ error_chain! {
         Base64Error(base64::DecodeError);
         ChannelReceiveError(std::sync::mpsc::RecvError);
         Common(tremor_common::Error);
+        CsvError(csv::Error);
         DateTimeParseError(chrono::ParseError);
         FromUtf8Error(std::string::FromUtf8Error);
         InfluxEncoderError(influx::EncoderError);

@@ -30,8 +30,6 @@ use crate::pdk::RResult;
 use crate::permge::PriorityMerge;
 use crate::pipeline;
 use crate::postprocessor::{make_postprocessors, postprocess, Postprocessors};
-use crate::url::ports::IN;
-use crate::url::TremorUrl;
 use abi_stable::{
     rvec,
     std_types::{RBox, RResult::ROk, RStr, RVec, SendRBoxError},
@@ -194,34 +192,34 @@ pub trait RawSink: Send {
     // lifecycle stuff
     /// called when started
     /* async */
-    fn on_start(&mut self, _ctx: &mut SinkContext) -> RResult<()> {
+    fn on_start(&mut self, _ctx: &SinkContext) -> RResult<()> {
         ROk(())
     }
     /// called when paused
     /* async */
-    fn on_pause(&mut self, _ctx: &mut SinkContext) -> RResult<()> {
+    fn on_pause(&mut self, _ctx: &SinkContext) -> RResult<()> {
         ROk(())
     }
     /// called when resumed
     /* async */
-    fn on_resume(&mut self, _ctx: &mut SinkContext) -> RResult<()> {
+    fn on_resume(&mut self, _ctx: &SinkContext) -> RResult<()> {
         ROk(())
     }
     /// called when stopped
     /* async */
-    fn on_stop(&mut self, _ctx: &mut SinkContext) -> RResult<()> {
+    fn on_stop(&mut self, _ctx: &SinkContext) -> RResult<()> {
         ROk(())
     }
 
     // connectivity stuff
     /// called when sink lost connectivity
     /* async */
-    fn on_connection_lost(&mut self, _ctx: &mut SinkContext) -> RResult<()> {
+    fn on_connection_lost(&mut self, _ctx: &SinkContext) -> RResult<()> {
         ROk(())
     }
     /// called when sink re-established connectivity
     /* async */
-    fn on_connection_established(&mut self, _ctx: &mut SinkContext) -> RResult<()> {
+    fn on_connection_established(&mut self, _ctx: &SinkContext) -> RResult<()> {
         ROk(())
     }
 
@@ -281,25 +279,25 @@ impl Sink {
     }
 
     #[inline]
-    pub async fn on_start(&mut self, ctx: &mut SinkContext) -> Result<()> {
+    pub async fn on_start(&mut self, ctx: &SinkContext) -> Result<()> {
         self.0.on_start(ctx).map_err(Into::into).into()
     }
     #[inline]
-    pub async fn on_pause(&mut self, ctx: &mut SinkContext) -> Result<()> {
+    pub async fn on_pause(&mut self, ctx: &SinkContext) -> Result<()> {
         self.0
             .on_pause(ctx)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
     #[inline]
-    pub async fn on_resume(&mut self, ctx: &mut SinkContext) -> Result<()> {
+    pub async fn on_resume(&mut self, ctx: &SinkContext) -> Result<()> {
         self.0
             .on_resume(ctx)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
     #[inline]
-    pub async fn on_stop(&mut self, ctx: &mut SinkContext) -> Result<()> {
+    pub async fn on_stop(&mut self, ctx: &SinkContext) -> Result<()> {
         self.0
             .on_stop(ctx)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
@@ -307,14 +305,14 @@ impl Sink {
     }
 
     #[inline]
-    pub async fn on_connection_lost(&mut self, ctx: &mut SinkContext) -> Result<()> {
+    pub async fn on_connection_lost(&mut self, ctx: &SinkContext) -> Result<()> {
         self.0
             .on_connection_lost(ctx)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
     #[inline]
-    pub async fn on_connection_established(&mut self, ctx: &mut SinkContext) -> Result<()> {
+    pub async fn on_connection_established(&mut self, ctx: &SinkContext) -> Result<()> {
         self.0
             .on_connection_established(ctx)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>

@@ -19,8 +19,7 @@ use crate::onramp;
 use crate::pipeline;
 use crate::preprocessor::{make_preprocessors, preprocess, Preprocessors};
 use crate::system::World;
-use crate::url::ports::{ERR, METRICS, OUT};
-use tremor_common::url::TremorUrl;
+use tremor_common::url::{TremorUrl, ports::{ERR, METRICS, OUT}};
 
 use crate::Result;
 use async_std::channel::{unbounded, Receiver};
