@@ -114,6 +114,7 @@ qwal = { git = "https://github.com/tremor-rs/qwal" }
 abi_stable = "0.10.3"
 
 # FIXME: these can be maybe removed when separating the crate for the pdk
+async-tls = "0.11"
 rustls = "0.19"
 rustls-native-certs = "0.5"
 smol = "1.2.5"
