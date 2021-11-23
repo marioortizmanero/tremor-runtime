@@ -63,6 +63,7 @@ use abi_stable::{
     type_level::downcasting::TD_Opaque,
     StableAbi,
 };
+use async_ffi::{FfiFuture, FutureExt};
 use async_std::channel::{bounded, Sender};
 use halfbrown::{Entry, HashMap};
 use tremor_common::ids::ConnectorIdGen;
@@ -1128,21 +1129,22 @@ pub trait RawConnector: Send {
     ///
     /// This function is called exactly once upon connector creation.
     /// If this connector does not act as a source, return `Ok(None)`.
-    /* async */
     fn create_source(
         &mut self,
         _source_context: SourceContext,
-    ) -> RResult<ROption<BoxedRawSource>> {
-        ROk(RNone)
+    ) -> FfiFuture<RResult<ROption<BoxedRawSource>>> {
+        async move { ROk(RNone) }.into_ffi()
     }
 
     /// Create a sink part for this connector if applicable
     ///
     /// This function is called exactly once upon connector creation.
     /// If this connector does not act as a sink, return `Ok(None)`.
-    /* async */
-    fn create_sink(&mut self, _sink_context: SinkContext) -> RResult<ROption<BoxedRawSink>> {
-        ROk(RNone)
+    fn create_sink(
+        &mut self,
+        _sink_context: SinkContext,
+    ) -> FfiFuture<RResult<ROption<BoxedRawSink>>> {
+        async move { ROk(RNone) }.into_ffi()
     }
 
     /// Attempt to connect to the outside world.
@@ -1159,40 +1161,34 @@ pub trait RawConnector: Send {
     ///
     /// To know when to stop reading new data from the external connection, the `quiescence` beacon
     /// can be used. Call `.reading()` and `.writing()` to see if you should continue doing so, if not, just stop and rest.
-    /* async */
-    fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> RResult<bool>;
+    fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> FfiFuture<RResult<bool>>;
 
     /// called once when the connector is started
     /// `connect` will be called after this for the first time, leave connection attempts in `connect`.
-    /* async */
-    fn on_start(&mut self, _ctx: &ConnectorContext) -> RResult<()> {
-        ROk(())
+    fn on_start(&mut self, _ctx: &ConnectorContext) -> FfiFuture<RResult<()>> {
+        async move { ROk(()) }.into_ffi()
     }
 
     /// called when the connector pauses
-    /* async */
-    fn on_pause(&mut self, _ctx: &ConnectorContext) -> RResult<()> {
-        ROk(())
+    fn on_pause(&mut self, _ctx: &ConnectorContext) -> FfiFuture<RResult<()>> {
+        async move { ROk(()) }.into_ffi()
     }
     /// called when the connector resumes
-    /* async */
-    fn on_resume(&mut self, _ctx: &ConnectorContext) -> RResult<()> {
-        ROk(())
+    fn on_resume(&mut self, _ctx: &ConnectorContext) -> FfiFuture<RResult<()>> {
+        async move { ROk(()) }.into_ffi()
     }
 
     /// Drain
     ///
     /// Ensure no new events arrive at the source part of this connector when this function returns
     /// So we can safely send the `Drain` signal.
-    /* async */
-    fn on_drain(&mut self, _ctx: &ConnectorContext) -> RResult<()> {
-        ROk(())
+    fn on_drain(&mut self, _ctx: &ConnectorContext) -> FfiFuture<RResult<()>> {
+        async move { ROk(()) }.into_ffi()
     }
 
     /// called when the connector is stopped
-    /* async */
-    fn on_stop(&mut self, _ctx: &ConnectorContext) -> RResult<()> {
-        ROk(())
+    fn on_stop(&mut self, _ctx: &ConnectorContext) -> FfiFuture<RResult<()>> {
+        async move { ROk(()) }.into_ffi()
     }
 
     /// returns the default codec for this connector
@@ -1239,7 +1235,7 @@ impl Connector {
         source_context: SourceContext,
         builder: source::SourceManagerBuilder,
     ) -> Result<Option<source::SourceAddr>> {
-        match self.0.create_source(source_context.clone()) {
+        match self.0.create_source(source_context.clone()).await {
             ROk(RSome(raw_source)) => {
                 let wrapper = Source(raw_source);
                 builder.spawn(wrapper, source_context).map(Some)
@@ -1255,7 +1251,7 @@ impl Connector {
         sink_context: SinkContext,
         builder: sink::SinkManagerBuilder,
     ) -> Result<Option<sink::SinkAddr>> {
-        match self.0.create_sink(sink_context.clone()) {
+        match self.0.create_sink(sink_context.clone()).await {
             ROk(RSome(raw_sink)) => {
                 let wrapper = Sink(raw_sink);
                 builder.spawn(wrapper, sink_context).map(Some)
@@ -1269,6 +1265,7 @@ impl Connector {
     pub async fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> Result<bool> {
         self.0
             .connect(ctx, attempt)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -1277,6 +1274,7 @@ impl Connector {
     pub async fn on_start(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
             .on_start(ctx)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -1285,6 +1283,7 @@ impl Connector {
     pub async fn on_pause(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
             .on_pause(ctx)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -1293,6 +1292,7 @@ impl Connector {
     pub async fn on_resume(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
             .on_resume(ctx)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -1301,6 +1301,7 @@ impl Connector {
     pub async fn on_drain(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
             .on_drain(ctx)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -1309,6 +1310,7 @@ impl Connector {
     pub async fn on_stop(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
             .on_stop(ctx)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }

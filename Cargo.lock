@@ -293,6 +293,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-ffi"
+version = "0.3.1"
+source = "git+https://github.com/marioortizmanero/async-ffi.git?branch=sabi#f066b51241ebdf6e95dbf59cf13ec187476dc3a3"
+dependencies = [
+ "abi_stable",
+]
+
+[[package]]
 name = "async-fs"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5026,6 +5034,7 @@ dependencies = [
  "async-broadcast",
  "async-compat",
  "async-compression",
+ "async-ffi",
  "async-std",
  "async-tls",
  "async-trait",

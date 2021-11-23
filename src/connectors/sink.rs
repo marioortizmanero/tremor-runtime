@@ -36,6 +36,7 @@ use abi_stable::{
     type_level::downcasting::TD_Opaque,
     RMut, StableAbi,
 };
+use async_ffi::{FfiFuture, FutureExt};
 use async_std::channel::{bounded, unbounded, Receiver, Sender};
 use async_std::stream::StreamExt; // for .next() on PriorityMerge
 use async_std::task;
@@ -164,7 +165,6 @@ pub type BoxedRawSink = RawSink_TO<'static, RBox<()>>;
 pub trait RawSink: Send {
     /// called when receiving an event
     /// FIXME: Why are we returning a Vec but the elements don't allow to correlate what was acked
-    /* async */
     fn on_event(
         &mut self,
         input: RStr<'_>,
@@ -172,7 +172,7 @@ pub trait RawSink: Send {
         ctx: &SinkContext,
         serializer: MutEventSerializer,
         start: u64,
-    ) -> RResult<SinkReply>;
+    ) -> FfiFuture<RResult<SinkReply>>;
     /// called when receiving a signal
     /* async */
     fn on_signal(
@@ -180,8 +180,8 @@ pub trait RawSink: Send {
         _signal: PdkEvent,
         _ctx: &SinkContext,
         _serializer: MutEventSerializer,
-    ) -> RResult<SinkReply> {
-        ROk(SinkReply::default())
+    ) -> FfiFuture<RResult<SinkReply>> {
+        async move { ROk(SinkReply::default()) }.into_ffi()
     }
 
     /// Pull metrics from the sink
@@ -191,36 +191,30 @@ pub trait RawSink: Send {
 
     // lifecycle stuff
     /// called when started
-    /* async */
-    fn on_start(&mut self, _ctx: &SinkContext) -> RResult<()> {
-        ROk(())
+    fn on_start(&mut self, _ctx: &SinkContext) -> FfiFuture<RResult<()>> {
+        async move { ROk(()) }.into_ffi()
     }
     /// called when paused
-    /* async */
-    fn on_pause(&mut self, _ctx: &SinkContext) -> RResult<()> {
-        ROk(())
+    fn on_pause(&mut self, _ctx: &SinkContext) -> FfiFuture<RResult<()>> {
+        async move { ROk(()) }.into_ffi()
     }
     /// called when resumed
-    /* async */
-    fn on_resume(&mut self, _ctx: &SinkContext) -> RResult<()> {
-        ROk(())
+    fn on_resume(&mut self, _ctx: &SinkContext) -> FfiFuture<RResult<()>> {
+        async move { ROk(()) }.into_ffi()
     }
     /// called when stopped
-    /* async */
-    fn on_stop(&mut self, _ctx: &SinkContext) -> RResult<()> {
-        ROk(())
+    fn on_stop(&mut self, _ctx: &SinkContext) -> FfiFuture<RResult<()>> {
+        async move { ROk(()) }.into_ffi()
     }
 
     // connectivity stuff
     /// called when sink lost connectivity
-    /* async */
-    fn on_connection_lost(&mut self, _ctx: &SinkContext) -> RResult<()> {
-        ROk(())
+    fn on_connection_lost(&mut self, _ctx: &SinkContext) -> FfiFuture<RResult<()>> {
+        async move { ROk(()) }.into_ffi()
     }
     /// called when sink re-established connectivity
-    /* async */
-    fn on_connection_established(&mut self, _ctx: &SinkContext) -> RResult<()> {
-        ROk(())
+    fn on_connection_established(&mut self, _ctx: &SinkContext) -> FfiFuture<RResult<()>> {
+        async move { ROk(()) }.into_ffi()
     }
 
     /// if `true` events are acknowledged/failed automatically by the sink manager.
@@ -252,6 +246,7 @@ impl Sink {
         let serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
         self.0
             .on_event(input.into(), event.into(), ctx, serializer, start)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -265,6 +260,7 @@ impl Sink {
         let serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
         self.0
             .on_signal(signal.into(), ctx, serializer)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -280,12 +276,13 @@ impl Sink {
 
     #[inline]
     pub async fn on_start(&mut self, ctx: &SinkContext) -> Result<()> {
-        self.0.on_start(ctx).map_err(Into::into).into()
+        self.0.on_start(ctx).await.map_err(Into::into).into()
     }
     #[inline]
     pub async fn on_pause(&mut self, ctx: &SinkContext) -> Result<()> {
         self.0
             .on_pause(ctx)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -293,6 +290,7 @@ impl Sink {
     pub async fn on_resume(&mut self, ctx: &SinkContext) -> Result<()> {
         self.0
             .on_resume(ctx)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -300,6 +298,7 @@ impl Sink {
     pub async fn on_stop(&mut self, ctx: &SinkContext) -> Result<()> {
         self.0
             .on_stop(ctx)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -308,6 +307,7 @@ impl Sink {
     pub async fn on_connection_lost(&mut self, ctx: &SinkContext) -> Result<()> {
         self.0
             .on_connection_lost(ctx)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -315,6 +315,7 @@ impl Sink {
     pub async fn on_connection_established(&mut self, ctx: &SinkContext) -> Result<()> {
         self.0
             .on_connection_established(ctx)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -572,7 +573,7 @@ impl EventSerializer {
 /// complex types and it's easier to just make it available as an opaque type
 /// instead, with the help of `sabi_trait`.
 #[abi_stable::sabi_trait]
-pub trait EventSerializerOpaque {
+pub trait EventSerializerOpaque: Send {
     fn drop_stream(&mut self, stream_id: u64);
 
     /// clear out all streams - this can lead to data loss
