@@ -24,7 +24,8 @@ use async_std::task;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::fmt::Display;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::future;
 use tremor_common::time::nanotime;
 use tremor_script::{pdk::EventPayload as PdkEventPayload, EventPayload, ValueAndMeta};
 
@@ -172,9 +173,13 @@ pub trait RawSource: Send {
     /// pull_event did not create any events, this is needed for
     /// linked sources that require a 1:1 mapping between requests
     /// and responses, we're looking at you REST
-    /* async */
-    fn on_no_events(&mut self, _pull_id: u64, _stream: u64, _ctx: &SourceContext) -> RResult<()> {
-        ROk(())
+    fn on_no_events(
+        &mut self,
+        _pull_id: u64,
+        _stream: u64,
+        _ctx: &SourceContext,
+    ) -> FfiFuture<RResult<()>> {
+        future::ready(ROk(())).into_ffi()
     }
 
     /// Pulls custom metrics from the source
@@ -187,25 +192,21 @@ pub trait RawSource: Send {
     ///////////////////////////
 
     /// called when the source is started. This happens only once in the whole source lifecycle, before any other callbacks
-    /* async */
-    fn on_start(&mut self, _ctx: &SourceContext) -> RResult<()> {
-        ROk(())
+    fn on_start(&mut self, _ctx: &SourceContext) -> FfiFuture<RResult<()>> {
+        future::ready(ROk(())).into_ffi()
     }
     /// called when the source is explicitly paused as result of a user/operator interaction
     /// in contrast to `on_cb_close` which happens automatically depending on downstream pipeline or sink connector logic.
-    /* async */
-    fn on_pause(&mut self, _ctx: &SourceContext) -> RResult<()> {
-        ROk(())
+    fn on_pause(&mut self, _ctx: &SourceContext) -> FfiFuture<RResult<()>> {
+        future::ready(ROk(())).into_ffi()
     }
     /// called when the source is explicitly resumed from being paused
-    /* async */
-    fn on_resume(&mut self, _ctx: &SourceContext) -> RResult<()> {
-        ROk(())
+    fn on_resume(&mut self, _ctx: &SourceContext) -> FfiFuture<RResult<()>> {
+        future::ready(ROk(())).into_ffi()
     }
     /// called when the source is stopped. This happens only once in the whole source lifecycle, as the very last callback
-    /* async */
-    fn on_stop(&mut self, _ctx: &SourceContext) -> RResult<()> {
-        ROk(())
+    fn on_stop(&mut self, _ctx: &SourceContext) -> FfiFuture<RResult<()>> {
+        future::ready(ROk(())).into_ffi()
     }
 
     // circuit breaker callbacks
@@ -213,38 +214,36 @@ pub trait RawSource: Send {
     /// Expected reaction is to pause receiving messages, which is handled automatically by the runtime
     /// Source implementations might want to close connections or signal a pause to the upstream entity it connects to if not done in the connector (the default)
     // TODO: add info of Cb event origin (port, origin_uri)?
-    /* async */
-    fn on_cb_close(&mut self, _ctx: &SourceContext) -> RResult<()> {
-        ROk(())
+    fn on_cb_close(&mut self, _ctx: &SourceContext) -> FfiFuture<RResult<()>> {
+        future::ready(ROk(())).into_ffi()
     }
     /// Called when we receive a `open` Circuit breaker event from any connected pipeline
     /// This means we can start/continue polling this source for messages
     /// Source implementations might want to start establishing connections if not done in the connector (the default)
-    /* async */
-    fn on_cb_open(&mut self, _ctx: &SourceContext) -> RResult<()> {
-        ROk(())
+    fn on_cb_open(&mut self, _ctx: &SourceContext) -> FfiFuture<RResult<()>> {
+        future::ready(ROk(())).into_ffi()
     }
 
     // guaranteed delivery callbacks
     /// an event has been acknowledged and can be considered delivered
     /// multiple acks for the same set of ids are always possible
-    /* async */
-    fn ack(&mut self, _stream_id: u64, _pull_id: u64) {}
+    fn ack(&mut self, _stream_id: u64, _pull_id: u64) -> FfiFuture<RResult<()>> {
+        future::ready(ROk(())).into_ffi()
+    }
     /// an event has failed along its way and can be considered failed
     /// multiple fails for the same set of ids are always possible
-    /* async */
-    fn fail(&mut self, _stream_id: u64, _pull_id: u64) {}
+    fn fail(&mut self, _stream_id: u64, _pull_id: u64) -> FfiFuture<RResult<()>> {
+        future::ready(ROk(())).into_ffi()
+    }
 
     // connectivity stuff
     /// called when connector lost connectivity
-    /* async */
-    fn on_connection_lost(&mut self, _ctx: &SourceContext) -> RResult<()> {
-        ROk(())
+    fn on_connection_lost(&mut self, _ctx: &SourceContext) -> FfiFuture<RResult<()>> {
+        future::ready(ROk(())).into_ffi()
     }
     /// called when connector re-established connectivity
-    /* async */
-    fn on_connection_established(&mut self, _ctx: &SourceContext) -> RResult<()> {
-        ROk(())
+    fn on_connection_established(&mut self, _ctx: &SourceContext) -> FfiFuture<RResult<()>> {
+        future::ready(ROk(())).into_ffi()
     }
 
     /// Is this source transactional or can acks/fails be ignored

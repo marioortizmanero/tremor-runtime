@@ -32,11 +32,7 @@ pub use tremor_pipeline::DEFAULT_STREAM_ID;
 pub use tremor_script::EventPayload;
 pub use tremor_value::literal;
 
-/// Home of the famous metrics collector
-pub(crate) mod metrics;
-
-/// connector for checking guaranteed delivery and circuit breaker logic
-//pub(crate) mod cb;
+use std::{fmt::Display, future};
 
 /// quiescence stuff
 // FIXME: this should be reorganized after the pdk is moved to a separate crate
@@ -1200,17 +1196,19 @@ pub trait RawConnector: Send {
     fn create_source(
         &mut self,
         _source_context: SourceContext,
-    ) -> RResult<ROption<BoxedRawSource>> {
-        ROk(RNone)
+    ) -> FfiFuture<RResult<ROption<BoxedRawSource>>> {
+        future::ready(ROk(RNone)).into_ffi()
     }
 
     /// Create a sink part for this connector if applicable
     ///
     /// This function is called exactly once upon connector creation.
     /// If this connector does not act as a sink, return `Ok(None)`.
-    /* async */
-    fn create_sink(&mut self, _sink_context: SinkContext) -> RResult<ROption<BoxedRawSink>> {
-        ROk(RNone)
+    fn create_sink(
+        &mut self,
+        _sink_context: SinkContext,
+    ) -> FfiFuture<RResult<ROption<BoxedRawSink>>> {
+        future::ready(ROk(RNone)).into_ffi()
     }
 
     /// Attempt to connect to the outside world.
@@ -1232,29 +1230,30 @@ pub trait RawConnector: Send {
 
     /// called once when the connector is started
     /// `connect` will be called after this for the first time, leave connection attempts in `connect`.
-    /* async */
-    fn on_start(&mut self, _ctx: &ConnectorContext) -> RResult<ConnectorState> {
-        ROk(ConnectorState::Running)
+    fn on_start(&mut self, _ctx: &ConnectorContext) -> FfiFuture<RResult<()>> {
+        future::ready(ROk(())).into_ffi()
     }
 
     /// called when the connector pauses
-    /* async */
-    fn on_pause(&mut self, _ctx: &ConnectorContext) {}
+    fn on_pause(&mut self, _ctx: &ConnectorContext) -> FfiFuture<RResult<()>> {
+        future::ready(ROk(())).into_ffi()
+    }
     /// called when the connector resumes
-    /* async */
-    fn on_resume(&mut self, _ctx: &ConnectorContext) {}
+    fn on_resume(&mut self, _ctx: &ConnectorContext) -> FfiFuture<RResult<()>> {
+        future::ready(ROk(())).into_ffi()
+    }
 
     /// Drain
     ///
     /// Ensure no new events arrive at the source part of this connector when this function returns
     /// So we can safely send the `Drain` signal.
-    /* async */
-    fn on_drain(&mut self, _ctx: &ConnectorContext) {}
+    fn on_drain(&mut self, _ctx: &ConnectorContext) -> FfiFuture<RResult<()>> {
+        future::ready(ROk(())).into_ffi()
+    }
 
     /// called when the connector is stopped
-    /* async */
-    fn on_stop(&mut self, _ctx: &ConnectorContext) -> RResult<()> {
-        ROk(())
+    fn on_stop(&mut self, _ctx: &ConnectorContext) -> FfiFuture<RResult<()>> {
+        future::ready(ROk(())).into_ffi()
     }
 
     /// returns the default codec for this connector
