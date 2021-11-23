@@ -48,6 +48,7 @@ use std::borrow::Borrow;
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Display;
+use std::future;
 use tremor_common::time::nanotime;
 use tremor_common::url::{ports::IN, TremorUrl};
 use tremor_pipeline::{
@@ -181,7 +182,7 @@ pub trait RawSink: Send {
         _ctx: &SinkContext,
         _serializer: MutEventSerializer,
     ) -> FfiFuture<RResult<SinkReply>> {
-        async move { ROk(SinkReply::default()) }.into_ffi()
+        future::ready(ROk(SinkReply::default())).into_ffi()
     }
 
     /// Pull metrics from the sink
@@ -192,29 +193,29 @@ pub trait RawSink: Send {
     // lifecycle stuff
     /// called when started
     fn on_start(&mut self, _ctx: &SinkContext) -> FfiFuture<RResult<()>> {
-        async move { ROk(()) }.into_ffi()
+        future::ready(ROk(())).into_ffi()
     }
     /// called when paused
     fn on_pause(&mut self, _ctx: &SinkContext) -> FfiFuture<RResult<()>> {
-        async move { ROk(()) }.into_ffi()
+        future::ready(ROk(())).into_ffi()
     }
     /// called when resumed
     fn on_resume(&mut self, _ctx: &SinkContext) -> FfiFuture<RResult<()>> {
-        async move { ROk(()) }.into_ffi()
+        future::ready(ROk(())).into_ffi()
     }
     /// called when stopped
     fn on_stop(&mut self, _ctx: &SinkContext) -> FfiFuture<RResult<()>> {
-        async move { ROk(()) }.into_ffi()
+        future::ready(ROk(())).into_ffi()
     }
 
     // connectivity stuff
     /// called when sink lost connectivity
     fn on_connection_lost(&mut self, _ctx: &SinkContext) -> FfiFuture<RResult<()>> {
-        async move { ROk(()) }.into_ffi()
+        future::ready(ROk(())).into_ffi()
     }
     /// called when sink re-established connectivity
     fn on_connection_established(&mut self, _ctx: &SinkContext) -> FfiFuture<RResult<()>> {
-        async move { ROk(()) }.into_ffi()
+        future::ready(ROk(())).into_ffi()
     }
 
     /// if `true` events are acknowledged/failed automatically by the sink manager.
