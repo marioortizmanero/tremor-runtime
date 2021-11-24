@@ -51,14 +51,14 @@ fn conv_u8_inv(cow: RCow<[u8]>) -> beef::Cow<[u8]> {
     cow.into()
 }
 
-/// Temporary type to represent a `Value` in the PDK interface. It's meant to be
-/// converted to the original [`Value`] whenever its full functionality is needed,
-/// and then back to `PdkValue` in order to pass it through the FFI boundary.
+/// Temporary type to represent a [`Value`] in the PDK interface. It's meant to
+/// be converted to the original `Value` whenever its full functionality is
+/// needed, and then back to `PdkValue` in order to pass it through the FFI
+/// boundary.
 ///
-/// Refer to the [`tremor_value::pdk`] top-level documentation for more
-/// information.
+/// Refer to the [`crate::pdk`] top-level documentation for more information.
 ///
-/// [`Value`]: [`tremor_value::Value`]
+/// [`Value`]: [`crate::Value`]
 #[repr(C)]
 #[derive(Debug, Clone, StableAbi)]
 pub enum PdkValue<'value> {
@@ -74,7 +74,8 @@ pub enum PdkValue<'value> {
     Bytes(Bytes<'value>),
 }
 
-/// Easily converting the PDK value to the original one.
+/// Easily converting the original type to the PDK one to pass it through the
+/// FFI boundary.
 impl<'value> From<Value<'value>> for PdkValue<'value> {
     fn from(original: Value<'value>) -> Self {
         match original {
@@ -103,7 +104,8 @@ impl<'value> From<Value<'value>> for PdkValue<'value> {
     }
 }
 
-/// Easily converting the original value to the PDK one.
+/// Easily converting the PDK type to the original one to access its full
+/// functionality.
 impl<'value> From<PdkValue<'value>> for Value<'value> {
     fn from(original: PdkValue<'value>) -> Self {
         match original {
