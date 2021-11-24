@@ -15,22 +15,19 @@ use abi_stable::{
     type_level::downcasting::TD_Opaque,
 };
 use async_ffi::{FfiFuture, FutureExt};
-use tremor_pdk::{
-    RResult,
-    artefacts::connectors::{
-    value::Value,
-};
-use tremor_script::{EventOriginUri, EventPayload};
-use tremor_common::url::TremorUrl;
+use tremor_common::{time::nanotime, url::TremorUrl};
 use tremor_pipeline::DEFAULT_STREAM_ID;
 use tremor_runtime::{
     connectors::{
-        utils::{hostname, literal, nanotime},
-        reconnect::Attempt,
         source::{BoxedRawSource, RawSource, SourceContext, SourceReply},
+        utils::reconnect::Attempt,
         BoxedRawConnector, ConnectorContext, RawConnector,
     },
+    pdk::RResult,
+    utils::hostname,
 };
+use tremor_script::{EventOriginUri, EventPayload};
+use tremor_value::{literal, pdk::PdkValue};
 
 #[derive(Debug, Clone)]
 struct Metronome {
@@ -109,7 +106,7 @@ impl RawSource for Metronome {
 
 /// Exports the metronome as a connector trait object
 #[sabi_extern_fn]
-pub fn new(_id: &TremorUrl, _config: ROption<Value>) -> BoxedRawConnector {
+pub fn new(_id: &TremorUrl, _config: ROption<PdkValue>) -> BoxedRawConnector {
     // TODO: take from config
     let interval = 1;
 

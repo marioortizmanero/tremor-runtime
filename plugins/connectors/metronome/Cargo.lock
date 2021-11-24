@@ -2053,7 +2053,11 @@ version = "0.1.0"
 dependencies = [
  "abi_stable",
  "async-ffi",
+ "tremor-common",
+ "tremor-pipeline",
  "tremor-runtime",
+ "tremor-script",
+ "tremor-value",
 ]
 
 [[package]]
@@ -2979,10 +2983,10 @@ dependencies = [
 
 [[package]]
 name = "simd-json-derive"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3221374cc85242d6da1fea48d5b6edb417cf79cf9f6d6c636cd8425161faa096"
+version = "0.2.3-alpha.0"
+source = "git+https://github.com/marioortizmanero/simd-json-derive.git?branch=abi-stable#9ed3dd1ba61925c0d72940cc67c6fb6a0110555c"
 dependencies = [
+ "abi_stable",
  "chrono",
  "itoa",
  "ryu",
@@ -2993,9 +2997,8 @@ dependencies = [
 
 [[package]]
 name = "simd-json-derive-int"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "929b468389809e93768ab7962f21aad7911774d472aca6211e332f74824c4635"
+version = "0.2.2-alpha.0"
+source = "git+https://github.com/marioortizmanero/simd-json-derive.git?branch=abi-stable#9ed3dd1ba61925c0d72940cc67c6fb6a0110555c"
 dependencies = [
  "proc-macro2",
  "quote",
