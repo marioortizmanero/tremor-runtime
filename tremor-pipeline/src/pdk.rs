@@ -3,10 +3,10 @@
 //! through the plugin interface. Thus, no functionality is implemented other
 //! than the conversion from and to the original type.
 
-use tremor_pipeline::{CbAction, EventId, EventOriginUri, PrimStr, SignalKind, TrackedPullIds};
+use crate::{CbAction, EventId, EventOriginUri, PrimStr, SignalKind, TrackedPullIds};
 
-use crate::script::EventPayload;
-use crate::value::Value;
+use tremor_script::pdk::EventPayload;
+use tremor_value::pdk::Value;
 
 use abi_stable::{
     std_types::{RHashMap, ROption, RString, RVec, Tuple2},

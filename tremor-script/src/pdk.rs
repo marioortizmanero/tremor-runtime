@@ -5,8 +5,7 @@
 
 use tremor_value::pdk::Value;
 
-use std::pin::Pin;
-use std::sync::Arc;
+use std::{pin::Pin, sync::Arc};
 
 use abi_stable::{
     std_types::{RArc, RVec},
@@ -81,4 +80,3 @@ impl From<EventPayload> for crate::EventPayload {
         }
     }
 }
-

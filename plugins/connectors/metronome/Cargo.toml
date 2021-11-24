@@ -14,8 +14,15 @@ name = "connector_metronome"
 crate-type = ["cdylib"]
 
 [dependencies]
+# FIXME: plugins should be able to depend on `tremor-pdk` only after everything
+# is moved around and cleaned up
+tremor-pdk = { version = "0.1.0", path = "../../../tremor-pdk" }
+tremor-script = { version = "0.11.4", path = "../../../tremor-script" }
+tremor-pipeline = { version = "0.11.4", path = "../../../tremor-pipeline" }
+tremor-common = { version = "0.11.4", path = "../../../tremor-common" }
+tremor-runtime = { version = "0.11.4", path = "../../../" }
+
 abi_stable = { version = "0.10", default-features = false }
-tremor-pdk = { version = "0.1.0", path = "../../../" }
 # FIXME: clean up after https://github.com/oxalica/async-ffi/pull/10 is merged
 async-ffi = { version = "0.3", features = ["sabi"], git = "https://github.com/marioortizmanero/async-ffi.git", branch = "sabi" }
 

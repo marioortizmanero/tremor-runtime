@@ -44,7 +44,7 @@ use self::source::{BoxedRawSource, Source, SourceAddr, SourceContext, SourceMsg}
 use self::utils::quiescence::QuiescenceBeacon;
 use crate::config::Connector as ConnectorConfig;
 use crate::errors::{Error, ErrorKind, Result};
-use tremor_pdk::RResult;
+use crate::pdk::RResult;
 use crate::pipeline;
 use crate::registry::instance::InstanceState;
 use crate::system::World;
@@ -64,7 +64,10 @@ use async_ffi::{FfiFuture, FutureExt};
 use async_std::channel::{bounded, Sender};
 use halfbrown::{Entry, HashMap};
 use tremor_common::ids::ConnectorIdGen;
-use tremor_common::url::ports::{ERR, IN, OUT};
+use tremor_common::url::{
+    ports::{ERR, IN, OUT},
+    TremorUrl,
+};
 use tremor_value::Value;
 use utils::reconnect::{Attempt, ReconnectRuntime};
 use value_trait::{Builder, Mutable};

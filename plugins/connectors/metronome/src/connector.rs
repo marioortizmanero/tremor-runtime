@@ -15,15 +15,21 @@ use abi_stable::{
     type_level::downcasting::TD_Opaque,
 };
 use async_ffi::{FfiFuture, FutureExt};
+use tremor_pdk::{
+    RResult,
+    artefacts::connectors::{
+    value::Value,
+};
+use tremor_script::{EventOriginUri, EventPayload};
+use tremor_common::url::TremorUrl;
+use tremor_pipeline::DEFAULT_STREAM_ID;
 use tremor_runtime::{
     connectors::{
-        hostname, literal, nanotime,
+        utils::{hostname, literal, nanotime},
         reconnect::Attempt,
         source::{BoxedRawSource, RawSource, SourceContext, SourceReply},
-        BoxedRawConnector, ConnectorContext, EventPayload, RawConnector, TremorUrl,
-        DEFAULT_STREAM_ID,
+        BoxedRawConnector, ConnectorContext, RawConnector,
     },
-    pdk::{pipeline::EventOriginUri, value::Value, RResult},
 };
 
 #[derive(Debug, Clone)]

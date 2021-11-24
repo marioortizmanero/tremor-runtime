@@ -4952,17 +4952,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tremor-pdk"
-version = "0.1.0"
-dependencies = [
- "abi_stable",
- "tremor-pipeline",
- "tremor-runtime",
- "tremor-script",
- "tremor-value",
-]
-
-[[package]]
 name = "tremor-pipeline"
 version = "0.11.4"
 dependencies = [
