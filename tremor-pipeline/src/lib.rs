@@ -302,15 +302,22 @@ impl CbAction {
 ///
 /// `EventId` also tracks min and max event ids for other events in order to support batched and grouped events
 /// and facilitate CB mechanics
+#[repr(C)]
 #[derive(
-    Debug, Clone, PartialEq, Default, simd_json_derive::Serialize, simd_json_derive::Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Default,
+    simd_json_derive::Serialize,
+    simd_json_derive::Deserialize,
+    StableAbi,
 )]
 pub struct EventId {
     source_id: u64,
     stream_id: u64,
     event_id: u64,
     pull_id: u64,
-    tracked_pull_ids: Vec<TrackedPullIds>,
+    tracked_pull_ids: RVec<TrackedPullIds>,
 }
 
 /// default stream id if streams dont make sense
@@ -327,7 +334,7 @@ impl EventId {
             stream_id,
             event_id,
             pull_id,
-            tracked_pull_ids: Vec::with_capacity(0),
+            tracked_pull_ids: RVec::with_capacity(0),
         }
     }
 

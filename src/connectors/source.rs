@@ -20,8 +20,8 @@ use either::Either;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::fmt::Display;
-use std::time::Duration;
 use std::future;
+use std::time::Duration;
 use tremor_common::time::nanotime;
 use tremor_script::{pdk::EventPayload as PdkEventPayload, EventPayload, ValueAndMeta};
 
@@ -54,8 +54,7 @@ use tremor_common::url::{
     TremorUrl,
 };
 use tremor_pipeline::{
-    pdk::EventOriginUri as PdkEventOriginUri, CbAction, Event, EventId, EventIdGenerator,
-    EventOriginUri, DEFAULT_STREAM_ID,
+    CbAction, Event, EventId, EventIdGenerator, EventOriginUri, DEFAULT_STREAM_ID,
 };
 use tremor_value::{literal, pdk::Value as PdkValue, Value};
 use value_trait::Builder;
@@ -109,7 +108,7 @@ pub enum SourceReply {
     /// A normal data event with a `Vec<u8>` for data
     Data {
         /// origin uri
-        origin_uri: PdkEventOriginUri,
+        origin_uri: EventOriginUri,
         /// the data
         data: RVec<u8>,
         /// metadata associated with this data
@@ -121,7 +120,7 @@ pub enum SourceReply {
     },
     // an already structured event payload
     Structured {
-        origin_uri: PdkEventOriginUri,
+        origin_uri: EventOriginUri,
         payload: PdkEventPayload,
         stream: u64,
         /// Port to send to, defaults to `out`
@@ -130,7 +129,7 @@ pub enum SourceReply {
     // a bunch of separated `Vec<u8>` with optional metadata
     // for when the source knows where boundaries are, maybe because it receives chunks already
     BatchData {
-        origin_uri: PdkEventOriginUri,
+        origin_uri: EventOriginUri,
         batch_data: RVec<Tuple2<RVec<u8>, ROption<PdkValue<'static>>>>,
         /// Port to send to, defaults to `out`
         port: ROption<RCow<'static, str>>,
@@ -142,7 +141,7 @@ pub enum SourceReply {
     /// This might result in additional events being flushed from
     /// preprocessors, that is why we have `origin_uri` and `meta`
     EndStream {
-        origin_uri: PdkEventOriginUri,
+        origin_uri: EventOriginUri,
         stream_id: u64,
         meta: ROption<PdkValue<'static>>,
     },

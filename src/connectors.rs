@@ -71,9 +71,7 @@ use async_ffi::{FfiFuture, FutureExt};
 use async_std::channel::{bounded, Sender};
 use halfbrown::{Entry, HashMap};
 use tremor_common::ids::ConnectorIdGen;
-use tremor_common::url::{
-    ports::{ERR, IN, OUT},
-};
+use tremor_common::url::ports::{ERR, IN, OUT};
 use tremor_value::Value;
 use utils::reconnect::{Attempt, ReconnectRuntime};
 use value_trait::{Builder, Mutable};
