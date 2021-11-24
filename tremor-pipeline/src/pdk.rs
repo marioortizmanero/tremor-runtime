@@ -1,9 +1,11 @@
-//! FFI-safe types to communicate with the plugins. They're meant to be
-//! converted to/from the original type and back so that it can be passed
-//! through the plugin interface. Thus, no functionality is implemented other
-//! than the conversion from and to the original type.
+//! Similarly to [`PdkValue`], the types defined in this module are only meant
+//! to be used temporarily for the plugin interface. They can be converted to
+//! their original types for full functionality, and back to the PDK version in
+//! order to pass them to the runtime.
+//!
+//! [`PdkValue`]: [`tremor_value::pdk::PdkValue`]
 
-use crate::{CbAction, Event, EventId, EventOriginUri, PrimStr, SignalKind, TrackedPullIds};
+use crate::{CbAction, Event, EventId, EventOriginUri, PrimStr, SignalKind, TrackedPullIds, OpMeta};
 
 use tremor_script::pdk::PdkEventPayload;
 use tremor_value::{pdk::PdkValue, Value};
@@ -13,18 +15,22 @@ use abi_stable::{
     StableAbi,
 };
 
-// FIXME: we can probably avoid this after `simd_json_derive` works for
-// `abi_stable`.
+/// Temporary type to represent [`OpMeta`] in the PDK interface. Refer to
+/// the [`crate::pdk`] top-level documentation for more information.
+///
+/// [`OpMeta`]: [`crate::OpMeta`]
+#[repr(C)]
+#[derive(Debug, Clone, StableAbi)]
 // FIXME: this used to be a binary tree map, not a hash map. Not sure if that
 // was because of performance or anything similar, but `abi_stable` only has
 // hash maps so it's left that way for now.
-#[repr(C)]
-#[derive(Debug, Clone, StableAbi)]
-pub struct OpMeta(RHashMap<PrimStr<u64>, PdkValue<'static>>);
+pub struct PdkOpMeta(RHashMap<PrimStr<u64>, PdkValue<'static>>);
 
-impl From<crate::OpMeta> for OpMeta {
-    fn from(original: crate::OpMeta) -> Self {
-        OpMeta(
+/// Easily converting the original type to the PDK one to pass it through the
+/// FFI boundary.
+impl From<OpMeta> for PdkOpMeta {
+    fn from(original: OpMeta) -> Self {
+        PdkOpMeta(
             original
                 .0
                 .into_iter()
@@ -38,9 +44,11 @@ impl From<crate::OpMeta> for OpMeta {
     }
 }
 
-impl From<OpMeta> for crate::OpMeta {
-    fn from(original: OpMeta) -> Self {
-        crate::OpMeta(
+/// Easily converting the PDK type to the original one to access its full
+/// functionality.
+impl From<PdkOpMeta> for OpMeta {
+    fn from(original: PdkOpMeta) -> Self {
+        OpMeta(
             original
                 .0
                 .into_iter()
@@ -54,6 +62,10 @@ impl From<OpMeta> for crate::OpMeta {
     }
 }
 
+/// Temporary type to represent [`Event`] in the PDK interface. Refer to
+/// the [`crate::pdk`] top-level documentation for more information.
+///
+/// [`Event`]: [`crate::Event`]
 #[repr(C)]
 #[derive(Debug, Clone, StableAbi)]
 pub struct PdkEvent {
@@ -73,11 +85,13 @@ pub struct PdkEvent {
     /// Circuit breaker action
     pub cb: CbAction,
     /// Metadata for operators
-    pub op_meta: OpMeta,
+    pub op_meta: PdkOpMeta,
     /// this needs transactional data
     pub transactional: bool,
 }
 
+/// Easily converting the original type to the PDK one to pass it through the
+/// FFI boundary.
 impl From<Event> for PdkEvent {
     fn from(original: Event) -> Self {
         PdkEvent {
@@ -94,6 +108,8 @@ impl From<Event> for PdkEvent {
     }
 }
 
+/// Easily converting the PDK type to the original one to access its full
+/// functionality.
 impl From<PdkEvent> for Event {
     fn from(original: PdkEvent) -> Self {
         Event {
