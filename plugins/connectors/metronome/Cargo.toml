@@ -14,12 +14,11 @@ name = "connector_metronome"
 crate-type = ["cdylib"]
 
 [dependencies]
-# FIXME: plugins should be able to depend on `tremor-pdk` only after everything
-# is moved around and cleaned up
-tremor-pdk = { version = "0.1.0", path = "../../../tremor-pdk" }
+# FIXME: plugins should be able to *only* depend on `tremor-pdk`
 tremor-script = { version = "0.11.4", path = "../../../tremor-script" }
 tremor-pipeline = { version = "0.11.4", path = "../../../tremor-pipeline" }
 tremor-common = { version = "0.11.4", path = "../../../tremor-common" }
+tremor-value = { version = "0.3.2", path = "../../../tremor-value" }
 tremor-runtime = { version = "0.11.4", path = "../../../" }
 
 abi_stable = { version = "0.10", default-features = false }
@@ -30,3 +29,6 @@ async-ffi = { version = "0.3", features = ["sabi"], git = "https://github.com/ma
 # FIXME: update to crates.io when this is added to a new version:
 # https://github.com/rodrimati1992/abi_stable_crates/pull/68
 abi_stable = { git = "https://github.com/rodrimati1992/abi_stable_crates.git" }
+# FIXME: update to crates.io when this is added to a new version:
+# https://github.com/simd-lite/simd-json-derive/pull/9
+simd-json-derive = { git = "https://github.com/marioortizmanero/simd-json-derive.git", branch = "abi-stable" }

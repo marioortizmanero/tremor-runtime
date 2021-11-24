@@ -3,7 +3,7 @@
 mod connector;
 
 use abi_stable::{export_root_module, prefix_type::PrefixTypeTrait};
-use tremor_runtime::pdk::{ConnectorMod, ConnectorMod_Ref};
+use tremor_runtime::pdk::connectors::{ConnectorMod, ConnectorMod_Ref};
 
 /// Exports the root module of this library.
 ///
