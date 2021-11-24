@@ -27,7 +27,7 @@ use std::fmt::Display;
 use std::future;
 use std::time::Duration;
 use tremor_common::time::nanotime;
-use tremor_script::{pdk::EventPayload as PdkEventPayload, EventPayload, ValueAndMeta};
+use tremor_script::{pdk::PdkEventPayload, EventPayload, ValueAndMeta};
 
 use crate::config::{
     Codec as CodecConfig, Connector as ConnectorConfig, Preprocessor as PreprocessorConfig,
@@ -56,7 +56,7 @@ use tremor_common::url::ports::{ERR, OUT};
 use tremor_pipeline::{
     CbAction, Event, EventId, EventIdGenerator, EventOriginUri, DEFAULT_STREAM_ID,
 };
-use tremor_value::{literal, pdk::Value as PdkValue, Value};
+use tremor_value::{literal, pdk::PdkValue, Value};
 use value_trait::Builder;
 
 use super::metrics::SourceReporter;

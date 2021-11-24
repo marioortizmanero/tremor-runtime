@@ -51,11 +51,11 @@ use std::future;
 use tremor_common::time::nanotime;
 use tremor_common::url::{ports::IN, TremorUrl};
 use tremor_pipeline::{
-    pdk::Event as PdkEvent, CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID,
+    pdk::PdkEvent, CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID,
 };
-use tremor_script::{pdk::EventPayload as PdkEventPayload, EventPayload};
+use tremor_script::{pdk::PdkEventPayload, EventPayload};
 
-use tremor_value::{pdk::Value as PdkValue, Value};
+use tremor_value::{pdk::PdkValue, Value};
 
 pub use self::channel_sink::SinkMeta;
 

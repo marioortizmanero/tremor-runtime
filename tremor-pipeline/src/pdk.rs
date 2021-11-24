@@ -3,10 +3,10 @@
 //! through the plugin interface. Thus, no functionality is implemented other
 //! than the conversion from and to the original type.
 
-use crate::{CbAction, EventId, EventOriginUri, PrimStr, SignalKind, TrackedPullIds};
+use crate::{CbAction, Event, EventId, EventOriginUri, PrimStr, SignalKind, TrackedPullIds};
 
-use tremor_script::pdk::EventPayload;
-use tremor_value::pdk::Value;
+use tremor_script::pdk::PdkEventPayload;
+use tremor_value::{pdk::PdkValue, Value};
 
 use abi_stable::{
     std_types::{RHashMap, ROption, RString, RVec, Tuple2},
@@ -20,7 +20,7 @@ use abi_stable::{
 // hash maps so it's left that way for now.
 #[repr(C)]
 #[derive(Debug, Clone, StableAbi)]
-pub struct OpMeta(RHashMap<PrimStr<u64>, Value<'static>>);
+pub struct OpMeta(RHashMap<PrimStr<u64>, PdkValue<'static>>);
 
 impl From<crate::OpMeta> for OpMeta {
     fn from(original: crate::OpMeta) -> Self {
@@ -29,8 +29,8 @@ impl From<crate::OpMeta> for OpMeta {
                 .0
                 .into_iter()
                 .map(|(k, v)| {
-                    let v: tremor_value::Value = v.into();
                     let v: Value = v.into();
+                    let v: PdkValue = v.into();
                     (k, v)
                 })
                 .collect(),
@@ -45,7 +45,7 @@ impl From<OpMeta> for crate::OpMeta {
                 .0
                 .into_iter()
                 .map(|Tuple2(k, v)| {
-                    let v: tremor_value::Value = v.into();
+                    let v: Value = v.into();
                     let v: simd_json::OwnedValue = v.into();
                     (k, v)
                 })
@@ -56,11 +56,11 @@ impl From<OpMeta> for crate::OpMeta {
 
 #[repr(C)]
 #[derive(Debug, Clone, StableAbi)]
-pub struct Event {
+pub struct PdkEvent {
     /// The event ID
     pub id: EventId,
     /// The event Data
-    pub data: EventPayload,
+    pub data: PdkEventPayload,
     /// Nanoseconds at when the event was ingested
     pub ingest_ns: u64,
     /// URI to identify the origin of the event
@@ -78,9 +78,9 @@ pub struct Event {
     pub transactional: bool,
 }
 
-impl From<crate::Event> for Event {
-    fn from(original: crate::Event) -> Self {
-        Event {
+impl From<Event> for PdkEvent {
+    fn from(original: Event) -> Self {
+        PdkEvent {
             id: original.id,
             data: original.data.into(),
             ingest_ns: original.ingest_ns,
@@ -94,9 +94,9 @@ impl From<crate::Event> for Event {
     }
 }
 
-impl From<Event> for crate::Event {
-    fn from(original: Event) -> Self {
-        crate::Event {
+impl From<PdkEvent> for Event {
+    fn from(original: PdkEvent) -> Self {
+        Event {
             id: original.id.into(),
             data: original.data.into(),
             ingest_ns: original.ingest_ns,
