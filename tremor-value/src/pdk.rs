@@ -1,3 +1,5 @@
+use crate::Value;
+
 use abi_stable::{
     std_types::{RBox, RCow, RHashMap, RVec, Tuple2},
     StableAbi,
@@ -5,23 +7,23 @@ use abi_stable::{
 use value_trait::StaticNode;
 
 /// Representation of a JSON object
-pub type Object<'value> = RHashMap<RCow<'value, str>, Value<'value>>;
+pub type Object<'value> = RHashMap<RCow<'value, str>, PdkValue<'value>>;
 /// Bytes
 pub type Bytes<'value> = RCow<'value, [u8]>;
 
 /// FFI-safe `Value` type to communicate with the plugins. It's meant to be
-/// converted to/from the original `crate::Value` type and back so that it can
+/// converted to/from the original `Value` type and back so that it can
 /// can be passed through the plugin interface. Thus, no functionality is
 /// implemented other than the conversion from and to the original type.
 #[repr(C)]
 #[derive(Debug, Clone, StableAbi)]
-pub enum Value<'value> {
+pub enum PdkValue<'value> {
     /// Static values
     Static(StaticNode),
     /// string type
     String(RCow<'value, str>),
     /// array type
-    Array(RVec<Value<'value>>),
+    Array(RVec<PdkValue<'value>>),
     /// object type
     Object(RBox<Object<'value>>),
     /// A binary type
@@ -29,30 +31,30 @@ pub enum Value<'value> {
 }
 
 /// Easily converting the PDK value to the original one.
-impl<'value> From<crate::Value<'value>> for Value<'value> {
-    fn from(original: crate::Value<'value>) -> Self {
+impl<'value> From<Value<'value>> for PdkValue<'value> {
+    fn from(original: Value<'value>) -> Self {
         match original {
             // No conversion needed; `StaticNode` implements `StableAbi`
-            crate::Value::Static(s) => Value::Static(s),
+            Value::Static(s) => PdkValue::Static(s),
             // This conversion is cheap
-            crate::Value::String(s) => Value::String(conv_str(s)),
+            Value::String(s) => PdkValue::String(conv_str(s)),
             // This unfortunately requires iterating the array
-            crate::Value::Array(a) => {
+            Value::Array(a) => {
                 let a = a.into_iter().map(Into::into).collect();
-                Value::Array(a)
+                PdkValue::Array(a)
             }
             // This unfortunately requires iterating the map and a new
             // allocation
-            crate::Value::Object(m) => {
+            Value::Object(m) => {
                 let m: halfbrown::HashMap<_, _> = *m;
                 let m = m
                     .into_iter()
                     .map(|(k, v)| (conv_str(k), v.into()))
                     .collect();
-                Value::Object(RBox::new(m))
+                PdkValue::Object(RBox::new(m))
             }
             // This conversion is cheap
-            crate::Value::Bytes(b) => Value::Bytes(conv_u8(b)),
+            Value::Bytes(b) => PdkValue::Bytes(conv_u8(b)),
         }
     }
 }
@@ -78,30 +80,30 @@ fn conv_u8_inv(cow: RCow<[u8]>) -> beef::Cow<[u8]> {
 }
 
 /// Easily converting the original value to the PDK one.
-impl<'value> From<Value<'value>> for crate::Value<'value> {
-    fn from(original: Value<'value>) -> Self {
+impl<'value> From<PdkValue<'value>> for Value<'value> {
+    fn from(original: PdkValue<'value>) -> Self {
         match original {
             // No conversion needed; `StaticNode` implements `StableAbi`
-            Value::Static(s) => crate::Value::Static(s),
+            PdkValue::Static(s) => Value::Static(s),
             // This conversion is cheap
-            Value::String(s) => crate::Value::String(conv_str_inv(s)),
+            PdkValue::String(s) => Value::String(conv_str_inv(s)),
             // This unfortunately requires iterating the array
-            Value::Array(a) => {
+            PdkValue::Array(a) => {
                 let a = a.into_iter().map(Into::into).collect();
-                crate::Value::Array(a)
+                Value::Array(a)
             }
             // This unfortunately requires iterating the map and a new
             // allocation
-            Value::Object(m) => {
+            PdkValue::Object(m) => {
                 let m = (*m).clone(); // FIXME: remove this super ugly clone
                 let m = m
                     .into_iter()
                     .map(|Tuple2(k, v)| (conv_str_inv(k), v.into()))
                     .collect();
-                crate::Value::Object(Box::new(m))
+                Value::Object(Box::new(m))
             }
             // This conversion is cheap
-            Value::Bytes(b) => crate::Value::Bytes(conv_u8_inv(b)),
+            PdkValue::Bytes(b) => Value::Bytes(conv_u8_inv(b)),
         }
     }
 }

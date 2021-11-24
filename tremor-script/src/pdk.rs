@@ -3,7 +3,7 @@
 //! through the plugin interface. Thus, no functionality is implemented other
 //! than the conversion from and to the original type.
 
-use tremor_value::pdk::Value;
+use crate::{EventPayload, ValueAndMeta};
 
 use std::{pin::Pin, sync::Arc};
 
@@ -11,16 +11,26 @@ use abi_stable::{
     std_types::{RArc, RVec},
     StableAbi,
 };
+use tremor_value::pdk::PdkValue;
 
 #[repr(C)]
 #[derive(Debug, Clone, StableAbi)]
-pub struct ValueAndMeta<'event> {
-    v: Value<'event>,
-    m: Value<'event>,
+pub struct PdkValueAndMeta<'event> {
+    v: PdkValue<'event>,
+    m: PdkValue<'event>,
 }
 
-impl<'event> From<crate::ValueAndMeta<'event>> for ValueAndMeta<'event> {
-    fn from(original: crate::ValueAndMeta<'event>) -> Self {
+impl<'event> From<ValueAndMeta<'event>> for PdkValueAndMeta<'event> {
+    fn from(original: ValueAndMeta<'event>) -> Self {
+        PdkValueAndMeta {
+            v: original.v.into(),
+            m: original.m.into(),
+        }
+    }
+}
+
+impl<'event> From<PdkValueAndMeta<'event>> for ValueAndMeta<'event> {
+    fn from(original: PdkValueAndMeta<'event>) -> Self {
         ValueAndMeta {
             v: original.v.into(),
             m: original.m.into(),
@@ -28,25 +38,16 @@ impl<'event> From<crate::ValueAndMeta<'event>> for ValueAndMeta<'event> {
     }
 }
 
-impl<'event> From<ValueAndMeta<'event>> for crate::ValueAndMeta<'event> {
-    fn from(original: ValueAndMeta<'event>) -> Self {
-        crate::ValueAndMeta {
-            v: original.v.into(),
-            m: original.m.into(),
-        }
-    }
-}
-
 #[repr(C)]
 #[derive(Debug, Clone, StableAbi)]
-pub struct EventPayload {
+pub struct PdkEventPayload {
     /// The vector of raw input values
     raw: RVec<RArc<Pin<RVec<u8>>>>,
-    data: ValueAndMeta<'static>,
+    data: PdkValueAndMeta<'static>,
 }
 
-impl From<crate::EventPayload> for EventPayload {
-    fn from(original: crate::EventPayload) -> Self {
+impl From<EventPayload> for PdkEventPayload {
+    fn from(original: EventPayload) -> Self {
         let raw = original
             .raw
             .into_iter()
@@ -56,15 +57,15 @@ impl From<crate::EventPayload> for EventPayload {
                 x
             })
             .collect();
-        EventPayload {
+        PdkEventPayload {
             raw,
             data: original.data.into(),
         }
     }
 }
 
-impl From<EventPayload> for crate::EventPayload {
-    fn from(original: EventPayload) -> Self {
+impl From<PdkEventPayload> for EventPayload {
+    fn from(original: PdkEventPayload) -> Self {
         let raw = original
             .raw
             .into_iter()
@@ -74,7 +75,7 @@ impl From<EventPayload> for crate::EventPayload {
                 x
             })
             .collect();
-        crate::EventPayload {
+        EventPayload {
             raw,
             data: original.data.into(),
         }
