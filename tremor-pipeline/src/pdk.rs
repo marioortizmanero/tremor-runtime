@@ -3,7 +3,7 @@
 //! through the plugin interface. Thus, no functionality is implemented other
 //! than the conversion from and to the original type.
 
-use crate::{CbAction, PrimStr, SignalKind, TrackedPullIds};
+use crate::{CbAction, EventId, EventOriginUri, PrimStr, SignalKind, TrackedPullIds};
 
 use tremor_script::pdk::EventPayload;
 use tremor_value::pdk::Value;
@@ -54,81 +54,6 @@ impl From<OpMeta> for crate::OpMeta {
     }
 }
 
-// FIXME: we can probably avoid this after `simd_json_derive` works for
-// `abi_stable`.
-#[repr(C)]
-#[derive(Debug, Clone, StableAbi)]
-pub struct EventId {
-    source_id: u64,
-    stream_id: u64,
-    event_id: u64,
-    pull_id: u64,
-    tracked_pull_ids: RVec<TrackedPullIds>,
-}
-
-impl From<crate::EventId> for EventId {
-    fn from(original: crate::EventId) -> Self {
-        EventId {
-            source_id: original.source_id,
-            stream_id: original.stream_id,
-            event_id: original.event_id,
-            pull_id: original.pull_id,
-            tracked_pull_ids: original.tracked_pull_ids.into(),
-        }
-    }
-}
-
-impl From<EventId> for crate::EventId {
-    fn from(original: EventId) -> Self {
-        crate::EventId {
-            source_id: original.source_id,
-            stream_id: original.stream_id,
-            event_id: original.event_id,
-            pull_id: original.pull_id,
-            tracked_pull_ids: original.tracked_pull_ids.into(),
-        }
-    }
-}
-
-// FIXME: we can probably avoid this after `simd_json_derive` works for
-// `abi_stable`.
-#[repr(C)]
-#[derive(Debug, Clone, StableAbi)]
-pub struct EventOriginUri {
-    /// schema part
-    pub scheme: RString,
-    /// host part
-    pub host: RString,
-    /// port part
-    pub port: ROption<u16>,
-    /// path part
-    pub path: RVec<RString>,
-    // implement query params if we find a good usecase for it
-    //pub query: Hashmap<String, String>
-}
-
-impl From<crate::EventOriginUri> for EventOriginUri {
-    fn from(original: crate::EventOriginUri) -> Self {
-        EventOriginUri {
-            scheme: original.scheme.into(),
-            host: original.host.into(),
-            port: original.port.into(),
-            path: original.path.into_iter().map(Into::into).collect(),
-        }
-    }
-}
-
-impl From<EventOriginUri> for crate::EventOriginUri {
-    fn from(original: EventOriginUri) -> Self {
-        crate::EventOriginUri {
-            scheme: original.scheme.into(),
-            host: original.host.into(),
-            port: original.port.into(),
-            path: original.path.into_iter().map(Into::into).collect(),
-        }
-    }
-}
-
 #[repr(C)]
 #[derive(Debug, Clone, StableAbi)]
 pub struct Event {
@@ -156,7 +81,7 @@ pub struct Event {
 impl From<crate::Event> for Event {
     fn from(original: crate::Event) -> Self {
         Event {
-            id: original.id.into(),
+            id: original.id,
             data: original.data.into(),
             ingest_ns: original.ingest_ns,
             origin_uri: original.origin_uri.map(Into::into).into(),
@@ -175,7 +100,7 @@ impl From<Event> for crate::Event {
             id: original.id.into(),
             data: original.data.into(),
             ingest_ns: original.ingest_ns,
-            origin_uri: original.origin_uri.map(Into::into).into(),
+            origin_uri: original.origin_uri.into(),
             kind: original.kind.into(),
             is_batch: original.is_batch,
             cb: original.cb,

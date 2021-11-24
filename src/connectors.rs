@@ -69,10 +69,7 @@ use beef::Cow;
 use halfbrown::HashMap;
 use std::{fmt::Display, sync::atomic::Ordering};
 use tremor_common::ids::ConnectorIdGen;
-use tremor_common::url::{
-    ports::{ERR, IN, OUT},
-};
-use tremor_script::ast::DeployEndpoint;
+use tremor_common::url::ports::{ERR, IN, OUT};
 use tremor_value::Value;
 use utils::reconnect::{Attempt, ConnectionLostNotifier, ReconnectRuntime};
 use value_trait::{Builder, Mutable};

@@ -17,8 +17,9 @@ base64 = "0.13"
 beef = "0.5"
 halfbrown = { version = "0.1", features = ["fxhash"] }
 serde = "1.0"
-simd-json = "0.4.13"
-simd-json-derive = "0.2"
+simd-json = "0.4.8"
+# FIXME: change version after it's upstreamed
+simd-json-derive = "0.2.3-alpha.0"
 value-trait = { version="0.2.9", features=["custom-types", "c-abi"] }
 
 [dev-dependencies]
