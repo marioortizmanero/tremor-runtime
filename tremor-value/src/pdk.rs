@@ -1,3 +1,21 @@
+//! The `Value` type is too complex to make `#[repr(C)]` from scratch. This is
+//! why this module declares `PdkValue` as the FFI-safe alternative to
+//! communicate with the plugins. It's a copy from the original one, but the
+//! collections have been replaced with `abi_stable`'s (e.g. `Box` for `RBox`).
+//!
+//! `PdkValue` is only meant to be used for the PDK interface. A plugin or the
+//! runtime can convert between `PdkValue` and `Value` at a relatively small
+//! cost, and use its full functionality that way.
+//!
+//! Although this decision might sound like a considerable performance overhead,
+//! it would be even worse to try to make `Value` fully `#[repr(C)]` as it is
+//! right now. The collections in `abi_stable` are much more basic than what the
+//! original `Value` uses, such as `beef::Cow` or `halfbrown::HashMap`. Not only
+//! are these types by themselves more efficient for Tremor's use-case, but also
+//! their functionality is consierably improved, making it impossible to for
+//! example implement the known-key optimization for a `Value` if we were to use
+//! `RHashMap`.
+
 use crate::Value;
 
 use abi_stable::{
@@ -11,10 +29,36 @@ pub type Object<'value> = RHashMap<RCow<'value, str>, PdkValue<'value>>;
 /// Bytes
 pub type Bytes<'value> = RCow<'value, [u8]>;
 
-/// FFI-safe `Value` type to communicate with the plugins. It's meant to be
-/// converted to/from the original `Value` type and back so that it can
-/// can be passed through the plugin interface. Thus, no functionality is
-/// implemented other than the conversion from and to the original type.
+/// There are no direct conversions between `beef::Cow` and `RCow`, so the type
+/// has to be converted to std as the intermediate. These conversions are cheap
+/// and they shouldn't be a performance issue.
+///
+/// FIXME: move to `tremor-pdk` once it's ready to avoid code duplication.
+fn conv_str(cow: beef::Cow<str>) -> RCow<str> {
+    let cow: std::borrow::Cow<str> = cow.into();
+    cow.into()
+}
+fn conv_u8(cow: beef::Cow<[u8]>) -> RCow<[u8]> {
+    let cow: std::borrow::Cow<[u8]> = cow.into();
+    cow.into()
+}
+fn conv_str_inv(cow: RCow<str>) -> beef::Cow<str> {
+    let cow: std::borrow::Cow<str> = cow.into();
+    cow.into()
+}
+fn conv_u8_inv(cow: RCow<[u8]>) -> beef::Cow<[u8]> {
+    let cow: std::borrow::Cow<[u8]> = cow.into();
+    cow.into()
+}
+
+/// Temporary type to represent a `Value` in the PDK interface. It's meant to be
+/// converted to the original [`Value`] whenever its full functionality is needed,
+/// and then back to `PdkValue` in order to pass it through the FFI boundary.
+///
+/// Refer to the [`tremor_value::pdk`] top-level documentation for more
+/// information.
+///
+/// [`Value`]: [`tremor_value::Value`]
 #[repr(C)]
 #[derive(Debug, Clone, StableAbi)]
 pub enum PdkValue<'value> {
@@ -57,26 +101,6 @@ impl<'value> From<Value<'value>> for PdkValue<'value> {
             Value::Bytes(b) => PdkValue::Bytes(conv_u8(b)),
         }
     }
-}
-
-/// There are no direct conversions between `beef::Cow` and `RCow`, so the type
-/// has to be converted to std as the intermediate. These conversions are cheap
-/// and they shouldn't be a performance issue.
-fn conv_str(cow: beef::Cow<str>) -> RCow<str> {
-    let cow: std::borrow::Cow<str> = cow.into();
-    cow.into()
-}
-fn conv_u8(cow: beef::Cow<[u8]>) -> RCow<[u8]> {
-    let cow: std::borrow::Cow<[u8]> = cow.into();
-    cow.into()
-}
-fn conv_str_inv(cow: RCow<str>) -> beef::Cow<str> {
-    let cow: std::borrow::Cow<str> = cow.into();
-    cow.into()
-}
-fn conv_u8_inv(cow: RCow<[u8]>) -> beef::Cow<[u8]> {
-    let cow: std::borrow::Cow<[u8]> = cow.into();
-    cow.into()
 }
 
 /// Easily converting the original value to the PDK one.
