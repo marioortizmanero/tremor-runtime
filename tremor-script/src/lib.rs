@@ -59,8 +59,6 @@ pub mod lexer;
 pub(crate) mod parser;
 /// Support for module paths
 pub mod path;
-/// Types for the Plugin Development Kit
-pub mod pdk;
 /// Tremor Script Position
 pub mod pos;
 /// Prelude module with important exports

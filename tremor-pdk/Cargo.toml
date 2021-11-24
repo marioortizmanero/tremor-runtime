@@ -1,0 +1,24 @@
+[package]
+authors = [
+    "The Tremor Team",
+    "Mario Ortiz Manero <marioortizmanero@gmail.com>",
+]
+description = "Tremor Plugin Development Kit"
+edition = "2021"
+license = "Apache-2.0"
+name = "tremor-pdk"
+version = "0.1.0"
+
+[dependencies]
+tremor-script = { path = "../tremor-script" }
+tremor-value = { path = "../tremor-value" }
+tremor-pipeline = { path = "../tremor-pipeline" }
+# FIXME: this should be removed in a future update, and `tremor-runtime` should
+# point to `tremor-pdk` instead.
+#
+# Plugins should be able to use *only* this crate as a dependency.
+tremor-runtime = { path = "../" }
+
+# FIXME: update to crates.io when this is added to a new version:
+# https://github.com/rodrimati1992/abi_stable_crates/pull/68
+abi_stable = "0.10.3"

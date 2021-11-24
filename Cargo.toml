@@ -19,6 +19,7 @@ members = [
   "tremor-common",
   "tremor-influx",
   "tremor-pipeline",
+  "tremor-pdk",
   "tremor-script",
   "tremor-value",
 ]
@@ -90,6 +91,7 @@ syslog_loose = "0.16"
 tremor-common = { path = "tremor-common" }
 tremor-influx = { path = "tremor-influx" }
 tremor-pipeline = { path = "tremor-pipeline" }
+tremor-pdk = { path = "tremor-pdk" }
 tremor-script = { path = "tremor-script" }
 tremor-value = { path = "tremor-value" }
 url = "2.2"

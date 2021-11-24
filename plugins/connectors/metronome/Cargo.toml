@@ -15,7 +15,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 abi_stable = { version = "0.10", default-features = false }
-tremor-runtime = { version = "0.11.4", path = "../../../" }
+tremor-pdk = { version = "0.1.0", path = "../../../" }
 # FIXME: clean up after https://github.com/oxalica/async-ffi/pull/10 is merged
 async-ffi = { version = "0.3", features = ["sabi"], git = "https://github.com/marioortizmanero/async-ffi.git", branch = "sabi" }
 

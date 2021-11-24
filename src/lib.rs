@@ -79,9 +79,6 @@ pub mod version;
 /// Instance management
 pub mod instance;
 
-/// Plugin Development Kit
-pub mod pdk;
-
 /// Metrics instance name
 pub static mut INSTANCE: &str = "tremor";
 

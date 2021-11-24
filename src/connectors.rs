@@ -22,22 +22,15 @@ pub mod sink;
 // FIXME: this should be reorganized after the pdk is moved to a separate crate
 // (it used to be `pub(crate)`).
 pub mod source;
-#[macro_use]
-pub(crate) mod utils;
-
 // FIXME: this should be reorganized after the pdk is moved to a separate crate
-pub use crate::utils::hostname;
-pub use tremor_common::{time::nanotime, url::TremorUrl};
-pub use tremor_pipeline::DEFAULT_STREAM_ID;
-pub use tremor_script::EventPayload;
-pub use tremor_value::literal;
+// (it used to be `pub(crate)`).
+#[macro_use]
+pub mod utils;
 
 use std::{fmt::Display, future};
 
 /// quiescence stuff
-// FIXME: this should be reorganized after the pdk is moved to a separate crate
-// (it used to be `pub(crate)`).
-pub use utils::{metrics, quiescence, reconnect};
+pub(crate) use utils::{metrics, quiescence, reconnect};
 
 use async_std::task::{self, JoinHandle};
 use beef::Cow;
@@ -48,7 +41,7 @@ use self::source::{BoxedRawSource, Source, SourceAddr, SourceContext, SourceMsg}
 use self::utils::quiescence::QuiescenceBeacon;
 use crate::config::Connector as ConnectorConfig;
 use crate::errors::{Error, ErrorKind, Result};
-use crate::pdk::RResult;
+use tremor_pdk::RResult;
 use crate::pipeline;
 use crate::system::World;
 use crate::OpConfig;
