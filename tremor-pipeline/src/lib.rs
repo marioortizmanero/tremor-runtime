@@ -61,6 +61,9 @@ pub mod errors;
 mod event;
 mod executable_graph;
 
+/// Types specific to the Plugin Development Kit
+pub mod pdk;
+
 #[macro_use]
 mod macros;
 pub(crate) mod op;
