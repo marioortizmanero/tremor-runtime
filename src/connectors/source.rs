@@ -537,9 +537,7 @@ impl ChannelSourceRuntime {
                 };
             }
             if reader.on_done(stream).await == StreamDone::ConnectorClosed {
-                if let RErr(e) = ctx.notifier.notify()
-                /*.await*/
-                {
+                if let RErr(e) = ctx.notifier.notify().await {
                     error!("[Connector::{}] Failed to notify connector: {}", ctx.url, e);
                 };
             }

@@ -38,7 +38,9 @@ use beef::Cow;
 use self::metrics::{MetricsSender, SinkReporter, SourceReporter};
 use self::sink::{BoxedRawSink, Sink, SinkAddr, SinkContext, SinkMsg};
 use self::source::{BoxedRawSource, Source, SourceAddr, SourceContext, SourceMsg};
-use self::utils::quiescence::QuiescenceBeacon;
+use self::utils::quiescence::{
+    BoxedQuiescenceBeacon, QuiescenceBeacon, QuiescenceBeaconOpaque, QuiescenceBeaconOpaque_TO,
+};
 use crate::config::Connector as ConnectorConfig;
 use crate::errors::{Error, ErrorKind, Result};
 use crate::pdk::RResult;
@@ -69,8 +71,6 @@ use tremor_common::url::{
 use tremor_value::Value;
 use utils::reconnect::{Attempt, ConnectionLostNotifier, ReconnectRuntime};
 use value_trait::{Builder, Mutable};
-
-use self::quiescence::{BoxedQuiescenceBeacon, QuiescenceBeaconOpaque, QuiescenceBeaconOpaque_TO};
 
 /// sender for connector manager messages
 pub type ManagerSender = Sender<ManagerMsg>;

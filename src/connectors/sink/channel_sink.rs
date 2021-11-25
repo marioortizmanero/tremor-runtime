@@ -316,7 +316,8 @@ where
                 Err(e) => RSome(e),
                 Ok(StreamDone::ConnectorClosed) => ctx
                     .notifier
-                    .notify() /*.await*/
+                    .notify()
+                    .await
                     .err()
                     .map(|e| ErrorKind::PluginError(e).into()),
                 Ok(_) => RNone,
