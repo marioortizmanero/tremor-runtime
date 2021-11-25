@@ -15,6 +15,7 @@
 use crate::config::{BindingVec, Config, MappingMap};
 use crate::connectors::utils::metrics::METRICS_CHANNEL;
 use crate::errors::{Error, ErrorKind, Result};
+use crate::pdk::connectors::ConnectorMod_Ref;
 use crate::registry::Registries;
 use crate::repository::{
     Artefact, BindingArtefact, ConnectorArtefact, PipelineArtefact, Repositories,
@@ -168,11 +169,11 @@ impl World {
     ///  * If the system is unavailable
     pub(crate) async fn register_builtin_connector_type(
         &self,
-        builder: Box<dyn connectors::ConnectorBuilder>,
+        builder: ConnectorMod_Ref,
     ) -> Result<()> {
         self.system
             .send(ManagerMsg::Connector(connectors::ManagerMsg::Register {
-                connector_type: builder.connector_type(),
+                connector_type: builder.connector_type()(),
                 builder,
                 builtin: true,
             }))
@@ -183,13 +184,10 @@ impl World {
     ///
     /// # Errors
     ///  * If the system is unavailable
-    pub async fn register_connector_type(
-        &self,
-        builder: Box<dyn connectors::ConnectorBuilder>,
-    ) -> Result<()> {
+    pub async fn register_connector_type(&self, builder: ConnectorMod_Ref) -> Result<()> {
         self.system
             .send(ManagerMsg::Connector(connectors::ManagerMsg::Register {
-                connector_type: builder.connector_type(),
+                connector_type: builder.connector_type()(),
                 builder,
                 builtin: false,
             }))

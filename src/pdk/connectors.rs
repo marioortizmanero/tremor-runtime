@@ -1,18 +1,31 @@
-use crate::connectors::BoxedRawConnector;
+use crate::{
+    connectors::{BoxedRawConnector, ConnectorType},
+    errors::Result,
+    pdk::RResult,
+};
 use tremor_common::url::TremorUrl;
 use tremor_value::pdk::PdkValue;
+
+use std::path::Path;
 
 use abi_stable::{
     declare_root_module_statics, library::RootModule, package_version_strings,
     sabi_types::VersionStrings, std_types::ROption, StableAbi,
 };
+use async_ffi::FfiFuture;
 
 /// The `new` function basically acts as the connector builder
 #[repr(C)]
 #[derive(StableAbi)]
 #[sabi(kind(Prefix))]
 pub struct ConnectorMod {
-    pub new: extern "C" fn(id: &TremorUrl, config: ROption<PdkValue>) -> BoxedRawConnector,
+    pub connector_type: extern "C" fn() -> ConnectorType,
+
+    // TODO: add back
+    #[sabi(last_prefix_field)]
+    pub from_config: extern "C" fn(
+        id: &TremorUrl, /*, config: &ROption<PdkValue>*/
+    ) -> FfiFuture<RResult<BoxedRawConnector>>,
 }
 
 // Marking `MinMod` as the main module in this plugin. Note that `MinMod_Ref` is

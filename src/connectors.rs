@@ -30,7 +30,7 @@ pub mod source;
 #[macro_use]
 pub mod utils;
 
-use std::{fmt::Display, future};
+use std::{fmt::Display, future, path::Path};
 
 /// quiescence stuff
 pub(crate) use utils::{metrics, quiescence, reconnect};
@@ -46,12 +46,13 @@ use self::utils::quiescence::{
 };
 use crate::config::Connector as ConnectorConfig;
 use crate::errors::{Error, ErrorKind, Result};
-use crate::pdk::RResult;
+use crate::pdk::{connectors::ConnectorMod_Ref, RResult};
 use crate::pipeline;
 use crate::registry::instance::InstanceState;
 use crate::system::World;
 use crate::OpConfig;
 use abi_stable::{
+    library::RootModule,
     rslice,
     std_types::{
         RBox, RCow,
@@ -70,7 +71,7 @@ use tremor_common::url::{
     ports::{ERR, IN, OUT},
     TremorUrl,
 };
-use tremor_value::Value;
+use tremor_value::{pdk::PdkValue, Value};
 use utils::reconnect::{Attempt, ReconnectRuntime};
 use value_trait::{Builder, Mutable};
 
@@ -83,6 +84,10 @@ fn conv_cow_str(cow: RCow<str>) -> beef::Cow<str> {
     let cow: std::borrow::Cow<str> = cow.into();
     cow.into()
 }
+// fn conv_value(value: serde_yaml::Value) -> PdkValue<'static> {
+//     let value: Value = value.into();
+//     value.into()
+// }
 
 /// connector address
 #[derive(Clone, Debug)]
@@ -326,7 +331,7 @@ pub enum ManagerMsg {
         /// the type of connector
         connector_type: ConnectorType,
         /// the builder
-        builder: Box<dyn ConnectorBuilder>,
+        builder: ConnectorMod_Ref,
         /// if this one is a builtin connector
         builtin: bool,
     },
@@ -371,7 +376,7 @@ impl Manager {
         let h = task::spawn(async move {
             info!("Connector manager started.");
             let mut connector_id_gen = ConnectorIdGen::new();
-            let mut known_connectors: HashMap<ConnectorType, (Box<dyn ConnectorBuilder>, bool)> =
+            let mut known_connectors: HashMap<ConnectorType, (ConnectorMod_Ref, bool)> =
                 HashMap::with_capacity(16);
 
             loop {
@@ -382,11 +387,13 @@ impl Manager {
                         let connector = if let Some((builder, _)) =
                             known_connectors.get(&create.config.binding_type)
                         {
-                            let connector_res =
-                                builder.from_config(&url, &create.config.config).await;
+                            // TODO: add back
+                            // let config: ROption<PdkValue> = ROption::from(create.config.config).map(conv_value);
+                            let connector_res = builder.from_config()(&url /*, &config*/).await;
                             match connector_res {
-                                Ok(connector) => connector,
-                                Err(e) => {
+                                ROk(connector) => Connector(connector),
+                                RErr(e) => {
+                                    let e = ErrorKind::PluginError(e).into();
                                     error!(
                                         "[Connector] Error instantiating connector {}: {}",
                                         &url, e
@@ -483,7 +490,7 @@ impl Manager {
         &self,
         addr_tx: Sender<Result<Addr>>,
         url: TremorUrl,
-        mut connector: Box<Connector>,
+        mut connector: Connector,
         config: ConnectorConfig,
         uid: u64,
     ) -> Result<()> {
@@ -748,7 +755,7 @@ impl Manager {
                     Msg::Reconnect => {
                         // reconnect if we are below max_retries, otherwise bail out and fail the connector
                         info!("[Connector::{}] Connecting...", &connector_addr.url);
-                        let new = reconnect.attempt(connector.as_mut(), &ctx).await?;
+                        let new = reconnect.attempt(&mut connector, &ctx).await?;
                         match (&connectivity, &new) {
                             (Connectivity::Disconnected, Connectivity::Connected) => {
                                 info!("[Connector::{}] Connected.", &connector_addr.url);
@@ -1385,7 +1392,12 @@ pub trait ConnectorBuilder: Sync + Send {
 ///  * If a builtin connector couldn't be registered
 #[cfg(not(tarpaulin_include))]
 pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
-    // TODO load dynamically
+    // TODO: load properly
+    let path = "plugins/connectors/metronome/target/debug/libconnector_metronome.so";
+    world
+        .register_connector_type(ConnectorMod_Ref::load_from_file(&Path::new(path))?)
+        .await?;
+
     Ok(())
 }
 
