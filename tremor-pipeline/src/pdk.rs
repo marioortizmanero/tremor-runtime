@@ -5,7 +5,9 @@
 //!
 //! [`PdkValue`]: [`tremor_value::pdk::PdkValue`]
 
-use crate::{CbAction, Event, EventId, EventOriginUri, PrimStr, SignalKind, TrackedPullIds, OpMeta};
+use crate::{
+    CbAction, Event, EventId, EventOriginUri, OpMeta, PrimStr, SignalKind, TrackedPullIds,
+};
 
 use tremor_script::pdk::PdkEventPayload;
 use tremor_value::{pdk::PdkValue, Value};
