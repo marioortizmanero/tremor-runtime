@@ -24,6 +24,7 @@ tremor-runtime = { version = "0.11.4", path = "../../../" }
 abi_stable = { version = "0.10", default-features = false }
 # FIXME: clean up after https://github.com/oxalica/async-ffi/pull/10 is merged
 async-ffi = { version = "0.3", features = ["sabi"], git = "https://github.com/marioortizmanero/async-ffi.git", branch = "sabi" }
+serde = { version = "1.0", features = ["derive"] }
 
 [patch.crates-io]
 # FIXME: update to crates.io when this is added to a new version:

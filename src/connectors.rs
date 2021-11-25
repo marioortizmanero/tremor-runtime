@@ -12,8 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// FIXME: uncomment
+// pub(crate) mod impls;
+
 /// prelude with commonly needed stuff imported
-pub(crate) mod prelude;
+// FIXME: this should be reorganized after the pdk is moved to a separate crate
+// (it used to be `pub(crate)`).
+pub mod prelude;
 
 /// sink parts
 pub mod sink;
@@ -455,9 +460,14 @@ async fn connector_task(
                         let connector = if let Some((builder, _)) =
                             known_connectors.get(&create.config.binding_type)
                         {
-                            // TODO: add back
-                            // let config: ROption<PdkValue> = ROption::from(create.config.config).map(conv_value);
-                            let connector_res = builder.from_config()(&url /*, &config*/).await;
+                            // The config is converted to a string so that it
+                            // can be passed through FFI.
+                            let config = create.config.config
+                                .as_ref()
+                                .and_then(|conf| serde_yaml::to_string(conf).ok())
+                                .map(RString::from)
+                                .into();
+                            let connector_res = builder.from_config()(&url, &config).await;
                             match connector_res {
                                 ROk(connector) => Connector(connector),
                                 RErr(e) => {
@@ -1776,9 +1786,18 @@ pub fn debug_connector_types() -> Vec<Box<dyn ConnectorBuilder + 'static>> {
 #[cfg(not(tarpaulin_include))]
 pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
     // TODO: load properly
+
+    // Dynamically loaded plugins for demonstration purposes until the PDK is
+    // ready to be released.
     let path = "plugins/connectors/metronome/target/debug/libconnector_metronome.so";
     world
         .register_connector_type(ConnectorMod_Ref::load_from_file(&Path::new(path))?)
+        .await?;
+
+    // Statically loaded plugins, which work the same way as the previous ones,
+    // but are in-tree.
+    world
+        .register_builtin_connector_type(ConnectorMod_Ref::load_from_file(&Path::new(path))?)
         .await?;
 
     Ok(())

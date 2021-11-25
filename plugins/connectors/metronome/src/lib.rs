@@ -12,7 +12,8 @@ use tremor_runtime::pdk::connectors::{ConnectorMod, ConnectorMod_Ref};
 fn instantiate_root_module() -> ConnectorMod_Ref {
     // Converts the `ConnectorMod` into `ConnectorMod_Ref` and leaks it
     ConnectorMod {
-        new: connector::new,
+        connector_type: connector::connector_type,
+        from_config: connector::from_config,
     }
     .leak_into_prefix()
 }

@@ -10,7 +10,7 @@ use std::path::Path;
 
 use abi_stable::{
     declare_root_module_statics, library::RootModule, package_version_strings,
-    sabi_types::VersionStrings, std_types::ROption, StableAbi,
+    sabi_types::VersionStrings, std_types::{ROption, RString}, StableAbi,
 };
 use async_ffi::FfiFuture;
 
@@ -21,10 +21,9 @@ use async_ffi::FfiFuture;
 pub struct ConnectorMod {
     pub connector_type: extern "C" fn() -> ConnectorType,
 
-    // TODO: add back
     #[sabi(last_prefix_field)]
     pub from_config: extern "C" fn(
-        id: &TremorUrl, /*, config: &ROption<PdkValue>*/
+        id: &TremorUrl, config: &ROption<RString>
     ) -> FfiFuture<RResult<BoxedRawConnector>>,
 }
 

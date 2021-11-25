@@ -1,5 +1,11 @@
 //! Implements the actual connector functionality.
 
+use tremor_common::{time::nanotime, url::TremorUrl};
+use tremor_pipeline::DEFAULT_STREAM_ID;
+use tremor_runtime::{connectors::prelude::*, pdk::RResult, utils::hostname};
+use tremor_script::{EventOriginUri, EventPayload};
+use tremor_value::literal;
+
 use std::{
     future,
     time::{Duration, Instant},
@@ -9,25 +15,22 @@ use abi_stable::{
     rstr, rvec, sabi_extern_fn,
     std_types::{
         ROption::{self, RNone, RSome},
-        RResult::ROk,
+        RResult::{RErr, ROk},
         RStr, RString,
     },
     type_level::downcasting::TD_Opaque,
 };
 use async_ffi::{FfiFuture, FutureExt};
-use tremor_common::{time::nanotime, url::TremorUrl};
-use tremor_pipeline::DEFAULT_STREAM_ID;
-use tremor_runtime::{
-    connectors::{
-        source::{BoxedRawSource, RawSource, SourceContext, SourceReply},
-        utils::reconnect::Attempt,
-        BoxedRawConnector, ConnectorContext, RawConnector,
-    },
-    pdk::RResult,
-    utils::hostname,
-};
-use tremor_script::{EventOriginUri, EventPayload};
-use tremor_value::{literal, pdk::PdkValue};
+use serde::Deserialize;
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct Config {
+    /// Interval in milliseconds
+    pub interval: u64,
+}
+
+impl ConfigImpl for Config {}
 
 #[derive(Debug, Clone)]
 struct Metronome {
@@ -106,21 +109,41 @@ impl RawSource for Metronome {
 
 /// Exports the metronome as a connector trait object
 #[sabi_extern_fn]
-pub fn new(_id: &TremorUrl, _config: ROption<PdkValue>) -> BoxedRawConnector {
-    // TODO: take from config
-    let interval = 1;
+pub fn from_config(
+    _id: &TremorUrl,
+    raw_config: &ROption<RString>,
+) -> FfiFuture<RResult<BoxedRawConnector>> {
+    if let RSome(raw_config) = raw_config {
+        let config = match Config::from_str(raw_config) {
+            Ok(config) => config,
+            Err(e) => {
+                todo!()
+                // FIXME: update after error handling
+                // return future::ready(RErr(e.into())).into_ffi()
+            }
+        };
 
-    let origin_uri = EventOriginUri {
-        scheme: RString::from("tremor-metronome"),
-        host: hostname().into(),
-        port: RNone,
-        path: rvec![interval.to_string().into()],
-    };
-    let metronome = Metronome {
-        origin_uri,
-        interval: Duration::from_secs(interval),
-        next: Instant::now(),
-    };
+        let origin_uri = EventOriginUri {
+            scheme: RString::from("tremor-metronome"),
+            host: hostname().into(),
+            port: RNone,
+            path: rvec![config.interval.to_string().into()],
+        };
+        let metronome = Metronome {
+            origin_uri,
+            interval: Duration::from_millis(config.interval),
+            next: Instant::now(),
+        };
 
-    BoxedRawConnector::from_value(metronome, TD_Opaque)
+        future::ready(ROk(BoxedRawConnector::from_value(metronome, TD_Opaque))).into_ffi()
+    } else {
+        todo!();
+        // FIXME: update after error handling
+        // future::ready(RErr(ErrorKind::MissingConfiguration(String::from("metronome")).into())).into_ffi()
+    }
+}
+
+#[sabi_extern_fn]
+pub fn connector_type() -> ConnectorType {
+    "metronome".into()
 }
