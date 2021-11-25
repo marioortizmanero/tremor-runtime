@@ -175,7 +175,6 @@ pub trait RawSink: Send {
         start: u64,
     ) -> FfiFuture<RResult<SinkReply>>;
     /// called when receiving a signal
-    /* async */
     fn on_signal(
         &mut self,
         _signal: PdkEvent,
