@@ -118,7 +118,7 @@ impl SingleStreamSinkRuntime {
                     start,
                 }),
             ) = (
-                ctx.quiescence_beacon.continue_writing(), /*.await*/
+                ctx.quiescence_beacon.continue_writing().await,
                 rx.recv().await,
             ) {
                 let failed = writer.write(data, meta).await.is_err();

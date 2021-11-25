@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use abi_stable::std_types::RBox;
+use async_ffi::{BorrowingFfiFuture, FutureExt};
 use event_listener::Event;
 use std::fmt;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -50,11 +51,8 @@ pub struct QuiescenceBeacon(Arc<Inner>);
 /// with the help of `sabi_trait`.
 #[abi_stable::sabi_trait]
 pub trait QuiescenceBeaconOpaque: fmt::Debug + Clone + Send + Sync {
-    // TODO: async
-    /* async */
-    fn continue_reading(&self) -> bool;
-    /* async */
-    fn continue_writing(&self) -> bool;
+    fn continue_reading(&self) -> BorrowingFfiFuture<'_, bool>;
+    fn continue_writing(&self) -> BorrowingFfiFuture<'_, bool>;
     fn stop_reading(&mut self);
     fn pause(&mut self);
     fn resume(&mut self);
@@ -68,32 +66,38 @@ impl QuiescenceBeacon {
 impl QuiescenceBeaconOpaque for QuiescenceBeacon {
     /// returns `true` if consumers should continue reading
     /// doesn't return until the beacon is unpaused
-    fn continue_reading(&self) -> bool {
-        loop {
-            match self.0.state.load(Ordering::Acquire) {
-                Inner::RUNNING => break true,
-                Inner::PAUSED => {
-                    // we wait to be notified
-                    // if so, we re-enter the loop to check the new state
-                    self.0.resume_event.listen() /* .await */;
+    fn continue_reading(&self) -> BorrowingFfiFuture<'_, bool> {
+        async move {
+            loop {
+                match self.0.state.load(Ordering::Acquire) {
+                    Inner::RUNNING => break true,
+                    Inner::PAUSED => {
+                        // we wait to be notified
+                        // if so, we re-enter the loop to check the new state
+                        self.0.resume_event.listen().await;
+                    }
+                    _ => break false, // STOP_ALL | STOP_READING | _
                 }
-                _ => break false, // STOP_ALL | STOP_READING | _
             }
         }
+        .into_ffi()
     }
 
     /// returns `true` if consumers should continue writing.
     ///
-    fn continue_writing(&self) -> bool {
-        loop {
-            match self.0.state.load(Ordering::Acquire) {
-                Inner::RUNNING | Inner::STOP_READING => break true,
-                Inner::PAUSED => {
-                    self.0.resume_event.listen() /* .await */;
+    fn continue_writing(&self) -> BorrowingFfiFuture<'_, bool> {
+        async move {
+            loop {
+                match self.0.state.load(Ordering::Acquire) {
+                    Inner::RUNNING | Inner::STOP_READING => break true,
+                    Inner::PAUSED => {
+                        self.0.resume_event.listen().await;
+                    }
+                    _ => break false, // STOP_ALL | _
                 }
-                _ => break false, // STOP_ALL | _
             }
         }
+        .into_ffi()
     }
 
     /// notify consumers of this beacon that reading should be stopped

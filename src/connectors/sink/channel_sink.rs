@@ -292,7 +292,7 @@ where
                     start,
                 }),
             ) = (
-                ctx.quiescence_beacon.continue_writing(), /*.await*/
+                ctx.quiescence_beacon.continue_writing().await,
                 stream_rx.recv().await,
             ) {
                 let failed = writer.write(data, meta).await.is_err();

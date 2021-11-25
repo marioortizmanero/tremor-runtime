@@ -518,9 +518,7 @@ impl ChannelSourceRuntime {
                 return;
             };
 
-            while ctx.quiescence_beacon.continue_reading()
-            /* .await */
-            {
+            while ctx.quiescence_beacon.continue_reading().await {
                 let sc_data = timeout(Self::READ_TIMEOUT_MS, reader.read(stream)).await;
 
                 let sc_data = match sc_data {
