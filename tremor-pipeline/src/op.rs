@@ -162,6 +162,18 @@ pub trait ConfigImpl {
     where
         for<'de> Self: serde::de::Deserialize<'de>,
     {
+        Self::from_str(&serde_yaml::to_string(config)?)
+    }
+
+    /// The exact same as `new`, but works with a raw `&str` instead of an
+    /// already built value.
+    ///
+    /// # Errors
+    /// if the Configuration is invalid
+    fn from_str(config: &str) -> Result<Self>
+    where
+        for<'de> Self: serde::de::Deserialize<'de>,
+    {
         // simpler ways, but does not give us the kind of error info we want
         //let validated_config: Config = serde_yaml::from_value(c.clone())?;
         //let validated_config: Config = serde_yaml::from_str(&serde_yaml::to_string(c)?)?;
@@ -169,7 +181,7 @@ pub trait ConfigImpl {
         // serialize the YAML config and deserialize it again, so that we get extra info on
         // YAML errors here (eg: name of the config key where the errror occured). can just
         // use serde_yaml::from_value() here, but the error message there is limited.
-        serde_yaml::from_str(&serde_yaml::to_string(config)?).map_err(|e| {
+        serde_yaml::from_str(config).map_err(|e| {
             // remove the potentially misleading "at line..." info, since it does not
             // correspond to the numbers in the file now
             LINE_REGEXP.replace(&e.to_string(), "").to_string().into()

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(crate) mod client;
+// pub(crate) mod client;
 pub(crate) mod server;
 
 use crate::connectors::prelude::*;
@@ -73,6 +73,7 @@ impl TcpReader<ReadHalf<async_tls::server::TlsStream<TcpStream>>> {
     }
 }
 
+/* TODO: add back
 impl TcpReader<ReadHalf<async_tls::client::TlsStream<TcpStream>>> {
     fn tls_client(
         stream: ReadHalf<async_tls::client::TlsStream<TcpStream>>,
@@ -92,6 +93,7 @@ impl TcpReader<ReadHalf<async_tls::client::TlsStream<TcpStream>>> {
         }
     }
 }
+*/
 
 #[async_trait::async_trait]
 impl<S> StreamReader for TcpReader<S>
@@ -162,6 +164,7 @@ impl TcpWriter<WriteHalf<async_tls::server::TlsStream<TcpStream>>> {
         }
     }
 }
+/* TODO: add back
 impl TcpWriter<WriteHalf<async_tls::client::TlsStream<TcpStream>>> {
     fn tls_client(
         tls_stream: WriteHalf<async_tls::client::TlsStream<TcpStream>>,
@@ -173,6 +176,7 @@ impl TcpWriter<WriteHalf<async_tls::client::TlsStream<TcpStream>>> {
         }
     }
 }
+*/
 
 #[async_trait::async_trait]
 impl<S> StreamWriter for TcpWriter<S>
