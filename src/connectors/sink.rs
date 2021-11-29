@@ -213,7 +213,10 @@ pub trait RawSink: Send {
         future::ready(ROk(())).into_ffi()
     }
     /// called when sink re-established connectivity
-    fn on_connection_established(&mut self, _ctx: &SinkContext) -> BorrowingFfiFuture<'_, RResult<()>> {
+    fn on_connection_established(
+        &mut self,
+        _ctx: &SinkContext,
+    ) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
 
