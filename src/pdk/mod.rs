@@ -3,6 +3,13 @@ pub mod connectors;
 pub type RError = abi_stable::std_types::SendRBoxError;
 pub type RResult<T> = abi_stable::std_types::RResult<T, RError>;
 
+use self::connectors::ConnectorMod_Ref;
+
+use std::env;
+
+use abi_stable::library::RootModule;
+use walkdir::WalkDir;
+
 /// This is a workaround until `?` can be used with functions that return
 /// `RResult`: https://github.com/rust-lang/rust/issues/84277
 ///
@@ -18,6 +25,30 @@ macro_rules! ttry {
     };
 }
 
-pub fn load_recursively(path: &str) {
-
+pub fn load_recursively(base_dir: &str) -> Vec<ConnectorMod_Ref> {
+    WalkDir::new(base_dir)
+        // No symlinks are followed for now
+        .follow_links(false)
+        // Adding some safe limits
+        .max_depth(1000)
+        .into_iter()
+        // Ignoring permission errors
+        .filter_map(|e| e.ok())
+        // Only try to load those that look like plugins
+        .filter_map(|file| match file.path().extension() {
+            None => None,
+            Some(ext) if ext == env::consts::DLL_EXTENSION => Some(file),
+            Some(_) => None,
+        })
+        // Try to load the plugins and if successful, add them to the result
+        .filter_map(|file| {
+            match ConnectorMod_Ref::load_from_file(file.path()) {
+                Ok(plugin) => Some(plugin),
+                Err(e) => {
+                    // TODO: log the error
+                    None
+                }
+            }
+        })
+        .collect()
 }

@@ -113,6 +113,9 @@ qwal = { git = "https://github.com/tremor-rs/qwal" }
 
 # plugin system
 abi_stable = "0.10.3"
+# FIXME: clean up after https://github.com/oxalica/async-ffi/pull/10 is merged
+async-ffi = { version = "0.3", features = ["sabi"], git = "https://github.com/marioortizmanero/async-ffi.git", branch = "sabi" }
+walkdir = "2.3.2"
 
 # FIXME: these can be maybe removed when separating the crate for the pdk
 async-tls = "0.11"
