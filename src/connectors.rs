@@ -32,7 +32,7 @@ pub mod source;
 #[macro_use]
 pub mod utils;
 
-use std::{fmt::Display, future, path::Path};
+use std::{fmt::Display, future, path::Path, env};
 
 /// quiescence stuff
 pub(crate) use utils::{metrics, quiescence, reconnect};
@@ -48,7 +48,7 @@ use self::utils::quiescence::{
 };
 use crate::config::Connector as ConnectorConfig;
 use crate::errors::{Error, ErrorKind, Result};
-use crate::pdk::{connectors::ConnectorMod_Ref, RResult};
+use crate::pdk::{connectors::ConnectorMod_Ref, RResult, self};
 use crate::pipeline;
 use crate::system::World;
 use crate::OpConfig;
@@ -1791,20 +1791,23 @@ pub fn debug_connector_types() -> Vec<Box<dyn ConnectorBuilder + 'static>> {
 ///  * If a builtin connector couldn't be registered
 #[cfg(not(tarpaulin_include))]
 pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
-    // TODO: load properly
+    // First we load the hardcoded connectors
+    // world
+    //     .register_builtin_connector_type(ConnectorMod_Ref::load_from_file(&Path::new(path))?)
+    //     .await?;
 
-    // Dynamically loaded plugins for demonstration purposes until the PDK is
-    // ready to be released.
-    let path = "plugins/connectors/metronome/target/debug/libconnector_metronome.so";
-    world
-        .register_connector_type(ConnectorMod_Ref::load_from_file(&Path::new(path))?)
-        .await?;
-
-    // Statically loaded plugins, which work the same way as the previous ones,
-    // but are in-tree.
-    world
-        .register_builtin_connector_type(ConnectorMod_Ref::load_from_file(&Path::new(path))?)
-        .await?;
+    // Finally, we try to find all the available plugins and we load them
+    // dynamically. For now, plugins are loaded from the path defined by
+    // `TREMOR_PLUGIN_PATH`.
+    //
+    // FIXME: the `plugins` fallback is only for development, this should have a
+    // proper default value.
+    let base_dir = env::var("TREMOR_PLUGIN_PATH")
+        .unwrap_or_else(|_| String::from("plugins"));
+    let dynamic_plugins = pdk::find_recursively(&base_dir);
+    for plugin in dynamic_plugins {
+        world.register_connector_type(plugin).await?;
+    }
 
     Ok(())
 }
