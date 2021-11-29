@@ -35,12 +35,13 @@ pub fn load_recursively(base_dir: &str) -> Vec<ConnectorMod_Ref> {
         .max_depth(1000)
         .into_iter()
         // Ignoring permission errors
-        .filter_map(|e| e.ok())
-        // Only try to load those that look like plugins
-        .filter_map(|file| match file.path().extension() {
-            None => None,
-            Some(ext) if ext == env::consts::DLL_EXTENSION => Some(file),
-            Some(_) => None,
+        .filter_map(Result::ok)
+        // Only try to load those that look like plugins on the current platform
+        .filter(|file| {
+            file.path()
+                .extension()
+                .map(|ext| ext == env::consts::DLL_EXTENSION)
+                .unwrap_or(false)
         })
         // Try to load the plugins and if successful, add them to the result
         .filter_map(|file| {
