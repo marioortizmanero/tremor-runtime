@@ -27,7 +27,7 @@ macro_rules! ttry {
     };
 }
 
-pub fn load_recursively(base_dir: &str) -> Vec<ConnectorMod_Ref> {
+pub fn find_recursively(base_dir: &str) -> Vec<ConnectorMod_Ref> {
     WalkDir::new(base_dir)
         // No symlinks are followed for now
         .follow_links(false)
