@@ -23,7 +23,7 @@ pub struct ConnectorMod {
 
     #[sabi(last_prefix_field)]
     pub from_config: extern "C" fn(
-        id: &TremorUrl, config: &ROption<RString>
+        id: TremorUrl, config: ROption<RString>
     ) -> FfiFuture<RResult<BoxedRawConnector>>,
 }
 

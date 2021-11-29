@@ -46,7 +46,7 @@ use abi_stable::{
     },
     StableAbi,
 };
-use async_ffi::{FfiFuture, FutureExt};
+use async_ffi::{BorrowingFfiFuture, FutureExt};
 use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
 use beef::Cow;
 use tremor_common::url::{
@@ -160,7 +160,7 @@ pub type BoxedRawSource = RawSource_TO<'static, RBox<()>>;
 pub trait RawSource: Send {
     /// Pulls an event from the source if one exists
     /// `idgen` is passed in so the source can inspect what event id it would get if it was producing 1 event from the pulled data
-    fn pull_data(&mut self, pull_id: u64, ctx: &SourceContext) -> FfiFuture<RResult<SourceReply>>;
+    fn pull_data(&mut self, pull_id: u64, ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<SourceReply>>;
     /// This callback is called when the data provided from
     /// pull_event did not create any events, this is needed for
     /// linked sources that require a 1:1 mapping between requests
@@ -170,7 +170,7 @@ pub trait RawSource: Send {
         _pull_id: u64,
         _stream: u64,
         _ctx: &SourceContext,
-    ) -> FfiFuture<RResult<()>> {
+    ) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
 
@@ -184,20 +184,20 @@ pub trait RawSource: Send {
     ///////////////////////////
 
     /// called when the source is started. This happens only once in the whole source lifecycle, before any other callbacks
-    fn on_start(&mut self, _ctx: &SourceContext) -> FfiFuture<RResult<()>> {
+    fn on_start(&mut self, _ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
     /// called when the source is explicitly paused as result of a user/operator interaction
     /// in contrast to `on_cb_close` which happens automatically depending on downstream pipeline or sink connector logic.
-    fn on_pause(&mut self, _ctx: &SourceContext) -> FfiFuture<RResult<()>> {
+    fn on_pause(&mut self, _ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
     /// called when the source is explicitly resumed from being paused
-    fn on_resume(&mut self, _ctx: &SourceContext) -> FfiFuture<RResult<()>> {
+    fn on_resume(&mut self, _ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
     /// called when the source is stopped. This happens only once in the whole source lifecycle, as the very last callback
-    fn on_stop(&mut self, _ctx: &SourceContext) -> FfiFuture<RResult<()>> {
+    fn on_stop(&mut self, _ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
 
@@ -206,35 +206,35 @@ pub trait RawSource: Send {
     /// Expected reaction is to pause receiving messages, which is handled automatically by the runtime
     /// Source implementations might want to close connections or signal a pause to the upstream entity it connects to if not done in the connector (the default)
     // TODO: add info of Cb event origin (port, origin_uri)?
-    fn on_cb_close(&mut self, _ctx: &SourceContext) -> FfiFuture<RResult<()>> {
+    fn on_cb_close(&mut self, _ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
     /// Called when we receive a `open` Circuit breaker event from any connected pipeline
     /// This means we can start/continue polling this source for messages
     /// Source implementations might want to start establishing connections if not done in the connector (the default)
-    fn on_cb_open(&mut self, _ctx: &SourceContext) -> FfiFuture<RResult<()>> {
+    fn on_cb_open(&mut self, _ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
 
     // guaranteed delivery callbacks
     /// an event has been acknowledged and can be considered delivered
     /// multiple acks for the same set of ids are always possible
-    fn ack(&mut self, _stream_id: u64, _pull_id: u64) -> FfiFuture<RResult<()>> {
+    fn ack(&mut self, _stream_id: u64, _pull_id: u64) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
     /// an event has failed along its way and can be considered failed
     /// multiple fails for the same set of ids are always possible
-    fn fail(&mut self, _stream_id: u64, _pull_id: u64) -> FfiFuture<RResult<()>> {
+    fn fail(&mut self, _stream_id: u64, _pull_id: u64) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
 
     // connectivity stuff
     /// called when connector lost connectivity
-    fn on_connection_lost(&mut self, _ctx: &SourceContext) -> FfiFuture<RResult<()>> {
+    fn on_connection_lost(&mut self, _ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
     /// called when connector re-established connectivity
-    fn on_connection_established(&mut self, _ctx: &SourceContext) -> FfiFuture<RResult<()>> {
+    fn on_connection_established(&mut self, _ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
 

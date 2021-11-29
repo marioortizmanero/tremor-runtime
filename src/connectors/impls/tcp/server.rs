@@ -23,7 +23,7 @@ use simd_json::ValueAccess;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use async_ffi::{FfiFuture, FutureExt};
+use async_ffi::{BorrowingFfiFuture, FutureExt};
 use abi_stable::{
     rvec, rstr,
     std_types::{ROption::{self, RSome, RNone}, RResult::{ROk, RErr}, RStr, RString},
@@ -50,7 +50,7 @@ fn connector_type() -> ConnectorType {
 }
 
 #[sabi_extern_fn]
-pub fn from_config(id: &TremorUrl, raw_config: ROption<RString>) -> FfiFuture<RResult<BoxedRawConnector>> {
+pub fn from_config(id: TremorUrl, raw_config: ROption<RString>) -> BorrowingFfiFuture<'_, RResult<BoxedRawConnector>> {
     if let RSome(raw_config) = raw_config {
         let config = Config::from_str(&raw_config)?;
 
@@ -126,7 +126,7 @@ fn resolve_connection_meta(meta: &Value) -> Option<ConnectionMeta> {
 }
 
 impl RawConnector for TcpServer {
-    fn on_stop(&mut self, _ctx: &ConnectorContext) -> FfiFuture<RResult<()>> {
+    fn on_stop(&mut self, _ctx: &ConnectorContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         async move {
             if let Some(accept_task) = self.accept_task.take() {
                 // stop acceptin' new connections
@@ -141,7 +141,7 @@ impl RawConnector for TcpServer {
         &mut self,
         ctx: SourceContext,
         builder: SourceManagerBuilder,
-    ) -> FfiFuture<RResult<ROption<SourceAddr>>> {
+    ) -> BorrowingFfiFuture<'_, RResult<ROption<SourceAddr>>> {
         async move {
             let source = ChannelSource::new(ctx.clone(), builder.qsize());
             self.source_runtime = Some(source.runtime());
@@ -156,7 +156,7 @@ impl RawConnector for TcpServer {
         &mut self,
         ctx: SinkContext,
         builder: SinkManagerBuilder,
-    ) -> FfiFuture<RResult<ROption<SinkAddr>>> {
+    ) -> BorrowingFfiFuture<'_, RResult<ROption<SinkAddr>>> {
         async move {
             let sink =
                 ChannelSink::new_no_meta(builder.qsize(), resolve_connection_meta, builder.reply_tx());
@@ -168,7 +168,7 @@ impl RawConnector for TcpServer {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn connect(&mut self, ctx: &ConnectorContext, _attempt: &Attempt) -> FfiFuture<RResult<bool>> {
+    fn connect(&mut self, ctx: &ConnectorContext, _attempt: &Attempt) -> BorrowingFfiFuture<'_, RResult<bool>> {
         // TODO: move inner into separate function so that `?` can be used
         async move {
             let path = rvec![RString::from(self.config.port.to_string())];
