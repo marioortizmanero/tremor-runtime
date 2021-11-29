@@ -64,6 +64,7 @@ use abi_stable::{
     type_level::downcasting::TD_Opaque,
     StableAbi,
 };
+use async_ffi::{BorrowingFfiFuture, FutureExt};
 use async_std::channel::{bounded, Sender};
 use async_std::task::{self};
 use beef::Cow;
@@ -467,7 +468,7 @@ async fn connector_task(
                                 .and_then(|conf| serde_yaml::to_string(conf).ok())
                                 .map(RString::from)
                                 .into();
-                            let connector_res = builder.from_config()(&url, &config).await;
+                            let connector_res = builder.from_config()(url.clone(), config).await;
                             match connector_res {
                                 ROk(connector) => Connector(connector),
                                 RErr(e) => {
@@ -1500,7 +1501,7 @@ pub trait RawConnector: Send {
     fn create_source(
         &mut self,
         _source_context: SourceContext,
-    ) -> FfiFuture<RResult<ROption<BoxedRawSource>>> {
+    ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSource>>> {
         future::ready(ROk(RNone)).into_ffi()
     }
 
@@ -1511,7 +1512,7 @@ pub trait RawConnector: Send {
     fn create_sink(
         &mut self,
         _sink_context: SinkContext,
-    ) -> FfiFuture<RResult<ROption<BoxedRawSink>>> {
+    ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSink>>> {
         future::ready(ROk(RNone)).into_ffi()
     }
 
@@ -1529,21 +1530,20 @@ pub trait RawConnector: Send {
     ///
     /// To know when to stop reading new data from the external connection, the `quiescence` beacon
     /// can be used. Call `.reading()` and `.writing()` to see if you should continue doing so, if not, just stop and rest.
-    /* async */
-    fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> RResult<bool>;
+    fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> BorrowingFfiFuture<'_, RResult<bool>>;
 
     /// called once when the connector is started
     /// `connect` will be called after this for the first time, leave connection attempts in `connect`.
-    fn on_start(&mut self, _ctx: &ConnectorContext) -> FfiFuture<RResult<()>> {
+    fn on_start(&mut self, _ctx: &ConnectorContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
 
     /// called when the connector pauses
-    fn on_pause(&mut self, _ctx: &ConnectorContext) -> FfiFuture<RResult<()>> {
+    fn on_pause(&mut self, _ctx: &ConnectorContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
     /// called when the connector resumes
-    fn on_resume(&mut self, _ctx: &ConnectorContext) -> FfiFuture<RResult<()>> {
+    fn on_resume(&mut self, _ctx: &ConnectorContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
 
@@ -1551,12 +1551,12 @@ pub trait RawConnector: Send {
     ///
     /// Ensure no new events arrive at the source part of this connector when this function returns
     /// So we can safely send the `Drain` signal.
-    fn on_drain(&mut self, _ctx: &ConnectorContext) -> FfiFuture<RResult<()>> {
+    fn on_drain(&mut self, _ctx: &ConnectorContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
 
     /// called when the connector is stopped
-    fn on_stop(&mut self, _ctx: &ConnectorContext) -> FfiFuture<RResult<()>> {
+    fn on_stop(&mut self, _ctx: &ConnectorContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
 

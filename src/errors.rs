@@ -76,6 +76,21 @@ impl<P> From<std::sync::PoisonError<P>> for Error {
     }
 }
 
+/// For more ergonomic error-handling in PDK contexts
+impl From<Error> for abi_stable::std_types::SendRBoxError {
+    fn from(e: Error) -> Self {
+        Self::new(e)
+    }
+}
+
+/// For more ergonomic error-handling in PDK contexts
+impl From<ErrorKind> for abi_stable::std_types::SendRBoxError {
+    fn from(e: ErrorKind) -> Self {
+        let e: Error = e.into();
+        Self::new(e)
+    }
+}
+
 #[cfg(test)]
 impl PartialEq for Error {
     fn eq(&self, _other: &Self) -> bool {

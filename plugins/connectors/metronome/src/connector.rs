@@ -2,7 +2,7 @@
 
 use tremor_common::{time::nanotime, url::TremorUrl};
 use tremor_pipeline::DEFAULT_STREAM_ID;
-use tremor_runtime::{connectors::prelude::*, pdk::RResult, utils::hostname};
+use tremor_runtime::{connectors::prelude::*, pdk::RResult, utils::hostname, ttry};
 use tremor_script::{EventOriginUri, EventPayload};
 use tremor_value::literal;
 
@@ -20,7 +20,7 @@ use abi_stable::{
     },
     type_level::downcasting::TD_Opaque,
 };
-use async_ffi::{FfiFuture, FutureExt};
+use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt};
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug, Clone)]
@@ -47,7 +47,11 @@ struct Metronome {
 }
 
 impl RawConnector for Metronome {
-    fn connect(&mut self, _ctx: &ConnectorContext, _attempt: &Attempt) -> FfiFuture<RResult<bool>> {
+    fn connect(
+        &mut self,
+        _ctx: &ConnectorContext,
+        _attempt: &Attempt,
+    ) -> BorrowingFfiFuture<'_, RResult<bool>> {
         // No connection is actually necessary, it's just work locally
         future::ready(ROk(true)).into_ffi()
     }
@@ -56,7 +60,7 @@ impl RawConnector for Metronome {
     fn create_source(
         &mut self,
         _ctx: SourceContext,
-    ) -> FfiFuture<RResult<ROption<BoxedRawSource>>> {
+    ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSource>>> {
         let metronome = self.clone();
         // We don't need to be able to downcast the connector back to the original
         // type, so we just pass it as an opaque type.
@@ -74,7 +78,11 @@ impl RawConnector for Metronome {
 }
 
 impl RawSource for Metronome {
-    fn pull_data(&mut self, pull_id: u64, _ctx: &SourceContext) -> FfiFuture<RResult<SourceReply>> {
+    fn pull_data(
+        &mut self,
+        pull_id: u64,
+        _ctx: &SourceContext,
+    ) -> BorrowingFfiFuture<'_, RResult<SourceReply>> {
         // Even though this functionality may seem simple and panic-free,
         // it could occur in the addition operation, for example.
         let now = Instant::now();
@@ -110,37 +118,31 @@ impl RawSource for Metronome {
 /// Exports the metronome as a connector trait object
 #[sabi_extern_fn]
 pub fn from_config(
-    _id: &TremorUrl,
-    raw_config: &ROption<RString>,
+    _id: TremorUrl,
+    raw_config: ROption<RString>,
 ) -> FfiFuture<RResult<BoxedRawConnector>> {
-    if let RSome(raw_config) = raw_config {
-        let config = match Config::from_str(raw_config) {
-            Ok(config) => config,
-            Err(e) => {
-                todo!()
-                // FIXME: update after error handling
-                // return future::ready(RErr(e.into())).into_ffi()
-            }
-        };
+    async move {
+        if let RSome(raw_config) = raw_config {
+            let config = ttry!(Config::from_str(&raw_config));
 
-        let origin_uri = EventOriginUri {
-            scheme: RString::from("tremor-metronome"),
-            host: hostname().into(),
-            port: RNone,
-            path: rvec![config.interval.to_string().into()],
-        };
-        let metronome = Metronome {
-            origin_uri,
-            interval: Duration::from_millis(config.interval),
-            next: Instant::now(),
-        };
+            let origin_uri = EventOriginUri {
+                scheme: RString::from("tremor-metronome"),
+                host: hostname().into(),
+                port: RNone,
+                path: rvec![config.interval.to_string().into()],
+            };
+            let metronome = Metronome {
+                origin_uri,
+                interval: Duration::from_millis(config.interval),
+                next: Instant::now(),
+            };
 
-        future::ready(ROk(BoxedRawConnector::from_value(metronome, TD_Opaque))).into_ffi()
-    } else {
-        todo!();
-        // FIXME: update after error handling
-        // future::ready(RErr(ErrorKind::MissingConfiguration(String::from("metronome")).into())).into_ffi()
+            ROk(BoxedRawConnector::from_value(metronome, TD_Opaque))
+        } else {
+            RErr(ErrorKind::MissingConfiguration(String::from("metronome")).into())
+        }
     }
+    .into_ffi()
 }
 
 #[sabi_extern_fn]

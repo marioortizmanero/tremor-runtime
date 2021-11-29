@@ -37,6 +37,7 @@ use abi_stable::{
     type_level::downcasting::TD_Opaque,
     RMut, StableAbi,
 };
+use async_ffi::{BorrowingFfiFuture, FutureExt};
 use async_std::channel::{bounded, unbounded, Receiver, Sender};
 use async_std::stream::StreamExt; // for .next() on PriorityMerge
 use async_std::task;
@@ -185,14 +186,14 @@ pub trait RawSink: Send {
         ctx: &SinkContext,
         serializer: MutEventSerializer,
         start: u64,
-    ) -> RResult<SinkReply>;
+    ) -> BorrowingFfiFuture<'_, RResult<SinkReply>>;
     /// called when receiving a signal
     fn on_signal(
         &mut self,
         _signal: PdkEvent,
         _ctx: &SinkContext,
         _serializer: MutEventSerializer,
-    ) -> FfiFuture<RResult<SinkReply>> {
+    ) -> BorrowingFfiFuture<'_, RResult<SinkReply>> {
         future::ready(ROk(SinkReply::default())).into_ffi()
     }
 
@@ -203,29 +204,29 @@ pub trait RawSink: Send {
 
     // lifecycle stuff
     /// called when started
-    fn on_start(&mut self, _ctx: &SinkContext) -> FfiFuture<RResult<()>> {
+    fn on_start(&mut self, _ctx: &SinkContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
     /// called when paused
-    fn on_pause(&mut self, _ctx: &SinkContext) -> FfiFuture<RResult<()>> {
+    fn on_pause(&mut self, _ctx: &SinkContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
     /// called when resumed
-    fn on_resume(&mut self, _ctx: &SinkContext) -> FfiFuture<RResult<()>> {
+    fn on_resume(&mut self, _ctx: &SinkContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
     /// called when stopped
-    fn on_stop(&mut self, _ctx: &SinkContext) -> FfiFuture<RResult<()>> {
+    fn on_stop(&mut self, _ctx: &SinkContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
 
     // connectivity stuff
     /// called when sink lost connectivity
-    fn on_connection_lost(&mut self, _ctx: &SinkContext) -> FfiFuture<RResult<()>> {
+    fn on_connection_lost(&mut self, _ctx: &SinkContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
     /// called when sink re-established connectivity
-    fn on_connection_established(&mut self, _ctx: &SinkContext) -> FfiFuture<RResult<()>> {
+    fn on_connection_established(&mut self, _ctx: &SinkContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
 
