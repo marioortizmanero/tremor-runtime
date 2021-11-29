@@ -463,7 +463,9 @@ async fn connector_task(
                         {
                             // The config is converted to a string so that it
                             // can be passed through FFI.
-                            let config = create.config.config
+                            let config = create
+                                .config
+                                .config
                                 .as_ref()
                                 .and_then(|conf| serde_yaml::to_string(conf).ok())
                                 .map(RString::from)
@@ -1530,7 +1532,11 @@ pub trait RawConnector: Send {
     ///
     /// To know when to stop reading new data from the external connection, the `quiescence` beacon
     /// can be used. Call `.reading()` and `.writing()` to see if you should continue doing so, if not, just stop and rest.
-    fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> BorrowingFfiFuture<'_, RResult<bool>>;
+    fn connect(
+        &mut self,
+        ctx: &ConnectorContext,
+        attempt: &Attempt,
+    ) -> BorrowingFfiFuture<'_, RResult<bool>>;
 
     /// called once when the connector is started
     /// `connect` will be called after this for the first time, leave connection attempts in `connect`.

@@ -167,7 +167,11 @@ pub type BoxedRawSource = RawSource_TO<'static, RBox<()>>;
 pub trait RawSource: Send {
     /// Pulls an event from the source if one exists
     /// `idgen` is passed in so the source can inspect what event id it would get if it was producing 1 event from the pulled data
-    fn pull_data(&mut self, pull_id: u64, ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<SourceReply>>;
+    fn pull_data(
+        &mut self,
+        pull_id: u64,
+        ctx: &SourceContext,
+    ) -> BorrowingFfiFuture<'_, RResult<SourceReply>>;
     /// This callback is called when the data provided from
     /// pull_event did not create any events, this is needed for
     /// linked sources that require a 1:1 mapping between requests
@@ -241,7 +245,10 @@ pub trait RawSource: Send {
         future::ready(ROk(())).into_ffi()
     }
     /// called when connector re-established connectivity
-    fn on_connection_established(&mut self, _ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<()>> {
+    fn on_connection_established(
+        &mut self,
+        _ctx: &SourceContext,
+    ) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
 

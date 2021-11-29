@@ -20,7 +20,9 @@ macro_rules! ttry {
     ($e:expr) => {
         match $e {
             ::std::result::Result::Ok(val) => val,
-            ::std::result::Result::Err(err) => return ::abi_stable::std_types::RResult::RErr(err.into()),
+            ::std::result::Result::Err(err) => {
+                return ::abi_stable::std_types::RResult::RErr(err.into())
+            }
         }
     };
 }
