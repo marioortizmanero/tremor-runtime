@@ -16,6 +16,10 @@
 pub(crate) mod server;
 
 use crate::connectors::prelude::*;
+use abi_stable::std_types::{
+    ROption::{RNone, RSome},
+    RVec,
+};
 use async_std::net::TcpStream;
 use futures::{
     io::{ReadHalf, WriteHalf},
@@ -107,7 +111,7 @@ where
             trace!("[Connector::{}] EOF", &self.url);
             return Ok(SourceReply::EndStream {
                 origin_uri: self.origin_uri.clone(),
-                meta: Some(self.meta.clone()),
+                meta: RSome(self.meta.clone().into()),
                 stream_id: stream,
             });
         }
@@ -118,10 +122,10 @@ where
         Ok(SourceReply::Data {
             origin_uri: self.origin_uri.clone(),
             stream,
-            meta: Some(self.meta.clone()),
+            meta: RSome(self.meta.clone().into()),
             // ALLOW: we know bytes_read is smaller than or equal buf_size
-            data: self.buffer[0..bytes_read].to_vec(),
-            port: None,
+            data: RVec::from(&self.buffer[0..bytes_read]),
+            port: RNone,
         })
     }
 

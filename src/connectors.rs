@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // FIXME: uncomment
-// pub(crate) mod impls;
+pub(crate) mod impls;
 
 /// prelude with commonly needed stuff imported
 // FIXME: this should be reorganized after the pdk is moved to a separate crate
@@ -32,7 +32,7 @@ pub mod source;
 #[macro_use]
 pub mod utils;
 
-use std::{fmt::Display, future, path::Path, env};
+use std::{env, fmt::Display, future, path::Path};
 
 /// quiescence stuff
 pub(crate) use utils::{metrics, quiescence, reconnect};
@@ -48,7 +48,7 @@ use self::utils::quiescence::{
 };
 use crate::config::Connector as ConnectorConfig;
 use crate::errors::{Error, ErrorKind, Result};
-use crate::pdk::{connectors::ConnectorMod_Ref, RResult, self};
+use crate::pdk::{self, connectors::ConnectorMod_Ref, RResult};
 use crate::pipeline;
 use crate::system::World;
 use crate::OpConfig;
@@ -1802,8 +1802,7 @@ pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
     //
     // FIXME: the `plugins` fallback is only for development, this should have a
     // proper default value.
-    let base_dir = env::var("TREMOR_PLUGIN_PATH")
-        .unwrap_or_else(|_| String::from("plugins"));
+    let base_dir = env::var("TREMOR_PLUGIN_PATH").unwrap_or_else(|_| String::from("plugins"));
     let dynamic_plugins = pdk::find_recursively(&base_dir);
     for plugin in dynamic_plugins {
         world.register_connector_type(plugin).await?;
