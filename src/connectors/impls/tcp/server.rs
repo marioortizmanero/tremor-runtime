@@ -14,6 +14,8 @@
 use super::{TcpReader, TcpWriter};
 use crate::connectors::prelude::*;
 use crate::connectors::utils::tls::{load_server_config, TLSServerConfig};
+use crate::errors::{Error, ErrorKind};
+use crate::ttry;
 use async_std::net::TcpListener;
 use async_std::task::{self, JoinHandle};
 use async_tls::TlsAcceptor;
@@ -23,15 +25,18 @@ use simd_json::ValueAccess;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use async_ffi::{BorrowingFfiFuture, FutureExt};
 use abi_stable::{
-    rvec, rstr,
-    std_types::{ROption::{self, RSome, RNone}, RResult::{ROk, RErr}, RStr, RString},
-    prefix_type::PrefixTypeTrait,
     export_root_module,
-    sabi_extern_fn,
+    prefix_type::PrefixTypeTrait,
+    rstr, rvec, sabi_extern_fn,
+    std_types::{
+        ROption::{self, RNone, RSome},
+        RResult::{RErr, ROk},
+        RStr, RString,
+    },
     type_level::downcasting::TD_Opaque,
 };
+use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt};
 
 const URL_SCHEME: &str = "tremor-tcp-server";
 
@@ -50,27 +55,33 @@ fn connector_type() -> ConnectorType {
 }
 
 #[sabi_extern_fn]
-pub fn from_config(id: TremorUrl, raw_config: ROption<RString>) -> BorrowingFfiFuture<'_, RResult<BoxedRawConnector>> {
-    if let RSome(raw_config) = raw_config {
-        let config = Config::from_str(&raw_config)?;
+pub fn from_config(
+    id: TremorUrl,
+    raw_config: ROption<RString>,
+) -> FfiFuture<RResult<BoxedRawConnector>> {
+    async move {
+        if let RSome(raw_config) = raw_config {
+            let config = ttry!(Config::from_str(&raw_config));
 
-        let tls_server_config = if let Some(tls_config) = config.tls.as_ref() {
-            Some(load_server_config(tls_config)?)
+            let tls_server_config = if let Some(tls_config) = config.tls.as_ref() {
+                Some(ttry!(load_server_config(tls_config)))
+            } else {
+                None
+            };
+            let server = TcpServer {
+                url: id.clone(),
+                config,
+                accept_task: None,  // not yet started
+                sink_runtime: None, // replaced in create_sink()
+                source_runtime: None,
+                tls_server_config,
+            };
+            ROk(BoxedRawConnector::from_value(server, TD_Opaque))
         } else {
-            None
-        };
-        let server = TcpServer {
-            url: id.clone(),
-            config,
-            accept_task: None,  // not yet started
-            sink_runtime: None, // replaced in create_sink()
-            source_runtime: None,
-            tls_server_config,
-        };
-        ROk(BoxedRawConnector::from_value(server, TD_Opaque))
-    } else {
-        RErr(crate::errors::ErrorKind::MissingConfiguration(String::from("TcpServer")).into())
+            RErr(ErrorKind::MissingConfiguration(String::from("TcpServer")).into())
+        }
     }
+    .into_ffi()
 }
 
 #[derive(Deserialize, Debug)]
@@ -145,7 +156,7 @@ impl RawConnector for TcpServer {
         async move {
             let source = ChannelSource::new(ctx.clone(), builder.qsize());
             self.source_runtime = Some(source.runtime());
-            let addr = builder.spawn(source, ctx)?;
+            let addr = ttry!(builder.spawn(source, ctx));
 
             ROk(RSome(addr))
         }
@@ -158,30 +169,36 @@ impl RawConnector for TcpServer {
         builder: SinkManagerBuilder,
     ) -> BorrowingFfiFuture<'_, RResult<ROption<SinkAddr>>> {
         async move {
-            let sink =
-                ChannelSink::new_no_meta(builder.qsize(), resolve_connection_meta, builder.reply_tx());
+            let sink = ChannelSink::new_no_meta(
+                builder.qsize(),
+                resolve_connection_meta,
+                builder.reply_tx(),
+            );
             self.sink_runtime = Some(sink.runtime());
-            let addr = builder.spawn(sink, ctx)?;
+            let addr = ttry!(builder.spawn(sink, ctx));
             ROk(RSome(addr))
         }
         .into_ffi()
     }
 
     #[allow(clippy::too_many_lines)]
-    fn connect(&mut self, ctx: &ConnectorContext, _attempt: &Attempt) -> BorrowingFfiFuture<'_, RResult<bool>> {
-        // TODO: move inner into separate function so that `?` can be used
+    fn connect<'a>(
+        &'a mut self,
+        ctx: &'a ConnectorContext,
+        _attempt: &'a Attempt,
+    ) -> BorrowingFfiFuture<'a, RResult<bool>> {
         async move {
             let path = rvec![RString::from(self.config.port.to_string())];
             let accept_url = self.url.clone();
 
-            let source_runtime = self
+            let source_runtime = ttry!(self
                 .source_runtime
                 .clone()
-                .ok_or("Source runtime not initialized")?;
-            let sink_runtime = self
+                .ok_or(Error::from("Source runtime not initialized")));
+            let sink_runtime = ttry!(self
                 .sink_runtime
                 .clone()
-                .ok_or("sink runtime not initialized")?;
+                .ok_or(Error::from("sink runtime not initialized")));
             let buf_size = self.config.buf_size;
 
             // cancel last accept task if necessary, this will drop the previous listener
@@ -189,7 +206,11 @@ impl RawConnector for TcpServer {
                 previous_handle.cancel().await;
             }
 
-            let listener = TcpListener::bind((self.config.host.as_str(), self.config.port)).await?;
+            let listener = ttry!(
+                TcpListener::bind((self.config.host.as_str(), self.config.port))
+                    .await
+                    .map_err(Error::from)
+            );
 
             let ctx = ctx.clone();
             let tls_server_config = self.tls_server_config.clone();
@@ -273,7 +294,7 @@ impl RawConnector for TcpServer {
 
                 // notify connector task about disconnect
                 // of the listening socket
-                ctx.notifier.notify().await?;
+                Result::from(ctx.notifier.notify().await.map_err(Error::from))?;
                 Ok(())
             }));
 
