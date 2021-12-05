@@ -329,7 +329,10 @@ impl ReconnectRuntime {
 mod tests {
     // use crate::connectors::quiescence::QuiescenceBeacon;
 
-    use crate::connectors::quiescence::QuiescenceBeacon;
+    use crate::connectors::{quiescence::QuiescenceBeacon, RawConnector};
+    use crate::errors::Error;
+    use crate::pdk::{RError, RResult};
+    use abi_stable::{rstr, std_types::RStr};
 
     use super::*;
 
@@ -337,14 +340,19 @@ mod tests {
     struct FakeConnector {
         answer: Option<bool>,
     }
-    #[async_trait::async_trait]
-    impl Connector for FakeConnector {
-        async fn connect(&mut self, _ctx: &ConnectorContext, _attempt: &Attempt) -> Result<bool> {
-            self.answer.ok_or("Blergh!".into())
+    impl RawConnector for FakeConnector {
+        fn connect<'a>(
+            &'a mut self,
+            _ctx: &'a ConnectorContext,
+            _attempt: &'a Attempt,
+        ) -> BorrowingFfiFuture<'a, RResult<bool>> {
+            self.answer
+                .ok_or(RError::new(Error::from("Blergh!")))
+                .into()
         }
 
-        fn default_codec(&self) -> &str {
-            "json"
+        fn default_codec(&self) -> RStr<'_> {
+            rstr!("json")
         }
     }
 
