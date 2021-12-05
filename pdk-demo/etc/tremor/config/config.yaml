@@ -1,0 +1,32 @@
+connector:
+  - id: metronome-input
+    type: metronome
+    config:
+      interval: 1000
+
+  - id: tcp-input
+    type: tcp
+    codec: string
+    config:
+      port: 4242
+      host: "127.0.0.1"
+
+  - id: stdout-output
+    type: stdout
+    codec: json
+    config:
+      prefix: ">> "
+
+binding:
+  - id: default
+    links:
+      '/connector/tcp-input/{instance}/out':
+       - '/pipeline/main/{instance}/in'
+      '/connector/metronome-input/{instance}/out':
+       - '/pipeline/main/{instance}/in'
+      '/connector/main/{instance}/out':
+       - '/offramp/stdout-output/{instance}/in'
+
+mapping:
+  /binding/default/pdk-demo:
+    instance: "pdk-demo"
