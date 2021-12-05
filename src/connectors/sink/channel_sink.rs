@@ -15,10 +15,7 @@
 //! Sink implementation that keeps track of multiple streams and keeps channels to send to each stream
 
 use crate::connectors::prelude::*;
-use crate::connectors::{
-    reconnect::ConnectionLostNotifierOpaque, sink::EventSerializerOpaque, ConnectorContext,
-    QuiescenceBeaconOpaque, StreamDone,
-};
+use crate::connectors::{ConnectorContext, StreamDone};
 use crate::errors::{ErrorKind, Result};
 use crate::pdk::RResult;
 use crate::ttry;
