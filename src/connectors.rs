@@ -41,7 +41,7 @@ use async_std::task::{self, JoinHandle};
 use beef::Cow;
 
 use self::metrics::{MetricsSender, SinkReporter, SourceReporter};
-use self::sink::{BoxedRawSink, Sink, SinkAddr, SinkContext, SinkMsg};
+use self::sink::{BoxedContraflowSender, BoxedRawSink, Sink, SinkAddr, SinkContext, SinkMsg};
 use self::source::{BoxedRawSource, Source, SourceAddr, SourceContext, SourceMsg};
 use self::utils::quiescence::{
     BoxedQuiescenceBeacon, QuiescenceBeacon, QuiescenceBeaconOpaque, QuiescenceBeaconOpaque_TO,
@@ -62,7 +62,7 @@ use abi_stable::{
         RResult::{RErr, ROk},
         RSlice, RStr, RString, RVec,
     },
-    type_level::downcasting::TD_Opaque,
+    type_level::downcasting::{TD_CanDowncast, TD_Opaque},
     StableAbi,
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
@@ -1188,6 +1188,7 @@ pub trait RawConnector: Send {
     fn create_source(
         &mut self,
         _source_context: SourceContext,
+        _qsize: usize,
     ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSource>>> {
         future::ready(ROk(RNone)).into_ffi()
     }
@@ -1199,6 +1200,8 @@ pub trait RawConnector: Send {
     fn create_sink(
         &mut self,
         _sink_context: SinkContext,
+        _qsize: usize,
+        _reply_tx: BoxedContraflowSender,
     ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSink>>> {
         future::ready(ROk(RNone)).into_ffi()
     }
@@ -1295,7 +1298,11 @@ impl Connector {
         source_context: SourceContext,
         builder: source::SourceManagerBuilder,
     ) -> Result<Option<source::SourceAddr>> {
-        match self.0.create_source(source_context.clone()).await {
+        match self
+            .0
+            .create_source(source_context.clone(), builder.qsize())
+            .await
+        {
             ROk(RSome(raw_source)) => {
                 let wrapper = Source(raw_source);
                 builder.spawn(wrapper, source_context).map(Some)
@@ -1311,7 +1318,14 @@ impl Connector {
         sink_context: SinkContext,
         builder: sink::SinkManagerBuilder,
     ) -> Result<Option<sink::SinkAddr>> {
-        match self.0.create_sink(sink_context.clone()).await {
+        // Note that we actually want to be able to downcast back to the
+        // original type here, so that it's easier to manage in the runtime.
+        let reply_tx = BoxedContraflowSender::from_value(builder.reply_tx(), TD_CanDowncast);
+        match self
+            .0
+            .create_sink(sink_context.clone(), builder.qsize(), reply_tx)
+            .await
+        {
             ROk(RSome(raw_sink)) => {
                 let wrapper = Sink(raw_sink);
                 builder.spawn(wrapper, sink_context).map(Some)
@@ -1449,9 +1463,9 @@ pub trait ConnectorBuilder: Sync + Send {
 #[cfg(not(tarpaulin_include))]
 pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
     // First we load the hardcoded connectors
-    // world
-    //     .register_builtin_connector_type(ConnectorMod_Ref::load_from_file(&Path::new(path))?)
-    //     .await?;
+    world
+        .register_builtin_connector_type(impls::tcp::server::instantiate_root_module())
+        .await?;
 
     // Finally, we try to find all the available plugins and we load them
     // dynamically. For now, plugins are loaded from the path defined by

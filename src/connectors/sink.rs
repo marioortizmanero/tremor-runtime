@@ -28,8 +28,8 @@ use crate::config::{
     Codec as CodecConfig, Connector as ConnectorConfig, Postprocessor as PostprocessorConfig,
 };
 use crate::connectors::{ConnectorType, Context, Msg, StreamDone};
-use crate::errors::Result;
-use crate::pdk::RResult;
+use crate::errors::{Error, Result};
+use crate::pdk::{RError, RResult};
 use crate::permge::PriorityMerge;
 use crate::pipeline;
 use crate::postprocessor::{make_postprocessors, postprocess, Postprocessors};
@@ -54,7 +54,7 @@ use std::future;
 use tremor_common::time::nanotime;
 use tremor_common::url::{ports::IN, TremorUrl};
 use tremor_pipeline::{
-    pdk::PdkEvent, CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID,
+    pdk::PdkEvent, pdk::PdkOpMeta, CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID,
 };
 use tremor_script::{pdk::PdkEventPayload, EventPayload};
 
@@ -151,6 +151,8 @@ impl From<bool> for SinkAck {
 }
 
 /// Possible replies from asynchronous sinks via `reply_channel` from event or signal handling
+#[repr(C)]
+#[derive(StableAbi)]
 pub enum AsyncSinkReply {
     /// success
     Ack(ContraflowData, u64),
@@ -167,21 +169,21 @@ pub type BoxedRawSink = RawSink_TO<'static, RBox<()>>;
 #[abi_stable::sabi_trait]
 pub trait RawSink: Send {
     /// called when receiving an event
-    fn on_event(
-        &mut self,
-        input: RStr<'_>,
+    fn on_event<'a>(
+        &'a mut self,
+        input: RStr<'a>,
         event: PdkEvent,
-        ctx: &SinkContext,
-        serializer: MutEventSerializer,
+        ctx: &'a SinkContext,
+        serializer: &'a mut MutEventSerializer,
         start: u64,
-    ) -> BorrowingFfiFuture<'_, RResult<SinkReply>>;
+    ) -> BorrowingFfiFuture<'a, RResult<SinkReply>>;
     /// called when receiving a signal
-    fn on_signal(
-        &mut self,
+    fn on_signal<'a>(
+        &'a mut self,
         _signal: PdkEvent,
-        _ctx: &SinkContext,
-        _serializer: MutEventSerializer,
-    ) -> BorrowingFfiFuture<'_, RResult<SinkReply>> {
+        _ctx: &'a SinkContext,
+        _serializer: &'a mut MutEventSerializer,
+    ) -> BorrowingFfiFuture<'a, RResult<SinkReply>> {
         future::ready(ROk(SinkReply::default())).into_ffi()
     }
 
@@ -247,9 +249,9 @@ impl Sink {
         serializer: &mut EventSerializer,
         start: u64,
     ) -> Result<SinkReply> {
-        let serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
+        let mut serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
         self.0
-            .on_event(input.into(), event.into(), ctx, serializer, start)
+            .on_event(input.into(), event.into(), ctx, &mut serializer, start)
             .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
@@ -261,9 +263,9 @@ impl Sink {
         ctx: &SinkContext,
         serializer: &mut EventSerializer,
     ) -> Result<SinkReply> {
-        let serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
+        let mut serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
         self.0
-            .on_signal(signal.into(), ctx, serializer)
+            .on_signal(signal.into(), ctx, &mut serializer)
             .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
@@ -472,6 +474,24 @@ impl SinkManagerBuilder {
         Ok(SinkAddr { addr: sink_tx })
     }
 }
+
+#[abi_stable::sabi_trait]
+pub trait ContraflowSenderOpaque: Send {
+    fn send(&self, reply: AsyncSinkReply) -> BorrowingFfiFuture<'_, RResult<()>>;
+}
+impl ContraflowSenderOpaque for Sender<AsyncSinkReply> {
+    fn send(&self, reply: AsyncSinkReply) -> BorrowingFfiFuture<'_, RResult<()>> {
+        async move {
+            self.send(reply)
+                .await
+                .map_err(|e| RError::new(Error::from(e)))
+                .into()
+        }
+        .into_ffi()
+    }
+}
+/// Alias for the FFI-safe dynamic connector type
+pub type BoxedContraflowSender = ContraflowSenderOpaque_TO<'static, RBox<()>>;
 
 /// create a builder for a `SinkManager`.
 /// with the generic information available in the connector
@@ -944,14 +964,14 @@ impl SinkManager {
                         AsyncSinkReply::Ack(data, duration) => Event::cb_ack_with_timing(
                             data.ingest_ns,
                             data.event_id,
-                            data.op_meta,
+                            data.op_meta.into(),
                             duration,
                         ),
                         AsyncSinkReply::Fail(data) => {
-                            Event::cb_fail(data.ingest_ns, data.event_id, data.op_meta)
+                            Event::cb_fail(data.ingest_ns, data.event_id, data.op_meta.into())
                         }
                         AsyncSinkReply::CB(data, cb) => {
-                            Event::insight(cb, data.event_id, data.ingest_ns, data.op_meta)
+                            Event::insight(cb, data.event_id, data.ingest_ns, data.op_meta.into())
                         }
                     };
                     send_contraflow(&self.pipelines, &self.ctx.url, cf).await;
@@ -964,31 +984,32 @@ impl SinkManager {
     }
 }
 
-#[derive(Clone, Debug)]
+#[repr(C)]
+#[derive(Clone, Debug, StableAbi)]
 /// basic data to build contraflow messages
 pub struct ContraflowData {
     event_id: EventId,
     ingest_ns: u64,
-    op_meta: OpMeta,
+    op_meta: PdkOpMeta,
 }
 
 impl ContraflowData {
     fn into_ack(self, duration: u64) -> Event {
-        Event::cb_ack_with_timing(self.ingest_ns, self.event_id, self.op_meta, duration)
+        Event::cb_ack_with_timing(self.ingest_ns, self.event_id, self.op_meta.into(), duration)
     }
     fn into_fail(self) -> Event {
-        Event::cb_fail(self.ingest_ns, self.event_id, self.op_meta)
+        Event::cb_fail(self.ingest_ns, self.event_id, self.op_meta.into())
     }
     fn cb(&self, cb: CbAction) -> Event {
         Event::insight(
             cb,
             self.event_id.clone(),
             self.ingest_ns,
-            self.op_meta.clone(),
+            self.op_meta.clone().into(),
         )
     }
     fn into_cb(self, cb: CbAction) -> Event {
-        Event::insight(cb, self.event_id, self.ingest_ns, self.op_meta)
+        Event::insight(cb, self.event_id, self.ingest_ns, self.op_meta.into())
     }
 }
 
@@ -997,7 +1018,7 @@ impl From<&Event> for ContraflowData {
         ContraflowData {
             event_id: event.id.clone(),
             ingest_ns: event.ingest_ns,
-            op_meta: event.op_meta.clone(),
+            op_meta: event.op_meta.clone().into(), // TODO: mem::swap here?
         }
     }
 }
@@ -1007,7 +1028,17 @@ impl From<Event> for ContraflowData {
         ContraflowData {
             event_id: event.id,
             ingest_ns: event.ingest_ns,
-            op_meta: event.op_meta,
+            op_meta: event.op_meta.into(),
+        }
+    }
+}
+
+impl From<&PdkEvent> for ContraflowData {
+    fn from(event: &PdkEvent) -> Self {
+        ContraflowData {
+            event_id: event.id.clone(),
+            ingest_ns: event.ingest_ns,
+            op_meta: event.op_meta.clone(), // TODO: mem::swap here?
         }
     }
 }
