@@ -51,11 +51,26 @@ pub struct QuiescenceBeacon(Arc<Inner>);
 /// with the help of `sabi_trait`.
 #[abi_stable::sabi_trait]
 pub trait QuiescenceBeaconOpaque: fmt::Debug + Clone + Send + Sync {
+    /// returns `true` if consumers should continue reading
+    /// doesn't return until the beacon is unpaused
     fn continue_reading(&self) -> BorrowingFfiFuture<'_, bool>;
+
+    /// returns `true` if consumers should continue writing.
+    ///
     fn continue_writing(&self) -> BorrowingFfiFuture<'_, bool>;
+
+    /// notify consumers of this beacon that reading should be stopped
     fn stop_reading(&mut self);
+
+    /// pause both reading and writing
     fn pause(&mut self);
+
+    /// Resume both reading and writing.
+    ///
+    /// Has no effect if not currently paused.
     fn resume(&mut self);
+
+    /// notify consumers of this beacon that reading and writing should be stopped
     fn full_stop(&mut self);
 }
 impl QuiescenceBeacon {
@@ -64,8 +79,6 @@ impl QuiescenceBeacon {
     const MAX_LISTENERS: usize = 2;
 }
 impl QuiescenceBeaconOpaque for QuiescenceBeacon {
-    /// returns `true` if consumers should continue reading
-    /// doesn't return until the beacon is unpaused
     fn continue_reading(&self) -> BorrowingFfiFuture<'_, bool> {
         async move {
             loop {
@@ -83,8 +96,6 @@ impl QuiescenceBeaconOpaque for QuiescenceBeacon {
         .into_ffi()
     }
 
-    /// returns `true` if consumers should continue writing.
-    ///
     fn continue_writing(&self) -> BorrowingFfiFuture<'_, bool> {
         async move {
             loop {
@@ -100,13 +111,11 @@ impl QuiescenceBeaconOpaque for QuiescenceBeacon {
         .into_ffi()
     }
 
-    /// notify consumers of this beacon that reading should be stopped
     fn stop_reading(&mut self) {
         self.0.state.store(Inner::STOP_READING, Ordering::Release);
         self.0.resume_event.notify(Self::MAX_LISTENERS); // we might have been paused, so notify here
     }
 
-    /// pause both reading and writing
     fn pause(&mut self) {
         let _ = self.0.state.compare_exchange(
             Inner::RUNNING,
@@ -116,9 +125,6 @@ impl QuiescenceBeaconOpaque for QuiescenceBeacon {
         );
     }
 
-    /// Resume both reading and writing.
-    ///
-    /// Has no effect if not currently paused.
     fn resume(&mut self) {
         let _ = self.0.state.compare_exchange(
             Inner::PAUSED,
@@ -129,7 +135,6 @@ impl QuiescenceBeaconOpaque for QuiescenceBeacon {
         self.0.resume_event.notify(Self::MAX_LISTENERS); // we might have been paused, so notify here
     }
 
-    /// notify consumers of this beacon that reading and writing should be stopped
     fn full_stop(&mut self) {
         self.0.state.store(Inner::STOP_ALL, Ordering::Release);
         self.0.resume_event.notify(Self::MAX_LISTENERS); // we might have been paused, so notify here

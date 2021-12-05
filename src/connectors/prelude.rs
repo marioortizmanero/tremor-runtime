@@ -16,18 +16,17 @@ pub use crate::connectors::quiescence::QuiescenceBeacon;
 pub use crate::connectors::sink::{
     AsyncSinkReply, BoxedContraflowSender, BoxedEventSerializer, BoxedRawSink, ChannelSink,
     ChannelSinkRuntime, ContraflowData, ContraflowSenderOpaque, EventSerializerOpaque,
-    MutEventSerializer, RawSink, SingleStreamSink, SingleStreamSinkRuntime, Sink, SinkAck,
-    SinkAddr, SinkContext, SinkManagerBuilder, SinkMeta, SinkReply, StreamWriter,
+    MutEventSerializer, RawSink, SingleStreamSink, SingleStreamSinkRuntime, SinkAck, SinkAddr,
+    SinkContext, SinkMeta, SinkReply, StreamWriter,
 };
 pub use crate::connectors::source::{
-    BoxedRawSource, ChannelSource, ChannelSourceRuntime, RawSource, Source, SourceAddr,
-    SourceContext, SourceManagerBuilder, SourceReply, SourceReplySender, StreamReader,
-    DEFAULT_POLL_INTERVAL,
+    BoxedRawSource, ChannelSource, ChannelSourceRuntime, RawSource, SourceAddr, SourceContext,
+    SourceReply, SourceReplySender, StreamReader, DEFAULT_POLL_INTERVAL,
 };
 pub use crate::connectors::utils::reconnect::{Attempt, ConnectionLostNotifier};
 pub use crate::connectors::{
-    BoxedRawConnector, Connector, ConnectorBuilder, ConnectorContext, ConnectorType, Context,
-    RawConnector, StreamDone, StreamIdGen,
+    BoxedRawConnector, ConnectorContext, ConnectorType, Context, RawConnector, StreamDone,
+    StreamIdGen,
 };
 pub use crate::errors::{Error, ErrorKind, Result};
 pub use crate::pdk::{

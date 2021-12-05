@@ -262,10 +262,10 @@ pub trait RawSource: Send {
 /// Source part of a connector.
 ///
 /// Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
-/// types so that it's easier to use with `std`. This may be removed in the
-/// future for performance reasons.
-pub struct Source(pub BoxedRawSource);
+/// types so that it's easier to use with `std`.
+pub(crate) struct Source(pub BoxedRawSource);
 impl Source {
+    /// Wrapper for [`BoxedRawSource::pull_data`]
     #[inline]
     pub async fn pull_data(&mut self, pull_id: u64, ctx: &SourceContext) -> Result<SourceReply> {
         self.0
@@ -274,6 +274,7 @@ impl Source {
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
+    /// Wrapper for [`BoxedRawSource::on_no_events`]
     #[inline]
     pub async fn on_no_events(
         &mut self,
@@ -288,7 +289,7 @@ impl Source {
             .into() // RResult -> Result
     }
 
-    /// Pulls custom metrics from the source
+    /// Wrapper for [`BoxedRawSource::metrics`]
     #[inline]
     pub fn metrics(&mut self, timestamp: u64) -> Vec<EventPayload> {
         self.0
@@ -298,6 +299,7 @@ impl Source {
             .collect()
     }
 
+    /// Wrapper for [`BoxedRawSource::on_start`]
     #[inline]
     pub async fn on_start(&mut self, ctx: &SourceContext) -> Result<()> {
         self.0
@@ -306,6 +308,7 @@ impl Source {
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
+    /// Wrapper for [`BoxedRawSource::on_pause`]
     #[inline]
     pub async fn on_pause(&mut self, ctx: &SourceContext) -> Result<()> {
         self.0
@@ -314,6 +317,7 @@ impl Source {
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
+    /// Wrapper for [`BoxedRawSource::on_resume`]
     #[inline]
     pub async fn on_resume(&mut self, ctx: &SourceContext) -> Result<()> {
         self.0
@@ -322,6 +326,7 @@ impl Source {
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
+    /// Wrapper for [`BoxedRawSource::on_stop`]
     #[inline]
     pub async fn on_stop(&mut self, ctx: &SourceContext) -> Result<()> {
         self.0
@@ -331,6 +336,7 @@ impl Source {
             .into() // RResult -> Result
     }
 
+    /// Wrapper for [`BoxedRawSource::on_cb_close`]
     #[inline]
     pub async fn on_cb_close(&mut self, ctx: &SourceContext) -> Result<()> {
         self.0
@@ -339,6 +345,7 @@ impl Source {
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
+    /// Wrapper for [`BoxedRawSource::on_cb_open`]
     #[inline]
     pub async fn on_cb_open(&mut self, ctx: &SourceContext) -> Result<()> {
         self.0
@@ -348,6 +355,7 @@ impl Source {
             .into() // RResult -> Result
     }
 
+    /// Wrapper for [`BoxedRawSource::ack`]
     #[inline]
     pub async fn ack(&mut self, stream_id: u64, pull_id: u64) -> Result<()> {
         self.0
@@ -356,6 +364,7 @@ impl Source {
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
+    /// Wrapper for [`BoxedRawSource::fail`]
     #[inline]
     pub async fn fail(&mut self, stream_id: u64, pull_id: u64) -> Result<()> {
         self.0
@@ -365,6 +374,7 @@ impl Source {
             .into() // RResult -> Result
     }
 
+    /// Wrapper for [`BoxedRawSource::on_connection_lost`]
     #[inline]
     pub async fn on_connection_lost(&mut self, ctx: &SourceContext) -> Result<()> {
         self.0
@@ -373,6 +383,7 @@ impl Source {
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
+    /// Wrapper for [`BoxedRawSource::on_connection_established`]
     #[inline]
     pub async fn on_connection_established(&mut self, ctx: &SourceContext) -> Result<()> {
         self.0
@@ -382,6 +393,7 @@ impl Source {
             .into() // RResult -> Result
     }
 
+    /// Wrapper for [`BoxedRawSource::is_transactional`]
     #[inline]
     pub fn is_transactional(&self) -> bool {
         self.0.is_transactional()
@@ -551,7 +563,7 @@ impl SourceAddr {
 
 /// Builder for the SourceManager
 #[allow(clippy::module_name_repetitions)]
-pub struct SourceManagerBuilder {
+pub(crate) struct SourceManagerBuilder {
     qsize: usize,
     streams: Streams,
     source_metrics_reporter: SourceReporter,
