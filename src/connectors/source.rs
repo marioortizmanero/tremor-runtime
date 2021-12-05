@@ -30,7 +30,7 @@ use crate::config::{
 };
 use crate::connectors::{ConnectorType, Context, Msg, QuiescenceBeacon};
 use crate::errors::{Error, Result};
-use crate::pdk::RResult;
+use crate::pdk::{RError, RResult};
 use crate::pipeline;
 use crate::preprocessor::{finish, make_preprocessors, preprocess, Preprocessors};
 use crate::{
@@ -160,21 +160,21 @@ pub type BoxedRawSource = RawSource_TO<'static, RBox<()>>;
 pub trait RawSource: Send {
     /// Pulls an event from the source if one exists
     /// `idgen` is passed in so the source can inspect what event id it would get if it was producing 1 event from the pulled data
-    fn pull_data(
-        &mut self,
+    fn pull_data<'a>(
+        &'a mut self,
         pull_id: u64,
-        ctx: &SourceContext,
-    ) -> BorrowingFfiFuture<'_, RResult<SourceReply>>;
+        ctx: &'a SourceContext,
+    ) -> BorrowingFfiFuture<'a, RResult<SourceReply>>;
     /// This callback is called when the data provided from
     /// pull_event did not create any events, this is needed for
     /// linked sources that require a 1:1 mapping between requests
     /// and responses, we're looking at you REST
-    fn on_no_events(
-        &mut self,
+    fn on_no_events<'a>(
+        &'a mut self,
         _pull_id: u64,
         _stream: u64,
-        _ctx: &SourceContext,
-    ) -> BorrowingFfiFuture<'_, RResult<()>> {
+        _ctx: &'a SourceContext,
+    ) -> BorrowingFfiFuture<'a, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
 
@@ -404,6 +404,31 @@ impl ChannelSource {
             sender: self.tx.clone(),
             ctx: self.ctx.clone(),
         }
+    }
+}
+
+impl RawSource for ChannelSource {
+    fn pull_data<'a>(
+        &'a mut self,
+        pull_id: u64,
+        ctx: &'a SourceContext,
+    ) -> BorrowingFfiFuture<'a, RResult<SourceReply>> {
+        async move {
+            match self.rx.try_recv() {
+                Ok(reply) => ROk(reply),
+                Err(TryRecvError::Empty) => {
+                    // TODO: configure pull interval in connector config?
+                    ROk(SourceReply::Empty(DEFAULT_POLL_INTERVAL))
+                }
+                Err(e) => RErr(RError::new(Error::from(e))),
+            }
+        }
+        .into_ffi()
+    }
+
+    /// this source is not handling acks/fails
+    fn is_transactional(&self) -> bool {
+        false
     }
 }
 
