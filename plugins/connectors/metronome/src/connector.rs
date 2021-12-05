@@ -2,7 +2,7 @@
 
 use tremor_common::{time::nanotime, url::TremorUrl};
 use tremor_pipeline::DEFAULT_STREAM_ID;
-use tremor_runtime::{connectors::prelude::*, pdk::RResult, utils::hostname, ttry};
+use tremor_runtime::{connectors::prelude::*, pdk::RResult, ttry, utils::hostname};
 use tremor_script::{EventOriginUri, EventPayload};
 use tremor_value::literal;
 
@@ -36,13 +36,6 @@ impl ConfigImpl for Config {}
 struct Metronome {
     interval: Duration,
     next: Instant,
-    /// Note that in the metronome we save the PDK version of EventOriginUri
-    /// because it's needed to return a source reply.
-    ///
-    /// However, we could internally hold the regular feature-full
-    /// EventOriginUri and convert to the PDK one whenever we want to return it.
-    /// In this case we don't need any of its functionality so there's no need
-    /// to.
     origin_uri: EventOriginUri,
 }
 
@@ -60,6 +53,7 @@ impl RawConnector for Metronome {
     fn create_source(
         &mut self,
         _ctx: SourceContext,
+        _qsize: usize,
     ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSource>>> {
         let metronome = self.clone();
         // We don't need to be able to downcast the connector back to the original
@@ -78,13 +72,11 @@ impl RawConnector for Metronome {
 }
 
 impl RawSource for Metronome {
-    fn pull_data(
-        &mut self,
+    fn pull_data<'a>(
+        &'a mut self,
         pull_id: u64,
-        _ctx: &SourceContext,
-    ) -> BorrowingFfiFuture<'_, RResult<SourceReply>> {
-        // Even though this functionality may seem simple and panic-free,
-        // it could occur in the addition operation, for example.
+        _ctx: &'a SourceContext,
+    ) -> BorrowingFfiFuture<'a, RResult<SourceReply>> {
         let now = Instant::now();
         let reply = if self.next < now {
             self.next = now + self.interval;
@@ -115,7 +107,7 @@ impl RawSource for Metronome {
     }
 }
 
-/// Exports the metronome as a connector trait object
+/// Configures and exports the metronome as a connector trait object
 #[sabi_extern_fn]
 pub fn from_config(
     _id: TremorUrl,
