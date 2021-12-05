@@ -100,7 +100,7 @@ where
     resolver: F,
     tx: Sender<ChannelSinkMsg<M>>,
     rx: Receiver<ChannelSinkMsg<M>>,
-    reply_tx: Sender<AsyncSinkReply>,
+    reply_tx: BoxedContraflowSender,
 }
 
 impl<T, F> ChannelSink<T, F, NoMeta>
@@ -108,21 +108,9 @@ where
     T: Hash + Eq + Send + 'static,
     F: Fn(&Value<'_>) -> Option<T>,
 {
-    /// constructor of a ChannelSink that is not sending the event metadata to the StreamWriter
-    /// and by that saves an expensive clone()
-    pub fn new_no_meta(qsize: usize, resolver: F, reply_tx: Sender<AsyncSinkReply>) -> Self {
-        let (tx, rx) = bounded(qsize);
-        ChannelSink::new(resolver, reply_tx, tx, rx)
-    }
-
-    /// Construct a new instance that redacts metadata with prepared `rx` and `tx`
-    pub fn from_channel_no_meta(
-        resolver: F,
-        reply_tx: Sender<AsyncSinkReply>,
-        tx: Sender<ChannelSinkMsg<T>>,
-        rx: Receiver<ChannelSinkMsg<T>>,
-    ) -> Self {
-        ChannelSink::new(resolver, reply_tx, tx, rx)
+    /// constructor
+    pub fn new_no_meta(qsize: usize, resolver: F, reply_tx: BoxedContraflowSender) -> Self {
+        ChannelSink::new(qsize, resolver, reply_tx)
     }
 }
 
@@ -155,15 +143,9 @@ where
     F: Fn(&Value<'_>) -> Option<T>,
     B: SinkMetaBehaviour,
 {
-    /// constructor of a ChannelSink that is sending the event metadata to the StreamWriter
-    /// in case it needs it in the write.
-    /// This costs a clone.
-    pub fn new(
-        resolver: F,
-        reply_tx: Sender<AsyncSinkReply>,
-        tx: Sender<ChannelSinkMsg<T>>,
-        rx: Receiver<ChannelSinkMsg<T>>,
-    ) -> Self {
+    /// constructor
+    pub fn new(qsize: usize, resolver: F, reply_tx: BoxedContraflowSender) -> Self {
+        let (tx, rx) = bounded(qsize);
         let streams = HashMap::with_capacity(8);
         let streams_meta = BiMap::with_capacity(8);
         Self {

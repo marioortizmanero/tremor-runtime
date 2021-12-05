@@ -41,7 +41,7 @@ use async_std::task::{self, JoinHandle};
 use beef::Cow;
 
 use self::metrics::{MetricsSender, SinkReporter, SourceReporter};
-use self::sink::{BoxedRawSink, Sink, SinkAddr, SinkContext, SinkMsg};
+use self::sink::{BoxedContraflowSender, BoxedRawSink, Sink, SinkAddr, SinkContext, SinkMsg};
 use self::source::{BoxedRawSource, Source, SourceAddr, SourceContext, SourceMsg};
 use self::utils::quiescence::{
     BoxedQuiescenceBeacon, QuiescenceBeacon, QuiescenceBeaconOpaque, QuiescenceBeaconOpaque_TO,
@@ -1503,6 +1503,7 @@ pub trait RawConnector: Send {
     fn create_source(
         &mut self,
         _source_context: SourceContext,
+        _qsize: usize,
     ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSource>>> {
         future::ready(ROk(RNone)).into_ffi()
     }
@@ -1514,6 +1515,8 @@ pub trait RawConnector: Send {
     fn create_sink(
         &mut self,
         _sink_context: SinkContext,
+        _qsize: usize,
+        _reply_tx: BoxedContraflowSender,
     ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSink>>> {
         future::ready(ROk(RNone)).into_ffi()
     }
@@ -1610,7 +1613,11 @@ impl Connector {
         source_context: SourceContext,
         builder: source::SourceManagerBuilder,
     ) -> Result<Option<source::SourceAddr>> {
-        match self.0.create_source(source_context.clone()) {
+        match self
+            .0
+            .create_source(source_context.clone(), builder.qsize())
+            .await
+        {
             ROk(RSome(raw_source)) => {
                 let wrapper = Source(raw_source);
                 builder.spawn(wrapper, source_context).map(Some)
@@ -1626,7 +1633,12 @@ impl Connector {
         sink_context: SinkContext,
         builder: sink::SinkManagerBuilder,
     ) -> Result<Option<sink::SinkAddr>> {
-        match self.0.create_sink(sink_context.clone()) {
+        let reply_tx = BoxedContraflowSender::from_value(builder.reply_tx(), TD_Opaque);
+        match self
+            .0
+            .create_sink(sink_context.clone(), builder.qsize(), reply_tx)
+            .await
+        {
             ROk(RSome(raw_sink)) => {
                 let wrapper = Sink(raw_sink);
                 builder.spawn(wrapper, sink_context).map(Some)
