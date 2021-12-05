@@ -187,7 +187,7 @@ pub trait RawSink: Send {
         input: RStr<'a>,
         event: PdkEvent,
         ctx: &'a SinkContext,
-        serializer: MutEventSerializer<'a>,
+        serializer: &'a mut MutEventSerializer,
         start: u64,
     ) -> BorrowingFfiFuture<'a, RResult<SinkReply>>;
     /// called when receiving a signal
@@ -195,7 +195,7 @@ pub trait RawSink: Send {
         &'a mut self,
         _signal: PdkEvent,
         _ctx: &'a SinkContext,
-        _serializer: MutEventSerializer<'a>,
+        _serializer: &'a mut MutEventSerializer,
     ) -> BorrowingFfiFuture<'a, RResult<SinkReply>> {
         future::ready(ROk(SinkReply::default())).into_ffi()
     }
@@ -341,9 +341,10 @@ impl Sink {
         serializer: &mut EventSerializer,
         start: u64,
     ) -> Result<SinkReply> {
-        let serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
+        let mut serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
         self.0
-            .on_event(input.into(), event.into(), ctx, serializer, start)
+            .on_event(input.into(), event.into(), ctx, &mut serializer, start)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -354,9 +355,10 @@ impl Sink {
         ctx: &SinkContext,
         serializer: &mut EventSerializer,
     ) -> Result<SinkReply> {
-        let serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
+        let mut serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
         self.0
-            .on_signal(signal.into(), ctx, serializer)
+            .on_signal(signal.into(), ctx, &mut serializer)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }

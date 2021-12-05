@@ -174,13 +174,13 @@ where
         }
     }
 
-    fn handle_channels_quickly(&mut self, serializer: MutEventSerializer) -> bool {
+    fn handle_channels_quickly(&mut self, serializer: &mut MutEventSerializer) -> bool {
         self.handle_channels(serializer, false)
     }
     /// returns true, if there are no more channels to send stuff to
     fn handle_channels(
         &mut self,
-        serializer: MutEventSerializer,
+        serializer: &mut MutEventSerializer,
         clean_closed_streams: bool,
     ) -> bool {
         while let Ok(msg) = self.rx.try_recv() {
@@ -356,7 +356,7 @@ where
         input: RStr<'a>,
         event: PdkEvent,
         ctx: &'a SinkContext,
-        serializer: MutEventSerializer<'a>,
+        serializer: &'a mut MutEventSerializer,
         start: u64,
     ) -> BorrowingFfiFuture<'a, RResult<SinkReply>> {
         async move {
@@ -455,7 +455,7 @@ where
         &'a mut self,
         signal: PdkEvent,
         _ctx: &'a SinkContext,
-        serializer: MutEventSerializer<'a>,
+        serializer: &'a mut MutEventSerializer,
     ) -> BorrowingFfiFuture<'a, RResult<SinkReply>> {
         if let RSome(SignalKind::Tick) = signal.kind {
             self.handle_channels(serializer, true);
