@@ -18,9 +18,7 @@
 
 use std::marker::PhantomData;
 
-use crate::connectors::{
-    reconnect::ConnectionLostNotifierOpaque, ConnectorContext, QuiescenceBeaconOpaque, StreamDone,
-};
+use crate::connectors::{ConnectorContext, StreamDone};
 use crate::errors::{ErrorKind, Result};
 use abi_stable::std_types::ROption::{RNone, RSome};
 use async_std::{
