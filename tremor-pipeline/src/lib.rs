@@ -14,20 +14,15 @@
 
 //! Tremor event processing pipeline
 
-// TODO: disable and cleanup with `cargo fix` automatically once done
-#![allow(dead_code)]
-#![allow(unused)]
-// TODO: turn back on
-// #![deny(warnings)]
-// #![deny(missing_docs)]
+#![deny(warnings)]
+#![deny(missing_docs)]
 #![recursion_limit = "1024"]
-// TODO: turn back on
-// #![deny(
-//     clippy::all,
-//     clippy::unwrap_used,
-//     clippy::unnecessary_unwrap,
-//     clippy::pedantic
-// )]
+#![deny(
+    clippy::all,
+    clippy::unwrap_used,
+    clippy::unnecessary_unwrap,
+    clippy::pedantic
+)]
 
 #[macro_use]
 extern crate serde_derive;
