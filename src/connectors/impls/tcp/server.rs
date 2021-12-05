@@ -22,6 +22,7 @@ use async_tls::TlsAcceptor;
 use futures::io::AsyncReadExt;
 use rustls::ServerConfig;
 use simd_json::ValueAccess;
+use std::future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -151,34 +152,28 @@ impl RawConnector for TcpServer {
     fn create_source(
         &mut self,
         ctx: SourceContext,
-        builder: SourceManagerBuilder,
-    ) -> BorrowingFfiFuture<'_, RResult<ROption<SourceAddr>>> {
-        async move {
-            let source = ChannelSource::new(ctx.clone(), builder.qsize());
-            self.source_runtime = Some(source.runtime());
-            let addr = ttry!(builder.spawn(source, ctx));
-
-            ROk(RSome(addr))
-        }
-        .into_ffi()
+        qsize: usize,
+    ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSource>>> {
+        let source = ChannelSource::new(ctx.clone(), qsize);
+        self.source_runtime = Some(source.runtime());
+        // We don't need to be able to downcast the connector back to the original
+        // type, so we just pass it as an opaque type.
+        let source = BoxedRawSource::from_value(source, TD_Opaque);
+        future::ready(ROk(RSome(source))).into_ffi()
     }
 
     fn create_sink(
         &mut self,
         ctx: SinkContext,
-        builder: SinkManagerBuilder,
-    ) -> BorrowingFfiFuture<'_, RResult<ROption<SinkAddr>>> {
-        async move {
-            let sink = ChannelSink::new_no_meta(
-                builder.qsize(),
-                resolve_connection_meta,
-                builder.reply_tx(),
-            );
-            self.sink_runtime = Some(sink.runtime());
-            let addr = ttry!(builder.spawn(sink, ctx));
-            ROk(RSome(addr))
-        }
-        .into_ffi()
+        qsize: usize,
+        reply_tx: BoxedContraflowSender,
+    ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSink>>> {
+        let sink = ChannelSink::new_no_meta(qsize, resolve_connection_meta, reply_tx);
+        self.sink_runtime = Some(sink.runtime());
+        // We don't need to be able to downcast the connector back to the original
+        // type, so we just pass it as an opaque type.
+        let sink = BoxedRawSink::from_value(sink, TD_Opaque);
+        future::ready(ROk(RSome(sink))).into_ffi()
     }
 
     #[allow(clippy::too_many_lines)]

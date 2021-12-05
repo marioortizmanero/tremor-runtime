@@ -101,7 +101,7 @@ where
     resolver: F,
     tx: Sender<ChannelSinkMsg<M>>,
     rx: Receiver<ChannelSinkMsg<M>>,
-    reply_tx: Sender<AsyncSinkReply>,
+    reply_tx: BoxedContraflowSender,
 }
 
 impl<T, F> ChannelSink<T, F, NoMeta>
@@ -110,7 +110,7 @@ where
     F: Fn(&Value<'_>) -> Option<T>,
 {
     /// constructor
-    pub fn new_no_meta(qsize: usize, resolver: F, reply_tx: Sender<AsyncSinkReply>) -> Self {
+    pub fn new_no_meta(qsize: usize, resolver: F, reply_tx: BoxedContraflowSender) -> Self {
         ChannelSink::new(qsize, resolver, reply_tx)
     }
 }
@@ -134,7 +134,7 @@ where
     B: SinkMetaBehaviour,
 {
     /// constructor
-    pub fn new(qsize: usize, resolver: F, reply_tx: Sender<AsyncSinkReply>) -> Self {
+    pub fn new(qsize: usize, resolver: F, reply_tx: BoxedContraflowSender) -> Self {
         let (tx, rx) = bounded(qsize);
         let streams = HashMap::with_capacity(8);
         let streams_meta = BiMap::with_capacity(8);
