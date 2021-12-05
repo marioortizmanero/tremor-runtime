@@ -43,7 +43,7 @@ use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt};
 const URL_SCHEME: &str = "tremor-tcp-server";
 
 #[export_root_module]
-fn instantiate_root_module() -> ConnectorMod_Ref {
+pub fn instantiate_root_module() -> ConnectorMod_Ref {
     ConnectorMod {
         connector_type,
         from_config,
