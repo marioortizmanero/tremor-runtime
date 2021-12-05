@@ -18,10 +18,14 @@
 // pub(crate) mod bench;
 // /// connector for checking guaranteed delivery and circuit breaker logic
 // pub(crate) mod cb;
+// /// Crononome
+// pub(crate) mod crononome;
 // /// Discord connector
 // pub(crate) mod discord;
 // /// DNS
 // pub(crate) mod dns;
+// /// Elasticsearch Connector
+// pub(crate) mod elastic;
 // /// Exit Connector
 // pub(crate) mod exit;
 // /// file connector implementation
@@ -37,6 +41,8 @@
 /// tcp server and client connector impls
 pub(crate) mod tcp;
 // /// udp connector impls
-// // pub(crate) mod udp;
+// pub(crate) mod udp;
 // /// Write Ahead Log
-// // pub(crate) mod wal;
+// pub(crate) mod wal;
+// /// WebSockets
+// pub(crate) mod ws;

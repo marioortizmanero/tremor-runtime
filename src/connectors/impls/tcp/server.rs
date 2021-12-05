@@ -124,7 +124,6 @@ pub struct TcpServer {
 }
 
 fn resolve_connection_meta(meta: &Value) -> Option<ConnectionMeta> {
-    dbg!(meta);
     let peer = meta.get("peer");
     peer.get_u16("port")
         .zip(peer.get_str("host"))

@@ -24,7 +24,6 @@ use crate::QSIZE;
 use abi_stable::std_types::ROption::{RNone, RSome};
 use async_std::channel::{bounded, Receiver, Sender};
 use async_std::task;
-use beef::Cow;
 use bimap::BiMap;
 use either::Either;
 use hashbrown::HashMap;
@@ -109,22 +108,22 @@ where
     T: Hash + Eq + Send + 'static,
     F: Fn(&Value<'_>) -> Option<T>,
 {
-    /// constructor
+    /// Construct a new instance of a channel sink that redacts metadata
     pub fn new_no_meta(qsize: usize, resolver: F, reply_tx: Sender<AsyncSinkReply>) -> Self {
         ChannelSink::new(qsize, resolver, reply_tx)
     }
 }
 
-// impl<T, F> ChannelSink<T, F, WithMeta>
-// where
-//     T: Hash + Eq + Send + 'static,
-//     F: Fn(&Value<'_>) -> Option<T>,
-// {
-//     /// constructor
-//     pub fn new_with_meta(qsize: usize, resolver: F, reply_tx: Sender<AsyncSinkReply>) -> Self {
-//         ChannelSink::new(qsize, resolver, reply_tx)
-//     }
-// }
+impl<T, F> ChannelSink<T, F, WithMeta>
+where
+    T: Hash + Eq + Send + 'static,
+    F: Fn(&Value<'_>) -> Option<T>,
+{
+    /// Construct a new instance of a channel sink with metadata support
+    pub fn new_with_meta(qsize: usize, resolver: F, reply_tx: Sender<AsyncSinkReply>) -> Self {
+        ChannelSink::new(qsize, resolver, reply_tx)
+    }
+}
 
 // FIXME: implement PauseBehaviour correctly
 impl<T, F, B> ChannelSink<T, F, B>
@@ -133,7 +132,9 @@ where
     F: Fn(&Value<'_>) -> Option<T>,
     B: SinkMetaBehaviour,
 {
-    /// constructor
+    /// constructor of a ChannelSink that is sending the event metadata to the StreamWriter
+    /// in case it needs it in the write.
+    /// This costs a clone.
     pub fn new(qsize: usize, resolver: F, reply_tx: Sender<AsyncSinkReply>) -> Self {
         let (tx, rx) = bounded(qsize);
         let streams = HashMap::with_capacity(8);
@@ -205,7 +206,6 @@ where
         ctx: &SinkContext,
     ) -> Option<(&u64, &Sender<SinkData>)> {
         let sink_meta = get_sink_meta(meta, ctx);
-        dbg!(sink_meta);
         sink_meta
             .and_then(|sink_meta| (self.resolver)(sink_meta))
             .and_then(|stream_meta| self.streams_meta.get_by_left(&stream_meta))
@@ -309,14 +309,11 @@ where
 
 /// Extract sink specific metadata from event metadata
 ///
-/// The general path is `$<RESOURCE_TYPE>.<ARTEFACT>`
-/// Example: `$connector.tcp_server`
+/// The general path is `$<CONNECTOR_TYPE>`
+/// Example: `$tcp_server`
 fn get_sink_meta<'lt, 'value>(
     meta: &'lt Value<'value>,
     ctx: &SinkContext,
 ) -> Option<&'lt Value<'value>> {
-    ctx.url
-        .resource_type()
-        .and_then(|rt| meta.get(&Cow::owned(rt.to_string())))
-        .and_then(|rt_meta| rt_meta.get(ctx.connector_type.to_string().as_str()))
+    meta.get(ctx.connector_type.to_string().as_str())
 }

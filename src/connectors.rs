@@ -123,7 +123,12 @@ impl Addr {
         Ok(())
     }
 
-    pub(crate) async fn send_source(&self, msg: SourceMsg) -> Result<()> {
+    /// Send a message to the source part of the connector.
+    /// Results in a no-op if the connector has no source part.
+    ///
+    /// # Errors
+    ///   * if sending failed
+    pub async fn send_source(&self, msg: SourceMsg) -> Result<()> {
         if let Some(source) = self.source.as_ref() {
             source.addr.send(msg).await?;
         }
@@ -169,7 +174,7 @@ pub enum Msg {
     Reconnect,
     // TODO: fill as needed
     /// start the connector
-    Start,
+    Start(Sender<ConnectorResult<()>>),
     /// pause the connector
     ///
     /// source part is not polling for new data
@@ -208,6 +213,13 @@ impl ConnectorResult<()> {
         Self {
             url: ctx.url.clone(),
             res: Ok(()),
+        }
+    }
+
+    fn err(ctx: &ConnectorContext, err_msg: &'static str) -> Self {
+        Self {
+            url: ctx.url.clone(),
+            res: Err(Error::from(err_msg)),
         }
     }
 }
@@ -264,9 +276,7 @@ impl ConnectorContext {
     #[must_use]
     pub fn meta(&self, inner: Value<'static>) -> Value<'static> {
         let mut map = Value::object_with_capacity(1);
-        let mut type_map = Value::object_with_capacity(1);
-        type_map.try_insert(self.connector_type.to_string(), inner);
-        map.try_insert("connector", type_map);
+        map.try_insert(self.connector_type.to_string(), inner);
         map
     }
 }
@@ -387,7 +397,7 @@ impl Manager {
                         let url = create.servant_id.to_instance();
                         // lookup and instantiate connector
                         let connector = if let Some((builder, _)) =
-                            known_connectors.get(&create.config.binding_type)
+                            known_connectors.get(&create.config.connector_type)
                         {
                             // The config is converted to a string so that it
                             // can be passed through FFI.
@@ -414,10 +424,10 @@ impl Manager {
                         } else {
                             error!(
                                 "[Connector] Connector Type '{}' unknown",
-                                &create.config.binding_type
+                                &create.config.connector_type
                             );
                             tx.send(Err(ErrorKind::UnknownConnectorType(
-                                create.config.binding_type.to_string(),
+                                create.config.connector_type.to_string(),
                             )
                             .into()))
                                 .await?;
@@ -533,7 +543,7 @@ impl Manager {
         let source_ctx = SourceContext {
             uid,
             url: url.clone(),
-            connector_type: config.binding_type.clone(),
+            connector_type: config.connector_type.clone(),
             quiescence_beacon: BoxedQuiescenceBeacon::from_value(
                 quiescence_beacon.clone(),
                 TD_Opaque,
@@ -550,7 +560,7 @@ impl Manager {
         let sink_ctx = SinkContext {
             uid,
             url: url.clone(),
-            connector_type: config.binding_type.clone(),
+            connector_type: config.connector_type.clone(),
         };
         // create source instance
         let source_addr = connector.create_source(source_ctx, source_builder).await?;
@@ -573,7 +583,7 @@ impl Manager {
         let ctx = ConnectorContext {
             uid,
             url: url.clone(),
-            connector_type: config.binding_type.clone().into(),
+            connector_type: config.connector_type.clone().into(),
             quiescence_beacon: BoxedQuiescenceBeacon::from_value(
                 quiescence_beacon.clone(),
                 TD_Opaque,
@@ -587,6 +597,8 @@ impl Manager {
         let send_addr = connector_addr.clone();
         let mut connector_state = InstanceState::Initialized;
         let mut drainage = None;
+        let mut start_sender: Option<Sender<ConnectorResult<()>>> = None;
+
         // TODO: add connector metrics reporter (e.g. for reconnect attempts, cb's received, uptime, etc.)
         task::spawn::<_, Result<()>>(async move {
             // typical 1 pipeline connected to IN, OUT, ERR
@@ -764,7 +776,7 @@ impl Manager {
                     Msg::Reconnect => {
                         // reconnect if we are below max_retries, otherwise bail out and fail the connector
                         info!("[Connector::{}] Connecting...", &connector_addr.url);
-                        let new = reconnect.attempt(&mut connector, &ctx).await?;
+                        let (new, will_retry) = reconnect.attempt(&mut connector, &ctx).await?;
                         match (&connectivity, &new) {
                             (Connectivity::Disconnected, Connectivity::Connected) => {
                                 info!("[Connector::{}] Connected.", &connector_addr.url);
@@ -775,6 +787,12 @@ impl Manager {
                                 connector_addr
                                     .send_source(SourceMsg::ConnectionEstablished)
                                     .await?;
+                                if let Some(start_sender) = start_sender.take() {
+                                    ctx.log_err(
+                                        start_sender.send(ConnectorResult::ok(&ctx)).await,
+                                        "Error sending start response.",
+                                    );
+                                }
                             }
                             (Connectivity::Connected, Connectivity::Disconnected) => {
                                 info!("[Connector::{}] Disconnected.", &connector_addr.url);
@@ -790,10 +808,26 @@ impl Manager {
                                 );
                             }
                         }
+                        // ugly extra check
+                        if new == Connectivity::Disconnected
+                            && !will_retry
+                            && start_sender.is_some()
+                        {
+                            if let Some(start_sender) = start_sender.take() {
+                                ctx.log_err(
+                                    start_sender
+                                        .send(ConnectorResult::err(&ctx, "Connect failed."))
+                                        .await,
+                                    "Error sending start response",
+                                )
+                            }
+                        }
                         connectivity = new;
                     }
-                    Msg::Start if connector_state == InstanceState::Initialized => {
+                    Msg::Start(sender) if connector_state == InstanceState::Initialized => {
                         info!("[Connector::{}] Starting...", &connector_addr.url);
+                        start_sender = Some(sender);
+
                         // start connector
                         connector_state = match connector.on_start(&ctx).await {
                             Ok(()) => InstanceState::Running,
@@ -816,11 +850,20 @@ impl Manager {
                         // initiate connect asynchronously
                         connector_addr.sender.send(Msg::Reconnect).await?;
                     }
-                    Msg::Start => {
+                    Msg::Start(sender) => {
                         info!(
                             "[Connector::{}] Ignoring Start Msg. Current state: {:?}",
                             &connector_addr.url, &connector_state
                         );
+                        if connector_state == InstanceState::Running
+                            && connectivity == Connectivity::Connected
+                        {
+                            // sending an answer if we are connected
+                            ctx.log_err(
+                                sender.send(ConnectorResult::ok(&ctx)).await,
+                                "Error sending Start result",
+                            );
+                        }
                     }
 
                     Msg::Pause if connector_state == InstanceState::Running => {
@@ -1340,7 +1383,7 @@ impl Connector {
 
 /// the type of a connector
 #[repr(C)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, StableAbi)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default, StableAbi)]
 pub struct ConnectorType(RString);
 
 impl From<ConnectorType> for RString {
