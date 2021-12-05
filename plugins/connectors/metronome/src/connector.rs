@@ -52,7 +52,7 @@ impl RawConnector for Metronome {
         _ctx: &ConnectorContext,
         _attempt: &Attempt,
     ) -> BorrowingFfiFuture<'_, RResult<bool>> {
-        // No connection is actually necessary, it's just work locally
+        // No connection is actually necessary, it's just local work
         future::ready(ROk(true)).into_ffi()
     }
 
