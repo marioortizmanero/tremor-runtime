@@ -32,7 +32,7 @@ pub mod source;
 #[macro_use]
 pub mod utils;
 
-use std::{env, fmt::Display, future, path::Path};
+use std::{env, fmt::Display, future};
 
 /// quiescence stuff
 pub(crate) use utils::{metrics, quiescence, reconnect};
@@ -43,9 +43,7 @@ use beef::Cow;
 use self::metrics::{MetricsSender, SinkReporter, SourceReporter};
 use self::sink::{BoxedContraflowSender, BoxedRawSink, Sink, SinkAddr, SinkContext, SinkMsg};
 use self::source::{BoxedRawSource, Source, SourceAddr, SourceContext, SourceMsg};
-use self::utils::quiescence::{
-    BoxedQuiescenceBeacon, QuiescenceBeacon, QuiescenceBeaconOpaque, QuiescenceBeaconOpaque_TO,
-};
+use self::utils::quiescence::{BoxedQuiescenceBeacon, QuiescenceBeacon, QuiescenceBeaconOpaque};
 use crate::config::Connector as ConnectorConfig;
 use crate::errors::{Error, ErrorKind, Result};
 use crate::pdk::{self, connectors::ConnectorMod_Ref, RResult};
@@ -54,13 +52,11 @@ use crate::registry::instance::InstanceState;
 use crate::system::World;
 use crate::OpConfig;
 use abi_stable::{
-    library::RootModule,
-    rslice,
     std_types::{
         RBox, RCow,
         ROption::{self, RNone, RSome},
         RResult::{RErr, ROk},
-        RSlice, RStr, RString, RVec,
+        RStr, RString, RVec,
     },
     type_level::downcasting::{TD_CanDowncast, TD_Opaque},
     StableAbi,
@@ -73,7 +69,7 @@ use tremor_common::url::{
     ports::{ERR, IN, OUT},
     TremorUrl,
 };
-use tremor_value::{pdk::PdkValue, Value};
+use tremor_value::Value;
 use utils::reconnect::{Attempt, ReconnectRuntime};
 use value_trait::{Builder, Mutable};
 
@@ -1264,12 +1260,14 @@ pub type BoxedRawConnector = RawConnector_TO<'static, RBox<()>>;
 // plugin.
 pub struct Connector(pub BoxedRawConnector);
 impl Connector {
+    /// Wrapper for [`BoxedRawConnector::input_ports`]
     #[inline]
-    fn input_ports(&self) -> Vec<Cow<'static, str>> {
+    pub fn input_ports(&self) -> Vec<Cow<'static, str>> {
         self.0.input_ports().into_iter().map(conv_cow_str).collect()
     }
+    /// Wrapper for [`BoxedRawConnector::output_ports`]
     #[inline]
-    fn output_ports(&self) -> Vec<Cow<'static, str>> {
+    pub fn output_ports(&self) -> Vec<Cow<'static, str>> {
         self.0
             .output_ports()
             .into_iter()
@@ -1277,21 +1275,25 @@ impl Connector {
             .collect()
     }
 
+    /// Wrapper for [`BoxedRawConnector::is_valid_input_port`]
     #[inline]
-    fn is_valid_input_port(&self, port: &str) -> bool {
+    pub fn is_valid_input_port(&self, port: &str) -> bool {
         self.0.is_valid_input_port(port.into())
     }
 
+    /// Wrapper for [`BoxedRawConnector::is_valid_output_port`]
     #[inline]
-    fn is_valid_output_port(&self, port: &str) -> bool {
+    pub fn is_valid_output_port(&self, port: &str) -> bool {
         self.0.is_valid_output_port(port.into())
     }
 
+    /// Wrapper for [`BoxedRawConnector::is_structured`]
     #[inline]
-    fn is_structured(&self) -> bool {
+    pub fn is_structured(&self) -> bool {
         self.0.is_structured()
     }
 
+    /// Wrapper for [`BoxedRawConnector::create_source`]
     #[inline]
     pub async fn create_source(
         &mut self,
@@ -1312,6 +1314,7 @@ impl Connector {
         }
     }
 
+    /// Wrapper for [`BoxedRawConnector::create_sink`]
     #[inline]
     pub async fn create_sink(
         &mut self,
@@ -1335,6 +1338,7 @@ impl Connector {
         }
     }
 
+    /// Wrapper for [`BoxedRawConnector::connect`]
     #[inline]
     pub async fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> Result<bool> {
         self.0
@@ -1344,6 +1348,7 @@ impl Connector {
             .into() // RResult -> Result
     }
 
+    /// Wrapper for [`BoxedRawConnector::on_start`]
     #[inline]
     pub async fn on_start(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
@@ -1353,6 +1358,7 @@ impl Connector {
             .into() // RResult -> Result
     }
 
+    /// Wrapper for [`BoxedRawConnector::on_pause`]
     #[inline]
     pub async fn on_pause(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
@@ -1362,6 +1368,7 @@ impl Connector {
             .into() // RResult -> Result
     }
 
+    /// Wrapper for [`BoxedRawConnector::on_resume`]
     #[inline]
     pub async fn on_resume(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
@@ -1371,6 +1378,7 @@ impl Connector {
             .into() // RResult -> Result
     }
 
+    /// Wrapper for [`BoxedRawConnector::on_drain`]
     #[inline]
     pub async fn on_drain(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
@@ -1380,6 +1388,7 @@ impl Connector {
             .into() // RResult -> Result
     }
 
+    /// Wrapper for [`BoxedRawConnector::on_stop`]
     #[inline]
     pub async fn on_stop(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
@@ -1389,6 +1398,7 @@ impl Connector {
             .into() // RResult -> Result
     }
 
+    /// Wrapper for [`BoxedRawConnector::default_codec`]
     #[inline]
     pub fn default_codec(&self) -> &str {
         self.0.default_codec().into()
@@ -1487,7 +1497,7 @@ pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
 /// # Errors
 ///  * If a builtin connector couldn't be registered
 #[cfg(not(tarpaulin_include))]
-pub async fn register_debug_connector_types(world: &World) -> Result<()> {
+pub async fn register_debug_connector_types(_world: &World) -> Result<()> {
     // TODO load dynamically
     Ok(())
 }

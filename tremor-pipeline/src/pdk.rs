@@ -5,15 +5,13 @@
 //!
 //! [`PdkValue`]: [`tremor_value::pdk::PdkValue`]
 
-use crate::{
-    CbAction, Event, EventId, EventOriginUri, OpMeta, PrimStr, SignalKind, TrackedPullIds,
-};
+use crate::{CbAction, Event, EventId, EventOriginUri, OpMeta, PrimStr, SignalKind};
 
 use tremor_script::pdk::PdkEventPayload;
 use tremor_value::{pdk::PdkValue, Value};
 
 use abi_stable::{
-    std_types::{RHashMap, ROption, RString, RVec, Tuple2},
+    std_types::{RHashMap, ROption, Tuple2},
     StableAbi,
 };
 

@@ -199,7 +199,13 @@ impl TremorUrl {
             let (scope, resource_type, artefact, instance, instance_port) = if relative {
                 // TODO: This is not correct!
                 match parts.as_slice() {
-                    [port] => (Scope::Instance, RNone, RNone, RNone, RSome(RString::from(*port))),
+                    [port] => (
+                        Scope::Instance,
+                        RNone,
+                        RNone,
+                        RNone,
+                        RSome(RString::from(*port)),
+                    ),
                     [instance, port] => (
                         Scope::Type,
                         RNone,

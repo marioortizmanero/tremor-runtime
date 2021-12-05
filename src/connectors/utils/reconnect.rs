@@ -18,7 +18,7 @@ use crate::connectors::{Addr, Connectivity, Connector, ConnectorContext, Msg};
 use crate::errors::Result;
 use crate::pdk::RResult;
 use abi_stable::{
-    std_types::{RBox, RResult::ROk, SendRBoxError},
+    std_types::{RBox, SendRBoxError},
     StableAbi,
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};

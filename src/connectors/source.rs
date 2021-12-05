@@ -27,7 +27,7 @@ use tremor_script::{pdk::PdkEventPayload, EventPayload, ValueAndMeta};
 use crate::config::{
     self, Codec as CodecConfig, Connector as ConnectorConfig, Preprocessor as PreprocessorConfig,
 };
-use crate::connectors::{ConnectorType, Context, Msg, QuiescenceBeacon};
+use crate::connectors::{ConnectorType, Context, Msg};
 use crate::errors::{Error, Result};
 use crate::pdk::{RError, RResult};
 use crate::pipeline;
@@ -420,8 +420,8 @@ impl ChannelSource {
 impl RawSource for ChannelSource {
     fn pull_data<'a>(
         &'a mut self,
-        pull_id: u64,
-        ctx: &'a SourceContext,
+        _pull_id: u64,
+        _ctx: &'a SourceContext,
     ) -> BorrowingFfiFuture<'a, RResult<SourceReply>> {
         async move {
             match self.rx.try_recv() {

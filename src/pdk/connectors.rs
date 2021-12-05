@@ -1,12 +1,8 @@
 use crate::{
     connectors::{BoxedRawConnector, ConnectorType},
-    errors::Result,
     pdk::RResult,
 };
 use tremor_common::url::TremorUrl;
-use tremor_value::pdk::PdkValue;
-
-use std::path::Path;
 
 use abi_stable::{
     declare_root_module_statics,
@@ -18,13 +14,24 @@ use abi_stable::{
 };
 use async_ffi::FfiFuture;
 
-/// The `new` function basically acts as the connector builder
+/// This type represents a connector plugin that has been loaded with
+/// `abi_stable`. It serves as a builder, making it possible to construct a
+/// trait object of `RawConnector`.
+///
+/// Note that its interface may change heavily in the future in order to support
+/// more kinds of plugins. It's also important to keep the plugin interface as
+/// simple as possible, so with time this may be worked on.
 #[repr(C)]
 #[derive(StableAbi)]
 #[sabi(kind(Prefix))]
 pub struct ConnectorMod {
+    /// the type of the connector
     pub connector_type: extern "C" fn() -> ConnectorType,
 
+    /// create a connector from the given `id` and `config`
+    ///
+    /// # Errors
+    ///  * If the config is invalid for the connector
     #[sabi(last_prefix_field)]
     pub from_config: extern "C" fn(
         id: TremorUrl,

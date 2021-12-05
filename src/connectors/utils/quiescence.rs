@@ -15,7 +15,7 @@
 use abi_stable::std_types::RBox;
 use async_ffi::{BorrowingFfiFuture, FutureExt};
 use event_listener::Event;
-use std::fmt;
+
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 

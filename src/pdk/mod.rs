@@ -1,14 +1,16 @@
 pub mod connectors;
 
-pub type RError = abi_stable::std_types::SendRBoxError;
-pub type RResult<T> = abi_stable::std_types::RResult<T, RError>;
-
 use self::connectors::ConnectorMod_Ref;
 
 use std::env;
 
 use abi_stable::library::RootModule;
 use walkdir::WalkDir;
+
+/// The error type used for the PDK, from `abi_stable`
+pub type RError = abi_stable::std_types::SendRBoxError;
+/// The result type used for the PDK, from `abi_stable`
+pub type RResult<T> = abi_stable::std_types::RResult<T, RError>;
 
 /// This is a workaround until `?` can be used with functions that return
 /// `RResult`: https://github.com/rust-lang/rust/issues/84277
@@ -27,6 +29,9 @@ macro_rules! ttry {
     };
 }
 
+/// Recursively finds all the connector plugins in a directory. It doesn't
+/// follow symlinks, and has a sensible maximum depth so that it doesn't get
+/// stuck.
 pub fn find_recursively(base_dir: &str) -> Vec<ConnectorMod_Ref> {
     WalkDir::new(base_dir)
         // No symlinks are followed for now
@@ -47,7 +52,7 @@ pub fn find_recursively(base_dir: &str) -> Vec<ConnectorMod_Ref> {
         .filter_map(|file| {
             match ConnectorMod_Ref::load_from_file(file.path()) {
                 Ok(plugin) => Some(plugin),
-                Err(e) => {
+                Err(_e) => {
                     // TODO: log the error
                     None
                 }

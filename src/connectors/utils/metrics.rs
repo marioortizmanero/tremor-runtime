@@ -18,7 +18,7 @@
 use std::sync::atomic::Ordering;
 
 use crate::connectors::prelude::*;
-use async_broadcast::{broadcast, Receiver, Sender, TryRecvError, TrySendError};
+use async_broadcast::{broadcast, Receiver, Sender};
 use beef::Cow;
 use halfbrown::HashMap;
 use tremor_common::url::{
@@ -26,7 +26,6 @@ use tremor_common::url::{
     TremorUrl,
 };
 use tremor_script::EventPayload;
-use tremor_value::prelude::*;
 
 #[derive(Clone, Debug)]
 pub(crate) struct MetricsChannel {
