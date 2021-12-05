@@ -1420,9 +1420,9 @@ pub trait ConnectorBuilder: Sync + Send {
 #[cfg(not(tarpaulin_include))]
 pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
     // First we load the hardcoded connectors
-    // world
-    //     .register_builtin_connector_type(ConnectorMod_Ref::load_from_file(&Path::new(path))?)
-    //     .await?;
+    world
+        .register_builtin_connector_type(impls::tcp::server::instantiate_root_module())
+        .await?;
 
     // Finally, we try to find all the available plugins and we load them
     // dynamically. For now, plugins are loaded from the path defined by
