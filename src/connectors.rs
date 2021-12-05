@@ -62,7 +62,7 @@ use abi_stable::{
         RResult::{RErr, ROk},
         RSlice, RStr, RString, RVec,
     },
-    type_level::downcasting::TD_Opaque,
+    type_level::downcasting::{TD_CanDowncast, TD_Opaque},
     StableAbi,
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
@@ -1275,7 +1275,9 @@ impl Connector {
         sink_context: SinkContext,
         builder: sink::SinkManagerBuilder,
     ) -> Result<Option<sink::SinkAddr>> {
-        let reply_tx = BoxedContraflowSender::from_value(builder.reply_tx(), TD_Opaque);
+        // Note that we actually want to be able to downcast back to the
+        // original type here, so that it's easier to manage in the runtime.
+        let reply_tx = BoxedContraflowSender::from_value(builder.reply_tx(), TD_CanDowncast);
         match self
             .0
             .create_sink(sink_context.clone(), builder.qsize(), reply_tx)

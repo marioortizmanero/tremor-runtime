@@ -168,21 +168,21 @@ pub type BoxedRawSink = RawSink_TO<'static, RBox<()>>;
 pub trait RawSink: Send {
     /// called when receiving an event
     /// FIXME: Why are we returning a Vec but the elements don't allow to correlate what was acked
-    fn on_event(
-        &mut self,
-        input: RStr<'_>,
+    fn on_event<'a>(
+        &'a mut self,
+        input: RStr<'a>,
         event: PdkEvent,
-        ctx: &SinkContext,
-        serializer: MutEventSerializer,
+        ctx: &'a SinkContext,
+        serializer: MutEventSerializer<'a>,
         start: u64,
-    ) -> BorrowingFfiFuture<'_, RResult<SinkReply>>;
+    ) -> BorrowingFfiFuture<'a, RResult<SinkReply>>;
     /// called when receiving a signal
-    fn on_signal(
-        &mut self,
+    fn on_signal<'a>(
+        &'a mut self,
         _signal: PdkEvent,
-        _ctx: &SinkContext,
-        _serializer: MutEventSerializer,
-    ) -> BorrowingFfiFuture<'_, RResult<SinkReply>> {
+        _ctx: &'a SinkContext,
+        _serializer: MutEventSerializer<'a>,
+    ) -> BorrowingFfiFuture<'a, RResult<SinkReply>> {
         future::ready(ROk(SinkReply::default())).into_ffi()
     }
 
@@ -1022,6 +1022,16 @@ impl From<&Event> for ContraflowData {
             event_id: event.id.clone(),
             ingest_ns: event.ingest_ns,
             op_meta: event.op_meta.clone().into(), // TODO: mem::swap here?
+        }
+    }
+}
+
+impl From<&PdkEvent> for ContraflowData {
+    fn from(event: &PdkEvent) -> Self {
+        ContraflowData {
+            event_id: event.id.clone(),
+            ingest_ns: event.ingest_ns,
+            op_meta: event.op_meta.clone(), // TODO: mem::swap here?
         }
     }
 }

@@ -14,10 +14,10 @@
 
 pub use crate::connectors::quiescence::QuiescenceBeacon;
 pub use crate::connectors::sink::{
-    AsyncSinkReply, BoxedContraflowSender, BoxedRawSink, ChannelSink, ChannelSinkRuntime,
-    ContraflowData, ContraflowSenderOpaque, EventSerializer, RawSink, SingleStreamSink,
-    SingleStreamSinkRuntime, Sink, SinkAck, SinkAddr, SinkContext, SinkManagerBuilder, SinkMeta,
-    SinkReply, StreamWriter,
+    AsyncSinkReply, BoxedContraflowSender, BoxedEventSerializer, BoxedRawSink, ChannelSink,
+    ChannelSinkRuntime, ContraflowData, ContraflowSenderOpaque, EventSerializerOpaque,
+    MutEventSerializer, RawSink, SingleStreamSink, SingleStreamSinkRuntime, Sink, SinkAck,
+    SinkAddr, SinkContext, SinkManagerBuilder, SinkMeta, SinkReply, StreamWriter,
 };
 pub use crate::connectors::source::{
     BoxedRawSource, ChannelSource, ChannelSourceRuntime, RawSource, Source, SourceAddr,
