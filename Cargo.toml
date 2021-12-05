@@ -98,6 +98,8 @@ zstd = "0.9"
 
 mapr = "0.8"
 
+# blaster / blackhole
+hdrhistogram = "7"
 xz2 = "0.1"
 
 # opentelemetry
@@ -107,6 +109,15 @@ tonic = { version = "0.5.2", default-features = false, features = [
   "tls",
 ] }
 tremor-otelapis = { version = "0.2.2" }
+
+# gcp
+googapis = { version = "0.5", default-features = false, features = [
+  "google-pubsub-v1",
+] }
+gouth = { version = "0.2" }
+
+http = "0.2.5"
+reqwest = "0.11.6"
 
 # wal
 qwal = { git = "https://github.com/tremor-rs/qwal" }
