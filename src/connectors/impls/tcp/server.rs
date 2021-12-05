@@ -32,7 +32,7 @@ use abi_stable::{
     prefix_type::PrefixTypeTrait,
     rstr, rvec, sabi_extern_fn,
     std_types::{
-        ROption::{self, RNone, RSome},
+        ROption::{self, RSome},
         RResult::{RErr, ROk},
         RStr, RString,
     },
@@ -162,7 +162,7 @@ impl RawConnector for TcpServer {
 
     fn create_sink(
         &mut self,
-        ctx: SinkContext,
+        _ctx: SinkContext,
         qsize: usize,
         reply_tx: BoxedContraflowSender,
     ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSink>>> {

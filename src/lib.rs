@@ -14,7 +14,8 @@
 
 //! Tremor runtime
 
-#![deny(warnings)]
+// TODO: turn back on
+// #![deny(warnings)]
 #![deny(missing_docs)]
 #![recursion_limit = "1024"]
 #![deny(

@@ -19,8 +19,7 @@
 use std::marker::PhantomData;
 
 use crate::connectors::{
-    reconnect::ConnectionLostNotifierOpaque, sink::SinkReply, ConnectorContext,
-    QuiescenceBeaconOpaque, StreamDone,
+    reconnect::ConnectionLostNotifierOpaque, ConnectorContext, QuiescenceBeaconOpaque, StreamDone,
 };
 use crate::errors::{ErrorKind, Result};
 use abi_stable::std_types::ROption::{RNone, RSome};
@@ -32,7 +31,7 @@ use std::marker::PhantomData;
 use tremor_common::time::nanotime;
 
 use super::channel_sink::{NoMeta, SinkMeta, SinkMetaBehaviour, WithMeta};
-use super::{AsyncSinkReply, ContraflowData, EventSerializer, Sink, SinkContext, StreamWriter};
+use super::{AsyncSinkReply, ContraflowData, StreamWriter};
 
 /// simple Sink implementation that is handling only a single stream
 pub struct SingleStreamSink<B>

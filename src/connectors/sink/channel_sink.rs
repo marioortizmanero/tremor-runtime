@@ -353,7 +353,7 @@ where
     /// FIXME: use reply_channel to only ack delivery once it is successfully sent via TCP
     fn on_event<'a>(
         &'a mut self,
-        input: RStr<'a>,
+        _input: RStr<'a>,
         event: PdkEvent,
         ctx: &'a SinkContext,
         serializer: &'a mut MutEventSerializer,

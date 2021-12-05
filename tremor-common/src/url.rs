@@ -202,7 +202,7 @@ impl TremorUrl {
                 // TODO: This is not correct!
                 match parts.as_slice() {
                     [port] => (
-                        Scope::Servant,
+                        Scope::Instance,
                         RNone,
                         RNone,
                         RNone,
