@@ -249,10 +249,13 @@ pub trait RawSink: Send {
     }
 }
 
-// Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
-// types so that it's easier to use with `std`.
-pub struct Sink(pub BoxedRawSink);
+/// Sink part of a connector.
+///
+/// Just like `Connector`, this wraps the FFI dynamic sink with `abi_stable`
+/// types so that it's easier to use with `std`.
+pub(crate) struct Sink(pub BoxedRawSink);
 impl Sink {
+    /// Wrapper for [`BoxedRawSink::on_event`]
     #[inline]
     pub async fn on_event(
         &mut self,
@@ -348,6 +351,7 @@ impl Sink {
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
+    /// Wrapper for [`BoxedRawSink::on_signal`]
     #[inline]
     pub async fn on_signal(
         &mut self,
@@ -363,6 +367,7 @@ impl Sink {
             .into() // RResult -> Result
     }
 
+    /// Wrapper for [`BoxedRawSink::metrics`]
     #[inline]
     pub fn metrics(&mut self, timestamp: u64) -> Vec<EventPayload> {
         self.0
@@ -372,10 +377,12 @@ impl Sink {
             .collect()
     }
 
+    /// Wrapper for [`BoxedRawSink::on_start`]
     #[inline]
     pub async fn on_start(&mut self, ctx: &SinkContext) -> Result<()> {
         self.0.on_start(ctx).map_err(Into::into).into()
     }
+    /// Wrapper for [`BoxedRawSink::on_pause`]
     #[inline]
     pub async fn on_pause(&mut self, ctx: &SinkContext) -> Result<()> {
         self.0
@@ -383,6 +390,7 @@ impl Sink {
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
+    /// Wrapper for [`BoxedRawSink::on_resume`]
     #[inline]
     pub async fn on_resume(&mut self, ctx: &SinkContext) -> Result<()> {
         self.0
@@ -390,6 +398,7 @@ impl Sink {
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
+    /// Wrapper for [`BoxedRawSink::on_stop`]
     #[inline]
     pub async fn on_stop(&mut self, ctx: &SinkContext) -> Result<()> {
         self.0
@@ -398,6 +407,7 @@ impl Sink {
             .into() // RResult -> Result
     }
 
+    /// Wrapper for [`BoxedRawSink::on_connection_lost`]
     #[inline]
     pub async fn on_connection_lost(&mut self, ctx: &SinkContext) -> Result<()> {
         self.0
@@ -405,6 +415,7 @@ impl Sink {
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
+    /// Wrapper for [`BoxedRawSink::on_connection_established`]
     #[inline]
     pub async fn on_connection_established(&mut self, ctx: &SinkContext) -> Result<()> {
         self.0
@@ -413,11 +424,13 @@ impl Sink {
             .into() // RResult -> Result
     }
 
+    /// Wrapper for [`BoxedRawSink::auto_ack`]
     #[inline]
     pub fn auto_ack(&self) -> bool {
         self.0.auto_ack()
     }
 
+    /// Wrapper for [`BoxedRawSink::asynchronous`]
     #[inline]
     pub fn asynchronous(&self) -> bool {
         self.0.asynchronous()
@@ -550,7 +563,7 @@ impl SinkAddr {
 }
 
 /// Builder for the sink manager
-pub struct SinkManagerBuilder {
+pub(crate) struct SinkManagerBuilder {
     qsize: usize,
     serializer: EventSerializer,
     reply_channel: (Sender<AsyncSinkReply>, Receiver<AsyncSinkReply>),
@@ -586,6 +599,7 @@ impl SinkManagerBuilder {
 
 #[abi_stable::sabi_trait]
 pub trait ContraflowSenderOpaque: Send {
+    /// Send a contraflow message to the runtime
     fn send(&self, reply: AsyncSinkReply) -> BorrowingFfiFuture<'_, RResult<()>>;
 }
 impl ContraflowSenderOpaque for Sender<AsyncSinkReply> {
@@ -702,7 +716,8 @@ impl EventSerializer {
 /// complex types and it's easier to just make it available as an opaque type
 /// instead, with the help of `sabi_trait`.
 #[abi_stable::sabi_trait]
-pub trait EventSerializerOpaque {
+pub trait EventSerializerOpaque: Send {
+    /// drop a stream
     fn drop_stream(&mut self, stream_id: u64);
 
     /// clear out all streams - this can lead to data loss
@@ -751,66 +766,9 @@ impl EventSerializerOpaque for EventSerializer {
             .into() // RResult -> Result
     }
 }
-/// Alias for the types used in FFI (box and mutable reference)
+/// Alias for the type used in FFI, as a box
 pub type BoxedEventSerializer = EventSerializerOpaque_TO<'static, RBox<()>>;
-pub type MutEventSerializer<'a> = EventSerializerOpaque_TO<'static, RMut<'a, ()>>;
-
-/// Note that since `EventSerializer` is used for the plugin system, it
-/// must be `#[repr(C)]` in order to interact with it. However, since it uses
-/// complex types and it's easier to just make it available as an opaque type
-/// instead, with the help of `sabi_trait`.
-#[abi_stable::sabi_trait]
-pub trait EventSerializerOpaque {
-    fn drop_stream(&mut self, stream_id: u64);
-
-    /// clear out all streams - this can lead to data loss
-    /// only use when you are sure, all the streams are gone
-    fn clear(&mut self);
-
-    /// serialize event for the default stream
-    ///
-    /// # Errors
-    ///   * if serialization failed (codec or postprocessors)
-    fn serialize(&mut self, value: &PdkValue, ingest_ns: u64) -> RResult<RVec<RVec<u8>>>;
-
-    /// serialize event for a certain stream
-    ///
-    /// # Errors
-    ///   * if serialization failed (codec or postprocessors)
-    fn serialize_for_stream(
-        &mut self,
-        value: &PdkValue,
-        ingest_ns: u64,
-        stream_id: u64,
-    ) -> RResult<RVec<RVec<u8>>>;
-}
-impl EventSerializerOpaque for EventSerializer {
-    fn drop_stream(&mut self, stream_id: u64) {
-        self.streams.remove(&stream_id);
-    }
-
-    fn clear(&mut self) {
-        self.streams.clear();
-    }
-
-    fn serialize(&mut self, value: &PdkValue, ingest_ns: u64) -> RResult<RVec<RVec<u8>>> {
-        self.serialize_for_stream(value.into(), ingest_ns, DEFAULT_STREAM_ID)
-    }
-
-    fn serialize_for_stream(
-        &mut self,
-        value: &PdkValue,
-        ingest_ns: u64,
-        stream_id: u64,
-    ) -> RResult<RVec<RVec<u8>>> {
-        self.serialize_for_stream_inner(value, ingest_ns, stream_id)
-            .map(|v1| v1.into_iter().map(|v2| v2.into()).collect()) // RVec<RVec<T>> -> Vec<Vec<T>>
-            .map_err(|e| SendRBoxError::new(e)) // RBoxError -> Error
-            .into() // RResult -> Result
-    }
-}
-/// Alias for the types used in FFI (box and mutable reference)
-pub type BoxedEventSerializer = EventSerializerOpaque_TO<'static, RBox<()>>;
+/// Alias for the type used in FFI, as a mutable reference
 pub type MutEventSerializer<'a> = EventSerializerOpaque_TO<'static, RMut<'a, ()>>;
 
 #[derive(Debug, PartialEq)]

@@ -1,3 +1,4 @@
+/// The PDK interface for connectors
 pub mod connectors;
 
 use self::connectors::ConnectorMod_Ref;

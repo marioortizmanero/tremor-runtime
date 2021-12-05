@@ -1571,9 +1571,13 @@ pub trait RawConnector: Send {
 /// Alias for the FFI-safe dynamic connector type
 pub type BoxedRawConnector = RawConnector_TO<'static, RBox<()>>;
 
-// The higher level connector interface, which wraps the raw connector from the
-// plugin.
-pub struct Connector(pub BoxedRawConnector);
+/// The higher level connector interface, which wraps the raw connector from the
+/// plugin. This should always be used for maximum usability and readability,
+/// instead of the underlying `BoxedRawConnector`.
+///
+/// Note that it may hurt performance in some parts of the connector interface,
+/// so some of the functionality may not be fully wrapped.
+pub(crate) struct Connector(pub BoxedRawConnector);
 impl Connector {
     /// Wrapper for [`BoxedRawConnector::input_ports`]
     #[inline]
