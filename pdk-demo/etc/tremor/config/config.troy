@@ -33,11 +33,11 @@ flow
     create connector server;
     create connector io;
 
-    # create pipeline main;
+    create pipeline main;
 
-    connect /connector/server/out to /pipeline/main/main;
-    connect /connector/clock/out to /pipeline/main/main;
-    connect /pipeline/main/main to /connector/io/in;
+    connect /connector/server/server to /pipeline/main/main;
+    connect /connector/clock/clock to /pipeline/main/main;
+    connect /pipeline/main/main to /connector/io/io;
 end;
 
 deploy flow demo_01 from demo;
