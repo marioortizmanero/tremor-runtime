@@ -23,6 +23,7 @@ use crate::repository::{
 
 use crate::connectors::{self, ConnectorBuilder};
 use crate::errors::{Error, Kind as ErrorKind, Result};
+use crate::pdk::connectors::ConnectorMod_Ref;
 use crate::QSIZE;
 use async_std::channel::{bounded, Sender};
 use async_std::prelude::*;
@@ -77,7 +78,7 @@ pub(crate) enum ManagerMsg {
         /// the type of connector
         connector_type: ConnectorType,
         /// the builder
-        builder: Box<dyn ConnectorBuilder>,
+        builder: ConnectorMod_Ref,
     },
     /// Initiate the Quiescence process
     Drain(Sender<Result<()>>),
@@ -115,7 +116,7 @@ impl Manager {
                         {
                             error!(
                                 "FIXME: error on duplicate connectors: {}",
-                                old.connector_type()
+                                old.connector_type()()
                             );
                         }
                     }
@@ -260,42 +261,13 @@ impl World {
     ///
     /// # Errors
     ///  * If the system is unavailable
-    pub(crate) async fn register_builtin_connector_type(
-        &self,
-        builder: ConnectorMod_Ref,
-    ) -> Result<()> {
+    pub async fn register_connector_type(&self, builder: ConnectorMod_Ref) -> Result<()> {
+        // TODO: actually make a difference
         self.system
-            .send(ManagerMsg::Connector(connectors::ManagerMsg::Register {
+            .send(ManagerMsg::RegisterConnectorType {
                 connector_type: builder.connector_type()(),
                 builder,
             })
-            .await?;
-        Ok(())
-    }
-    /// Registers the given connector type with `type_name` and the corresponding `builder`
-    ///
-    /// # Errors
-    ///  * If the system is unavailable
-    pub async fn register_connector_type(&self, builder: ConnectorMod_Ref) -> Result<()> {
-        self.system
-            .send(ManagerMsg::Connector(connectors::ManagerMsg::Register {
-                connector_type: builder.connector_type()(),
-                builder,
-                builtin: false,
-            }))
-            .await?;
-        Ok(())
-    }
-
-    /// unregister a connector type
-    ///
-    /// # Errors
-    ///  * If the system is unavailable
-    pub async fn unregister_connector_type(&self, type_name: String) -> Result<()> {
-        self.system
-            .send(ManagerMsg::Connector(connectors::ManagerMsg::Unregister(
-                type_name.into(),
-            )))
             .await?;
         Ok(())
     }

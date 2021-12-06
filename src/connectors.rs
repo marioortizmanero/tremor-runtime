@@ -32,24 +32,29 @@ pub mod source;
 #[macro_use]
 pub mod utils;
 
-use std::{env, fmt::Display, future};
+use std::{env, future};
 
+use tremor_script::ast::DeployEndpoint;
 /// quiescence stuff
 pub(crate) use utils::{metrics, quiescence, reconnect};
 
 use async_std::task::{self, JoinHandle};
-use beef::Cow;
 
 use self::metrics::{MetricsSender, SinkReporter, SourceReporter};
+use self::prelude::ConnectionLostNotifier;
 use self::sink::{BoxedContraflowSender, BoxedRawSink, Sink, SinkAddr, SinkContext, SinkMsg};
 use self::source::{BoxedRawSource, Source, SourceAddr, SourceContext, SourceMsg};
-use self::utils::quiescence::{BoxedQuiescenceBeacon, QuiescenceBeacon, QuiescenceBeaconOpaque};
-use crate::config::Connector as ConnectorConfig;
-use crate::errors::{Error, ErrorKind, Result};
+use self::utils::quiescence::QuiescenceBeacon;
+use crate::connectors::utils::{
+    quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier,
+};
+use crate::errors::{Error, Kind as ErrorKind, Result};
+use crate::instance::InstanceState;
 use crate::pdk::{self, connectors::ConnectorMod_Ref, RResult};
 use crate::pipeline;
 use crate::system::World;
 use crate::OpConfig;
+use crate::{config::Connector as ConnectorConfig, connectors::utils::metrics::METRICS_CHANNEL};
 use abi_stable::{
     std_types::{
         RBox, RCow,
@@ -57,14 +62,15 @@ use abi_stable::{
         RResult::{RErr, ROk},
         RStr, RString, RVec,
     },
-    type_level::downcasting::{TD_CanDowncast, TD_Opaque},
+    type_level::downcasting::TD_CanDowncast,
+    type_level::downcasting::TD_Opaque,
     StableAbi,
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
 use async_std::channel::{bounded, Sender};
-use async_std::task::{self};
 use beef::Cow;
 use halfbrown::HashMap;
+use std::{env, future};
 use std::{fmt::Display, sync::atomic::Ordering};
 use tremor_common::ids::ConnectorIdGen;
 use tremor_common::url::{
@@ -76,9 +82,6 @@ use tremor_script::ast::DeployEndpoint;
 use tremor_value::Value;
 use utils::reconnect::{Attempt, ReconnectRuntime};
 use value_trait::{Builder, Mutable};
-
-/// sender for connector manager messages
-pub type ManagerSender = Sender<ManagerMsg>;
 
 // FIXME: make prettier or avoid duplication in pdk mod? It's a bit out of place
 // for now.
@@ -247,10 +250,10 @@ pub trait Context: Display + Clone {
     fn alias(&self) -> &str;
 
     /// get the quiescence beacon for checking if we should continue reading/writing
-    fn quiescence_beacon(&self) -> &QuiescenceBeacon;
+    fn quiescence_beacon(&self) -> &BoxedQuiescenceBeacon;
 
     /// get the notifier to signal to the runtime that we are disconnected
-    fn notifier(&self) -> &reconnect::ConnectionLostNotifier;
+    fn notifier(&self) -> &reconnect::BoxedConnectionLostNotifier;
 
     /// get the connector type
     fn connector_type(&self) -> &ConnectorType;
@@ -308,11 +311,11 @@ impl Context for ConnectorContext {
         &self.connector_type
     }
 
-    fn quiescence_beacon(&self) -> &QuiescenceBeacon {
+    fn quiescence_beacon(&self) -> &BoxedQuiescenceBeacon {
         &self.quiescence_beacon
     }
 
-    fn notifier(&self) -> &reconnect::ConnectionLostNotifier {
+    fn notifier(&self) -> &reconnect::BoxedConnectionLostNotifier {
         &self.notifier
     }
 }
@@ -373,7 +376,7 @@ pub enum StreamDone {
 }
 
 /// Lookup table for known connectors
-pub type KnownConnectors = HashMap<ConnectorType, Box<ConnectorMod_Ref + 'static>>;
+pub type KnownConnectors = HashMap<ConnectorType, ConnectorMod_Ref>;
 
 /// Spawns a connector
 pub async fn spawn(
@@ -386,9 +389,23 @@ pub async fn spawn(
     let builder = known_connectors
         .get(&config.connector_type)
         .ok_or_else(|| ErrorKind::UnknownConnectorType(config.connector_type.to_string()))?;
-    let connector = builder.from_config(&alias, &config.config).await?;
+    let connector_config = config.config.clone().map(Into::into).into();
+    let connector = Result::from(
+        builder.from_config()(alias.clone().into(), connector_config)
+            .await
+            .map_err(Error::from),
+    )?;
 
-    Ok(connector_task(alias, connector, config, connector_id_gen.next_id()).await?)
+    Ok((
+        url.clone(),
+        connector_task(
+            alias,
+            Connector(connector),
+            config,
+            connector_id_gen.next_id(),
+        )
+        .await?,
+    ))
 }
 
 #[allow(clippy::too_many_lines)]
@@ -406,7 +423,6 @@ async fn connector_task(
     let mut connectivity = Connectivity::Disconnected;
     let mut quiescence_beacon = QuiescenceBeacon::default();
     let notifier = ConnectionLostNotifier::new(msg_tx.clone());
-    let notifier = BoxedConnectionLostNotifier::from_value(notifier, TD_Opaque);
 
     let source_metrics_reporter = SourceReporter::new(
         alias.clone(),
@@ -434,128 +450,31 @@ async fn connector_task(
         notifier: notifier.clone(),
     };
 
-    /// start the manager
-    #[must_use]
-    #[allow(clippy::too_many_lines)]
-    pub fn start(self) -> (JoinHandle<Result<()>>, ManagerSender) {
-        let (tx, rx) = bounded(self.qsize);
-        let h = task::spawn(async move {
-            info!("Connector manager started.");
-            let mut connector_id_gen = ConnectorIdGen::new();
-            let mut known_connectors: HashMap<ConnectorType, (ConnectorMod_Ref, bool)> =
-                HashMap::with_capacity(16);
+    let sink_metrics_reporter = SinkReporter::new(
+        alias.clone(),
+        METRICS_CHANNEL.tx(),
+        config.metrics_interval_s,
+    );
+    let sink_builder = sink::builder(&config, default_codec, qsize, sink_metrics_reporter)?;
+    let sink_ctx = SinkContext {
+        uid,
+        alias: alias.clone(),
+        connector_type: config.connector_type.clone(),
+        quiescence_beacon: quiescence_beacon.clone(),
+        notifier: notifier.clone(),
+    };
+    // create source instance
+    let source_addr = connector.create_source(source_ctx, source_builder).await?;
 
-            loop {
-                match rx.recv().await {
-                    Ok(ManagerMsg::Create { tx, create }) => {
-                        let url = create.servant_id.to_instance();
-                        // lookup and instantiate connector
-                        let connector = if let Some((builder, _)) =
-                            known_connectors.get(&create.config.binding_type)
-                        {
-                            // The config is converted to a string so that it
-                            // can be passed through FFI.
-                            let config = create
-                                .config
-                                .config
-                                .as_ref()
-                                .and_then(|conf| serde_yaml::to_string(conf).ok())
-                                .map(RString::from)
-                                .into();
-                            let connector_res = builder.from_config()(url.clone(), config).await;
-                            match connector_res {
-                                ROk(connector) => Connector(connector),
-                                RErr(e) => {
-                                    let e = ErrorKind::PluginError(e).into();
-                                    error!(
-                                        "[Connector] Error instantiating connector {}: {}",
-                                        &url, e
-                                    );
-                                    tx.send(Err(e)).await?;
-                                    continue;
-                                }
-                            }
-                        } else {
-                            error!(
-                                "[Connector] Connector Type '{}' unknown",
-                                &create.config.binding_type
-                            );
-                            tx.send(Err(ErrorKind::UnknownConnectorType(
-                                create.config.binding_type.to_string(),
-                            )
-                            .into()))
-                                .await?;
-                            continue;
-                        };
-                        if let Err(e) = self
-                            .connector_task(
-                                tx.clone(),
-                                url.clone(),
-                                connector,
-                                create.config,
-                                connector_id_gen.next_id(),
-                            )
-                            .await
-                        {
-                            error!(
-                                "[Connector] Error spawning task for connector {}: {}",
-                                &url, e
-                            );
-                            tx.send(Err(e)).await?;
-                        }
-                    }
-                    Ok(ManagerMsg::Register {
-                        connector_type,
-                        builder,
-                        builtin,
-                    }) => {
-                        debug!("Registering {} Connector Type.", &connector_type);
-                        match known_connectors.entry(connector_type) {
-                            Entry::Occupied(e) => {
-                                warn!("Connector Type {} already registered.", e.key());
-                            }
-                            Entry::Vacant(e) => {
-                                debug!(
-                                    "Connector Type {} registered{}.",
-                                    e.key(),
-                                    if builtin { " as builtin" } else { " " }
-                                );
-                                e.insert((builder, builtin));
-                            }
-                        }
-                    }
-                    Ok(ManagerMsg::Unregister(connector_type)) => {
-                        debug!("Unregistering {} Connector Type.", &connector_type);
-                        match known_connectors.entry(connector_type) {
-                            Entry::Occupied(e) => {
-                                let (_, builtin) = e.get();
-                                if *builtin {
-                                    error!("Cannot unregister builtin Connector Type {}", e.key());
-                                } else {
-                                    debug!("Connector Type {} unregistered.", e.key());
-                                    e.remove_entry();
-                                }
-                            }
-                            Entry::Vacant(e) => {
-                                error!("Connector Type {} not registered", e.key());
-                            }
-                        }
-                    }
-                    Ok(ManagerMsg::Stop { reason }) => {
-                        info!("Stopping Connector Manager... {}", reason);
-                        break;
-                    }
-                    Err(e) => {
-                        info!("Error! Stopping Connector Manager... {}", e);
-                        break;
-                    }
-                }
-            }
-            info!("Connector Manager stopped.");
-            Ok(())
-        });
-        (h, tx)
-    }
+    // create sink instance
+    let sink_addr = connector.create_sink(sink_ctx, sink_builder).await?;
+
+    let connector_addr = Addr {
+        alias: alias.clone(),
+        sender: msg_tx,
+        source: source_addr,
+        sink: sink_addr,
+    };
 
     let mut reconnect: ReconnectRuntime =
         ReconnectRuntime::new(&connector_addr, notifier.clone(), &config.reconnect);
@@ -569,88 +488,25 @@ async fn connector_task(
         notifier: notifier,
     };
 
-        let default_codec = connector.default_codec();
-        if connector.is_structured() && (config.codec.is_some() || config.codec_map.is_some()) {
-            return Err(format!(
-                "[Connector::{}] is a structured connector and can't be configured with a codec",
-                url
-            )
-            .into());
-        }
-        let source_builder = source::builder(
-            uid,
-            &config,
-            default_codec,
-            self.qsize,
-            source_metrics_reporter,
-        )?;
-        let source_ctx = SourceContext {
-            uid,
-            url: url.clone(),
-            quiescence_beacon: BoxedQuiescenceBeacon::from_value(
-                quiescence_beacon.clone(),
-                TD_Opaque,
-            ),
-        };
+    let send_addr = connector_addr.clone();
+    let mut connector_state = InstanceState::Initialized;
+    let mut drainage = None;
+    let mut start_sender: Option<Sender<ConnectorResult<()>>> = None;
 
-        let sink_metrics_reporter = MetricsSinkReporter::new(
-            url.clone(),
-            self.metrics_sender.clone(),
-            config.metrics_interval_s,
-        );
-        let sink_builder =
-            sink::builder(&config, default_codec, self.qsize, sink_metrics_reporter)?;
-        let sink_ctx = SinkContext {
-            uid,
-            url: url.clone(),
-        };
-        // create source instance
-        let source_addr = connector.create_source(source_ctx, source_builder).await?;
-
-        // create sink instance
-        let sink_addr = connector.create_sink(sink_ctx, sink_builder).await?;
-
-        let connector_addr = Addr {
-            alias: alias.clone(),
-            sender: msg_tx,
-            source: source_addr,
-            sink: sink_addr,
-        };
-
-        let mut reconnect: ReconnectRuntime =
-            ReconnectRuntime::new(&connector_addr, &config.reconnect);
-        let notifier = reconnect.notifier();
-
-        let ctx = ConnectorContext {
-            uid,
-            url: url.clone(),
-            type_name: config.binding_type.clone().into(),
-            quiescence_beacon: BoxedQuiescenceBeacon::from_value(
-                quiescence_beacon.clone(),
-                TD_Opaque,
-            ),
-            notifier: reconnect::BoxedConnectionLostNotifier::from_value(
-                notifier.clone(),
-                TD_Opaque,
-            ),
-        };
-
-        let send_addr = connector_addr.clone();
-        let mut connector_state = ConnectorState::Initialized;
-        let mut drainage = None;
-        // TODO: add connector metrics reporter (e.g. for reconnect attempts, cb's received, uptime, etc.)
-        task::spawn::<_, Result<()>>(async move {
-            // typical 1 pipeline connected to IN, OUT, ERR
-            let mut connected_pipelines: HashMap<
-                Cow<'static, str>,
-                Vec<(TremorUrl, pipeline::Addr)>,
-            > = HashMap::with_capacity(3);
-            // connector control plane loop
-            while let Ok(msg) = msg_rx.recv().await {
-                match msg {
-                    Msg::Report(tx) => {
-                        // request a status report from this connector
-                        let pipes: HashMap<Cow<'static, str>, Vec<TremorUrl>> = connected_pipelines
+    // TODO: add connector metrics reporter (e.g. for reconnect attempts, cb's received, uptime, etc.)
+    task::spawn::<_, Result<()>>(async move {
+        // typical 1 pipeline connected to IN, OUT, ERR
+        let mut connected_pipelines: HashMap<
+            Cow<'static, str>,
+            Vec<(DeployEndpoint, pipeline::Addr)>,
+        > = HashMap::with_capacity(3);
+        // connector control plane loop
+        while let Ok(msg) = msg_rx.recv().await {
+            match msg {
+                Msg::Report(tx) => {
+                    // request a status report from this connector
+                    let pipes: HashMap<Cow<'static, str>, Vec<DeployEndpoint>> =
+                        connected_pipelines
                             .iter()
                             .map(|(port, connected)| {
                                 (
@@ -709,199 +565,8 @@ async fn connector_task(
                             )
                             .into())
                         }
-                    }
-                    Msg::Unlink { port, id, tx } => {
-                        let delete =
-                            connected_pipelines
-                                .get_mut(&port)
-                                .map_or(false, |port_pipes| {
-                                    port_pipes.retain(|(url, _)| url != &id);
-                                    port_pipes.is_empty()
-                                });
-                        // make sure we can simply use `is_empty` for checking for emptiness
-                        if delete {
-                            connected_pipelines.remove(&port);
-                        }
-                        let res: Result<()> = if port.eq_ignore_ascii_case(IN.as_ref()) {
-                            // disconnect from source part
-                            match connector_addr.source.as_ref() {
-                                Some(source) => source
-                                    .addr
-                                    .send(SourceMsg::Unlink { port, id })
-                                    .await
-                                    .map_err(Error::from),
-                                None => Err(ErrorKind::InvalidDisconnect(
-                                    connector_addr.url.to_string(),
-                                    id.to_string(),
-                                    port.clone(),
-                                )
-                                .into()),
-                            }
-                        } else {
-                            // disconnect from sink part
-                            match connector_addr.sink.as_ref() {
-                                Some(sink) => sink
-                                    .addr
-                                    .send(SinkMsg::Disconnect { port, id })
-                                    .await
-                                    .map_err(Error::from),
-                                None => Err(ErrorKind::InvalidDisconnect(
-                                    connector_addr.url.to_string(),
-                                    id.to_string(),
-                                    port.clone(),
-                                )
-                                .into()),
-                            }
-                        };
-                        // TODO: work out more fine grained "empty" semantics
-                        tx.send(res.map(|_| connected_pipelines.is_empty())).await?;
-                    }
-                    Msg::ConnectionLost => {
-                        // FIXME: we don't always want to reconnect - add a flag that determines if a reconnect is appropriate
-                        // react on the connection being lost
-                        // immediately try to reconnect if we are not in draining state.
-                        //
-                        // TODO: this might lead to very fast retry loops if the connection is established as connector.connect returns successful
-                        //       but in the next instant fails and sends this message.
-                        connectivity = Connectivity::Disconnected;
-                        info!("[Connector::{}] Disconnected.", &connector_addr.url);
-                        connector_addr.send_sink(SinkMsg::ConnectionLost).await?;
-                        connector_addr
-                            .send_source(SourceMsg::ConnectionLost)
-                            .await?;
-
-                        // reconnect if running - wait with reconnect if paused (until resume)
-                        if connector_state == InstanceState::Running {
-                            info!("[Connector::{}] Triggering reconnect.", &connector_addr.url);
-                            connector_addr.sender.send(Msg::Reconnect).await?;
-                        }
-                    }
-                    Msg::Reconnect => {
-                        // reconnect if we are below max_retries, otherwise bail out and fail the connector
-                        info!("[Connector::{}] Connecting...", &connector_addr.url);
-                        let new = reconnect.attempt(&mut connector, &ctx).await?;
-                        match (&connectivity, &new) {
-                            (Connectivity::Disconnected, Connectivity::Connected) => {
-                                info!("[Connector::{}] Connected.", &connector_addr.url);
-                                // notify sink
-                                connector_addr
-                                    .send_sink(SinkMsg::ConnectionEstablished)
-                                    .await?;
-                                connector_addr
-                                    .send_source(SourceMsg::ConnectionEstablished)
-                                    .await?;
-                            }
-                            (Connectivity::Connected, Connectivity::Disconnected) => {
-                                info!("[Connector::{}] Disconnected.", &connector_addr.url);
-                                connector_addr.send_sink(SinkMsg::ConnectionLost).await?;
-                                connector_addr
-                                    .send_source(SourceMsg::ConnectionLost)
-                                    .await?;
-                            }
-                            _ => {
-                                debug!(
-                                    "[Connector::{}] No change: {:?}",
-                                    &connector_addr.url, &new
-                                );
-                            }
-                        }
-                        connectivity = new;
-                    }
-                    Msg::Start if connector_state == InstanceState::Initialized => {
-                        info!("[Connector::{}] Starting...", &connector_addr.url);
-                        // start connector
-                        connector_state = match connector.on_start(&ctx).await {
-                            Ok(()) => InstanceState::Running,
-                            Err(e) => {
-                                error!(
-                                    "[Connector::{}] on_start Error: {}",
-                                    &connector_addr.url, e
-                                );
-                                InstanceState::Failed
-                            }
-                        };
-                        info!(
-                            "[Connector::{}] Started. New state: {:?}",
-                            &connector_addr.url, &connector_state
-                        );
-                        // forward to source/sink if available
-                        connector_addr.send_source(SourceMsg::Start).await?;
-                        connector_addr.send_sink(SinkMsg::Start).await?;
-
-                        // initiate connect asynchronously
-                        connector_addr.sender.send(Msg::Reconnect).await?;
-                    }
-                    Msg::Start => {
-                        info!(
-                            "[Connector::{}] Ignoring Start Msg. Current state: {:?}",
-                            &connector_addr.url, &connector_state
-                        );
-                    }
-
-                    Msg::Pause if connector_state == InstanceState::Running => {
-                        info!("[Connector::{}] Pausing...", &connector_addr.url);
-
-                        // TODO: in implementations that don't really support pausing
-                        //       issue a warning/error message
-                        //       e.g. UDP, TCP, Rest
-                        //
-                        ctx.log_err(connector.on_pause(&ctx).await, "Error during on_pause");
-                        connector_state = InstanceState::Paused;
-                        quiescence_beacon.pause();
-
-                        connector_addr.send_source(SourceMsg::Pause).await?;
-                        connector_addr.send_sink(SinkMsg::Pause).await?;
-
-                        info!("[Connector::{}] Paused.", &connector_addr.url);
-                    }
-                    Msg::Pause => {
-                        info!(
-                            "[Connector::{}] Ignoring Pause Msg. Current state: {:?}",
-                            &connector_addr.url, &connector_state
-                        );
-                    }
-                    Msg::Resume if connector_state == InstanceState::Paused => {
-                        info!("[Connector::{}] Resuming...", &connector_addr.url);
-                        ctx.log_err(connector.on_resume(&ctx).await, "Error during on_resume");
-                        connector_state = InstanceState::Running;
-                        quiescence_beacon.resume();
-
-                        connector_addr.send_source(SourceMsg::Resume).await?;
-                        connector_addr.send_sink(SinkMsg::Resume).await?;
-
-                        if connectivity == Connectivity::Disconnected {
-                            info!(
-                                "[Connector::{}] Triggering reconnect as part of resume.",
-                                &connector_addr.url
-                            );
-                            connector_addr.send(Msg::Reconnect).await?;
-                        }
-
-                        info!("[Connector::{}] Resumed.", &connector_addr.url);
-                    }
-                    Msg::Resume => {
-                        info!(
-                            "[Connector::{}] Ignoring Resume Msg. Current state: {:?}",
-                            &connector_addr.url, &connector_state
-                        );
-                    }
-                    Msg::Drain(_) if connector_state == InstanceState::Draining => {
-                        info!(
-                            "[Connector::{}] Ignoring Drain Msg. Current state: {:?}",
-                            &connector_addr.url, &connector_state
-                        );
-                    }
-                    Msg::Drain(tx) => {
-                        info!("[Connector::{}] Draining...", &connector_addr.url);
-
-                        // notify connector that it should stop reading - so no more new events arrive at its source part
-                        quiescence_beacon.stop_reading();
-                        // FIXME: add stop_writing()
-                        // let connector stop emitting anything to its source part - if possible here
-                        ctx.log_err(connector.on_drain(&ctx).await, "Error during on_drain");
-                        connector_state = InstanceState::Draining;
-
-                        // notify source to drain the source channel and then send the drain signal
+                    } else if connector.is_valid_output_port(&port) {
+                        // connect to source part
                         if let Some(source) = connector_addr.source.as_ref() {
                             source
                                 .addr
@@ -1366,37 +1031,6 @@ impl Display for ConnectorState {
     }
 }
 
-/// connector context
-#[repr(C)]
-#[derive(Clone, StableAbi)]
-pub struct ConnectorContext {
-    /// unique identifier
-    pub uid: u64,
-    /// url of the connector
-    pub url: TremorUrl,
-    /// type name of the connector
-    pub type_name: RString,
-    /// The Quiescence Beacon
-    pub quiescence_beacon: BoxedQuiescenceBeacon,
-    /// Notifier
-    pub notifier: reconnect::BoxedConnectionLostNotifier,
-}
-
-impl ConnectorContext {
-    /// enclose the given meta in the right connector namespace
-    ///
-    /// Namespace: "connector.<connector-type>"
-    #[must_use]
-    pub fn meta(&self, inner: Value<'static>) -> Value<'static> {
-        let mut map = Value::object_with_capacity(1);
-        let mut type_map = Value::object_with_capacity(1);
-        let type_name: String = self.type_name.clone().into();
-        type_map.try_insert(type_name, inner);
-        map.try_insert("connector", type_map);
-        map
-    }
-}
-
 /// describes connectivity state of the connector
 #[derive(Debug, Serialize, Copy, Clone, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -1504,9 +1138,11 @@ pub trait RawConnector: Send {
     /// can be used. Call `.reading()` and `.writing()` to see if you should continue doing so, if not, just stop and rest.
     fn connect<'a>(
         &'a mut self,
-        ctx: &'a ConnectorContext,
-        attempt: &'a Attempt,
-    ) -> BorrowingFfiFuture<'a, RResult<bool>>;
+        _ctx: &'a ConnectorContext,
+        _attempt: &'a Attempt,
+    ) -> BorrowingFfiFuture<'a, RResult<bool>> {
+        future::ready(ROk(true)).into_ffi()
+    }
 
     /// called once when the connector is started
     /// `connect` will be called after this for the first time, leave connection attempts in `connect`.
@@ -1756,22 +1392,19 @@ pub trait ConnectorBuilder: Sync + Send + std::fmt::Debug {
     ///
     /// # Errors
     ///  * If the config is invalid for the connector
-    async fn from_config(
-        &self,
-        alias: &str,
-        config: &Option<OpConfig>,
-    ) -> Result<Box<Connector>>;
+    async fn from_config(&self, alias: &str, config: &Option<OpConfig>) -> Result<Box<Connector>>;
 }
 
 /// builtin connector types
 #[cfg(not(tarpaulin_include))]
-pub fn builtin_connector_types() -> Vec<Box<dyn ConnectorBuilder + 'static>> {
+pub fn builtin_connector_types() -> Vec<ConnectorMod_Ref> {
+    // FIXME: implement basic connectors
     vec![
+        /*
         Box::new(impls::file::Builder::default()),
         Box::new(impls::metrics::Builder::default()),
         Box::new(impls::stdio::Builder::default()),
         Box::new(impls::tcp::client::Builder::default()),
-        Box::new(impls::tcp::server::Builder::default()),
         Box::new(impls::udp::client::Builder::default()),
         Box::new(impls::udp::server::Builder::default()),
         Box::new(impls::kv::Builder::default()),
@@ -1786,15 +1419,17 @@ pub fn builtin_connector_types() -> Vec<Box<dyn ConnectorBuilder + 'static>> {
         Box::new(impls::s3::Builder::default()),
         Box::new(impls::kafka::consumer::Builder::default()),
         Box::new(impls::kafka::producer::Builder::default()),
+        */
+        impls::tcp::server::instantiate_root_module(),
     ]
 }
 
 /// debug connector types
 #[cfg(not(tarpaulin_include))]
-pub fn debug_connector_types() -> Vec<Box<dyn ConnectorBuilder + 'static>> {
+pub fn debug_connector_types() -> Vec<ConnectorMod_Ref> {
     vec![
-        Box::new(impls::cb::Builder::default()),
-        Box::new(impls::bench::Builder::default()),
+        // Box::new(impls::cb::Builder::default()),
+        // Box::new(impls::bench::Builder::default()),
     ]
 }
 
@@ -1803,11 +1438,15 @@ pub fn debug_connector_types() -> Vec<Box<dyn ConnectorBuilder + 'static>> {
 /// # Errors
 ///  * If a builtin connector couldn't be registered
 #[cfg(not(tarpaulin_include))]
-pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
-    // First we load the hardcoded connectors
-    world
-        .register_builtin_connector_type(impls::tcp::server::instantiate_root_module())
-        .await?;
+pub async fn register_builtin_connector_types(world: &World, debug: bool) -> Result<()> {
+    for builder in builtin_connector_types() {
+        world.register_builtin_connector_type(builder).await?;
+    }
+    if debug {
+        for builder in debug_connector_types() {
+            world.register_builtin_connector_type(builder).await?;
+        }
+    }
 
     // Finally, we try to find all the available plugins and we load them
     // dynamically. For now, plugins are loaded from the path defined by
@@ -1815,21 +1454,14 @@ pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
     //
     // FIXME: the `plugins` fallback is only for development, this should have a
     // proper default value.
-    let base_dir = env::var("TREMOR_PLUGIN_PATH").unwrap_or_else(|_| String::from("plugins"));
-    let dynamic_plugins = pdk::find_recursively(&base_dir);
-    for plugin in dynamic_plugins {
-        world.register_connector_type(plugin).await?;
+    let plugin_path = env::var("TREMOR_PLUGIN_PATH").unwrap_or_else(|_| String::from("plugins"));
+    for path in plugin_path.split(':') {
+        log::info!("Dynamically loading plugins in directory '{}'", path);
+        for plugin in pdk::find_recursively(&path) {
+            log::info!("Found and loaded plugin '{}'", plugin.connector_type()());
+            world.register_builtin_connector_type(plugin).await?;
+        }
     }
 
-    Ok(())
-}
-
-/// registering builtin connector types
-///
-/// # Errors
-///  * If a builtin connector couldn't be registered
-#[cfg(not(tarpaulin_include))]
-pub async fn register_debug_connector_types(_world: &World) -> Result<()> {
-    // TODO load dynamically
     Ok(())
 }
