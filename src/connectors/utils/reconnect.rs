@@ -21,9 +21,10 @@ use crate::errors::{Error, Result};
 use crate::pdk::RResult;
 use abi_stable::{
     std_types::{RBox, SendRBoxError},
+    type_level::downcasting::TD_Opaque,
     StableAbi,
 };
-use async_ffi::{BorrowingFfiFuture, FutureExt};
+use async_ffi::{BorrowingFfiFuture, FutureExt as AsyncFfiFutureExt};
 use async_std::channel::{bounded, Sender};
 use async_std::task;
 use futures::future::{join3, ready, FutureExt};
@@ -144,7 +145,7 @@ pub(crate) struct ReconnectRuntime {
     interval_ms: Option<u64>,
     strategy: Box<dyn ReconnectStrategy>,
     addr: Addr,
-    notifier: ConnectionLostNotifier,
+    notifier: BoxedConnectionLostNotifier,
     connector_url: TremorUrl,
 }
 
@@ -191,13 +192,13 @@ impl ConnectionLostNotifierOpaque for ConnectionLostNotifier {
 pub type BoxedConnectionLostNotifier = ConnectionLostNotifierOpaque_TO<'static, RBox<()>>;
 
 impl ReconnectRuntime {
-    pub(crate) fn notifier(&self) -> ConnectionLostNotifier {
+    pub(crate) fn notifier(&self) -> BoxedConnectionLostNotifier {
         self.notifier.clone()
     }
     /// constructor
     pub(crate) fn new(
         connector_addr: &Addr,
-        notifier: ConnectionLostNotifier,
+        notifier: BoxedConnectionLostNotifier,
         config: &Reconnect,
     ) -> Self {
         Self::inner(
@@ -210,7 +211,7 @@ impl ReconnectRuntime {
     fn inner(
         addr: Addr,
         connector_url: TremorUrl,
-        notifier: ConnectionLostNotifier,
+        notifier: BoxedConnectionLostNotifier,
         config: &Reconnect,
     ) -> Self {
         let strategy: Box<dyn ReconnectStrategy> = match config {
@@ -230,7 +231,7 @@ impl ReconnectRuntime {
             interval_ms: None,
             strategy,
             addr,
-            notifier,
+            notifier: BoxedConnectionLostNotifier::from_value(notifier, TD_Opaque),
             connector_url,
         }
     }

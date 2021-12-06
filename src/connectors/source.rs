@@ -27,10 +27,11 @@ use tremor_script::{pdk::PdkEventPayload, EventPayload, ValueAndMeta};
 use crate::config::{
     self, Codec as CodecConfig, Connector as ConnectorConfig, Preprocessor as PreprocessorConfig,
 };
+use crate::connectors::utils::{
+    quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier,
+};
 use crate::connectors::{
-    metrics::SourceReporter,
-    utils::reconnect::{Attempt, ConnectionLostNotifier},
-    ConnectorType, Context, Msg, QuiescenceBeacon, StreamDone,
+    metrics::SourceReporter, utils::reconnect::Attempt, ConnectorType, Context, Msg, StreamDone,
 };
 use crate::errors::{Error, Result};
 use crate::pdk::{RError, RResult};
@@ -61,10 +62,6 @@ use tremor_pipeline::{
 };
 use tremor_value::{literal, pdk::PdkValue, Value};
 use value_trait::Builder;
-
-use super::metrics::SourceReporter;
-use super::quiescence::BoxedQuiescenceBeacon;
-use super::{ConnectorContext, StreamDone};
 
 /// The default poll interval for `try_recv` on channels in connectors
 pub const DEFAULT_POLL_INTERVAL: u64 = 10;
@@ -215,8 +212,12 @@ pub trait RawSource: Send {
     /// The intended result of this function is to re-establish a connection. It might reuse a working connection.
     ///
     /// Return `Ok(true)` if the connection could be successfully established.
-    async fn connect(&mut self, _ctx: &SourceContext, _attempt: &Attempt) -> Result<bool> {
-        Ok(true)
+    fn connect(
+        &mut self,
+        _ctx: &SourceContext,
+        _attempt: &Attempt,
+    ) -> BorrowingFfiFuture<'_, RResult<bool>> {
+        future::ready(ROk(true)).into_ffi()
     }
 
     /// called when the source is explicitly paused as result of a user/operator interaction
@@ -326,6 +327,16 @@ impl Source {
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
+
+    /// Wrapper for [`BoxedRawSource::connect`]
+    pub async fn connect(&mut self, ctx: &SourceContext, attempt: &Attempt) -> Result<bool> {
+        self.0
+            .connect(ctx, attempt)
+            .await
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
+    }
+
     /// Wrapper for [`BoxedRawSource::on_pause`]
     #[inline]
     pub async fn on_pause(&mut self, ctx: &SourceContext) -> Result<()> {
@@ -551,7 +562,7 @@ pub struct SourceContext {
     pub(crate) quiescence_beacon: BoxedQuiescenceBeacon,
 
     /// tool to notify the connector when the connection is lost
-    pub(crate) notifier: ConnectionLostNotifier,
+    pub(crate) notifier: BoxedConnectionLostNotifier,
 }
 
 impl Display for SourceContext {
@@ -565,11 +576,11 @@ impl Context for SourceContext {
         &self.url
     }
 
-    fn quiescence_beacon(&self) -> &QuiescenceBeacon {
+    fn quiescence_beacon(&self) -> &BoxedQuiescenceBeacon {
         &self.quiescence_beacon
     }
 
-    fn notifier(&self) -> &ConnectionLostNotifier {
+    fn notifier(&self) -> &BoxedConnectionLostNotifier {
         &self.notifier
     }
 

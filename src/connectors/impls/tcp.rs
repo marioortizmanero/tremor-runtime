@@ -14,7 +14,7 @@
 
 // pub(crate) mod client;
 pub(crate) mod server;
-pub(crate) mod simple_server;
+// pub(crate) mod simple_server;
 
 use crate::connectors::prelude::*;
 use abi_stable::std_types::{

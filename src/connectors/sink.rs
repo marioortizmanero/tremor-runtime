@@ -27,8 +27,11 @@ use crate::codec::{self, Codec};
 use crate::config::{
     Codec as CodecConfig, Connector as ConnectorConfig, Postprocessor as PostprocessorConfig,
 };
-use crate::connectors::utils::reconnect::{Attempt, ConnectionLostNotifier};
-use crate::connectors::{ConnectorType, Context, Msg, QuiescenceBeacon, StreamDone};
+use crate::connectors::utils::reconnect::Attempt;
+use crate::connectors::utils::{
+    quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier,
+};
+use crate::connectors::{ConnectorType, Context, Msg, StreamDone};
 use crate::errors::{Error, Result};
 use crate::pdk::{RError, RResult};
 use crate::permge::PriorityMerge;
@@ -206,8 +209,12 @@ pub trait RawSink: Send {
     /// The intended result of this function is to re-establish a connection. It might reuse a working connection.
     ///
     /// Return `Ok(true)` if the connection could be successfully established.
-    async fn connect(&mut self, _ctx: &SinkContext, _attempt: &Attempt) -> Result<bool> {
-        Ok(true)
+    fn connect(
+        &mut self,
+        _ctx: &SinkContext,
+        _attempt: &Attempt,
+    ) -> BorrowingFfiFuture<'_, RResult<bool>> {
+        future::ready(ROk(true)).into_ffi()
     }
 
     /// called when paused
@@ -303,6 +310,17 @@ impl Sink {
     pub async fn on_start(&mut self, ctx: &SinkContext) -> Result<()> {
         self.0.on_start(ctx).await.map_err(Into::into).into()
     }
+
+    /// Wrapper for [`BoxedRawSink::connect`]
+    #[inline]
+    pub async fn connect(&mut self, ctx: &SinkContext, attempt: &Attempt) -> Result<bool> {
+        self.0
+            .connect(ctx, attempt)
+            .await
+            .map_err(Into::into)
+            .into()
+    }
+
     /// Wrapper for [`BoxedRawSink::on_pause`]
     #[inline]
     pub async fn on_pause(&mut self, ctx: &SinkContext) -> Result<()> {
@@ -385,10 +403,10 @@ pub struct SinkContext {
     pub(crate) connector_type: ConnectorType,
 
     /// check if we are paused or should stop reading/writing
-    pub(crate) quiescence_beacon: QuiescenceBeacon,
+    pub(crate) quiescence_beacon: BoxedQuiescenceBeacon,
 
     /// notifier the connector runtime if we lost a connection
-    pub(crate) notifier: ConnectionLostNotifier,
+    pub(crate) notifier: BoxedConnectionLostNotifier,
 }
 
 impl Display for SinkContext {
@@ -402,11 +420,11 @@ impl Context for SinkContext {
         &self.url
     }
 
-    fn quiescence_beacon(&self) -> &QuiescenceBeacon {
+    fn quiescence_beacon(&self) -> &BoxedQuiescenceBeacon {
         &self.quiescence_beacon
     }
 
-    fn notifier(&self) -> &ConnectionLostNotifier {
+    fn notifier(&self) -> &BoxedConnectionLostNotifier {
         &self.notifier
     }
 

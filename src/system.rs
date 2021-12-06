@@ -14,7 +14,7 @@
 
 mod deployment;
 
-use crate::connectors::{self, ConnectorBuilder};
+use crate::connectors;
 use crate::errors::Result;
 use crate::pdk::connectors::ConnectorMod_Ref;
 use crate::QSIZE;
@@ -71,7 +71,7 @@ pub(crate) enum ManagerMsg {
         /// the type of connector
         connector_type: ConnectorType,
         /// the builder
-        builder: Box<dyn ConnectorBuilder>,
+        builder: ConnectorMod_Ref,
     },
     /// stop this manager
     Stop,
@@ -107,7 +107,7 @@ impl Manager {
                         {
                             error!(
                                 "FIXME: error on duplicate connectors: {}",
-                                old.connector_type()
+                                old.connector_type()()
                             );
                         }
                     }
@@ -179,7 +179,7 @@ impl World {
     ) -> Result<()> {
         self.system
             .send(ManagerMsg::RegisterConnectorType {
-                connector_type: builder.connector_type(),
+                connector_type: builder.connector_type()(),
                 builder,
             })
             .await?;

@@ -36,6 +36,9 @@ use self::metrics::{SinkReporter, SourceReporter};
 use self::sink::{BoxedContraflowSender, BoxedRawSink, Sink, SinkAddr, SinkContext, SinkMsg};
 use self::source::{BoxedRawSource, Source, SourceAddr, SourceContext, SourceMsg};
 use self::utils::quiescence::QuiescenceBeacon;
+use crate::connectors::utils::{
+    quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier,
+};
 use crate::errors::{Error, Kind as ErrorKind, Result};
 use crate::instance::InstanceState;
 use crate::pdk::{self, connectors::ConnectorMod_Ref, RResult};
@@ -50,7 +53,8 @@ use abi_stable::{
         RResult::{RErr, ROk},
         RStr, RString, RVec,
     },
-    type_level::downcasting::{TD_CanDowncast, TD_Opaque},
+    type_level::downcasting::TD_CanDowncast,
+    type_level::downcasting::TD_Opaque,
     StableAbi,
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
@@ -58,6 +62,7 @@ use async_std::channel::{bounded, Sender};
 use async_std::task::{self};
 use beef::Cow;
 use halfbrown::HashMap;
+use std::{env, future};
 use std::{fmt::Display, sync::atomic::Ordering};
 use tremor_common::ids::ConnectorIdGen;
 use tremor_common::url::{
@@ -239,10 +244,10 @@ pub trait Context: Display + Clone {
     fn url(&self) -> &TremorUrl;
 
     /// get the quiescence beacon for checking if we should continue reading/writing
-    fn quiescence_beacon(&self) -> &QuiescenceBeacon;
+    fn quiescence_beacon(&self) -> &BoxedQuiescenceBeacon;
 
     /// get the notifier to signal to the runtime that we are disconnected
-    fn notifier(&self) -> &reconnect::ConnectionLostNotifier;
+    fn notifier(&self) -> &reconnect::BoxedConnectionLostNotifier;
 
     /// get the connector type
     fn connector_type(&self) -> &ConnectorType;
@@ -300,11 +305,11 @@ impl Context for ConnectorContext {
         &self.connector_type
     }
 
-    fn quiescence_beacon(&self) -> &QuiescenceBeacon {
+    fn quiescence_beacon(&self) -> &BoxedQuiescenceBeacon {
         &self.quiescence_beacon
     }
 
-    fn notifier(&self) -> &reconnect::ConnectionLostNotifier {
+    fn notifier(&self) -> &reconnect::BoxedConnectionLostNotifier {
         &self.notifier
     }
 }
@@ -365,7 +370,7 @@ pub enum StreamDone {
 }
 
 /// Lookup table for known connectors
-pub type KnownConnectors = HashMap<ConnectorType, Box<dyn ConnectorBuilder + 'static>>;
+pub type KnownConnectors = HashMap<ConnectorType, ConnectorMod_Ref>;
 
 /// Spawns a connector
 pub async fn spawn(
@@ -378,11 +383,22 @@ pub async fn spawn(
     let builder = known_connectors
         .get(&config.connector_type)
         .ok_or_else(|| ErrorKind::UnknownConnectorType(config.connector_type.to_string()))?;
-    let connector = builder.from_config(&url, &config.config).await?;
+    let connector_config = config.config.clone().map(Into::into).into();
+    let connector = Result::from(
+        builder.from_config()(url.clone(), connector_config)
+            .await
+            .map_err(Error::from),
+    )?;
 
     Ok((
         url.clone(),
-        connector_task(url.clone(), connector, config, connector_id_gen.next_id()).await?,
+        connector_task(
+            url.clone(),
+            Connector(connector),
+            config,
+            connector_id_gen.next_id(),
+        )
+        .await?,
     ))
 }
 
@@ -390,7 +406,7 @@ pub async fn spawn(
 // instantiates the connector and starts listening for control plane messages
 async fn connector_task(
     url: TremorUrl,
-    mut connector: Box<dyn Connector>,
+    mut connector: Connector,
     config: ConnectorConfig,
     uid: u64,
 ) -> Result<Addr> {
@@ -399,8 +415,10 @@ async fn connector_task(
     let (msg_tx, msg_rx) = bounded(qsize);
 
     let mut connectivity = Connectivity::Disconnected;
-    let mut quiescence_beacon = QuiescenceBeacon::default();
+    let quiescence_beacon = QuiescenceBeacon::default();
+    let mut quiescence_beacon = BoxedQuiescenceBeacon::from_value(quiescence_beacon, TD_Opaque);
     let notifier = ConnectionLostNotifier::new(msg_tx.clone());
+    let notifier = BoxedConnectionLostNotifier::from_value(notifier, TD_Opaque);
 
     let source_metrics_reporter =
         SourceReporter::new(url.clone(), METRICS_CHANNEL.tx(), config.metrics_interval_s);
@@ -637,7 +655,7 @@ async fn connector_task(
                 Msg::Reconnect => {
                     // reconnect if we are below max_retries, otherwise bail out and fail the connector
                     info!("[Connector::{}] Connecting...", &connector_addr.url);
-                    let (new, will_retry) = reconnect.attempt(connector.as_mut(), &ctx).await?;
+                    let (new, will_retry) = reconnect.attempt(&mut connector, &ctx).await?;
                     match (&connectivity, &new) {
                         (Connectivity::Disconnected, Connectivity::Connected) => {
                             info!("[Connector::{}] Connected.", &connector_addr.url);
@@ -1075,7 +1093,7 @@ pub trait RawConnector: Send {
         _ctx: &'a ConnectorContext,
         _attempt: &'a Attempt,
     ) -> BorrowingFfiFuture<'a, RResult<bool>> {
-        ROk(true)
+        future::ready(ROk(true)).into_ffi()
     }
 
     /// called once when the connector is started
@@ -1328,13 +1346,13 @@ pub(crate) trait ConnectorBuilder: Sync + Send + std::fmt::Debug {
 
 /// builtin connector types
 #[cfg(not(tarpaulin_include))]
-pub fn builtin_connector_types() -> Vec<Box<dyn ConnectorBuilder + 'static>> {
+pub fn builtin_connector_types() -> Vec<ConnectorMod_Ref> {
     vec![
         // Box::new(impls::file::Builder::default()),
         // Box::new(impls::metrics::Builder::default()),
         // Box::new(impls::stdio::Builder::default()),
         // Box::new(impls::tcp::client::Builder::default()),
-        Box::new(impls::tcp::server::instantiate_root_module()),
+        impls::tcp::server::instantiate_root_module(),
         // Box::new(impls::udp::client::Builder::default()),
         // Box::new(impls::udp::server::Builder::default()),
         // Box::new(impls::kv::Builder::default()),
@@ -1351,10 +1369,10 @@ pub fn builtin_connector_types() -> Vec<Box<dyn ConnectorBuilder + 'static>> {
 
 /// debug connector types
 #[cfg(not(tarpaulin_include))]
-pub fn debug_connector_types() -> Vec<Box<dyn ConnectorBuilder + 'static>> {
+pub fn debug_connector_types() -> Vec<ConnectorMod_Ref> {
     vec![
-        Box::new(impls::cb::Builder::default()),
-        Box::new(impls::bench::Builder::default()),
+        // Box::new(impls::cb::Builder::default()),
+        // Box::new(impls::bench::Builder::default()),
     ]
 }
 
@@ -1363,7 +1381,7 @@ pub fn debug_connector_types() -> Vec<Box<dyn ConnectorBuilder + 'static>> {
 /// # Errors
 ///  * If a builtin connector couldn't be registered
 #[cfg(not(tarpaulin_include))]
-pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
+pub async fn register_builtin_connector_types(world: &World, debug: bool) -> Result<()> {
     for builder in builtin_connector_types() {
         world.register_builtin_connector_type(builder).await?;
     }
@@ -1372,9 +1390,9 @@ pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
             world.register_builtin_connector_type(builder).await?;
         }
     }
-    world
-        .register_builtin_connector_type(Box::new(impls::exit::Builder::new(world)))
-        .await;
+    // world
+    //     .register_builtin_connector_type(Box::new(impls::exit::Builder::new(world)))
+    //     .await?;
 
     // After loading all the in-tree connectors, we try to find all the
     // available plugins and we load them dynamically. For now, plugins are
@@ -1384,6 +1402,8 @@ pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
     // proper default value.
     let base_dir = env::var("TREMOR_PLUGIN_PATH").unwrap_or_else(|_| String::from("plugins"));
     for plugin in pdk::find_recursively(&base_dir) {
-        world.register_connector_type(plugin).await?;
+        world.register_builtin_connector_type(plugin).await?;
     }
+
+    Ok(())
 }
