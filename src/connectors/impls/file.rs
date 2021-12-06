@@ -23,7 +23,66 @@ use async_std::{
 use futures::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tremor_common::asy::file;
 
+use crate::ttry;
+use abi_stable::{
+    prefix_type::PrefixTypeTrait,
+    rstr, rvec, sabi_extern_fn,
+    std_types::{
+        ROption::{self, RNone, RSome},
+        RResult::{RErr, ROk},
+        RStr, RString, RVec,
+    },
+    type_level::downcasting::TD_Opaque,
+};
+use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt};
+use async_std::channel::Sender;
+use std::future;
+use tremor_value::pdk::PdkValue;
+
 const URL_SCHEME: &str = "tremor-file";
+
+/// Note that since it's a built-in plugin, `#[export_root_module]` can't be
+/// used or it would conflict with other plugins.
+pub fn instantiate_root_module() -> ConnectorMod_Ref {
+    ConnectorMod {
+        connector_type,
+        from_config,
+    }
+    .leak_into_prefix()
+}
+
+#[sabi_extern_fn]
+fn connector_type() -> ConnectorType {
+    "file".into()
+}
+
+#[sabi_extern_fn]
+pub fn from_config(
+    id: TremorUrl,
+    config: ROption<PdkValue<'static>>,
+) -> FfiFuture<RResult<BoxedRawConnector>> {
+    async move {
+        if let RSome(raw_config) = config {
+            let config = ttry!(Config::new(&raw_config.into()));
+            let origin_uri = EventOriginUri {
+                scheme: RString::from(URL_SCHEME),
+                host: RString::from(hostname()),
+                port: RNone,
+                path: rvec![RString::from(config.path.display().to_string())],
+            };
+            let file = File {
+                config,
+                origin_uri,
+                source_runtime: None,
+                sink_runtime: None,
+            };
+            ROk(BoxedRawConnector::from_value(file, TD_Opaque))
+        } else {
+            RErr(ErrorKind::MissingConfiguration(id.to_instance().to_string()).into())
+        }
+    }
+    .into_ffi()
+}
 
 /// how to open the given file for writing
 #[derive(Deserialize, Debug, Clone, PartialEq)]
@@ -86,128 +145,118 @@ pub struct File {
     sink_runtime: Option<SingleStreamSinkRuntime>,
 }
 
-/// builder for file connector
-#[derive(Default, Debug)]
-pub struct Builder {}
-
-impl Builder {}
-
-#[async_trait::async_trait]
-impl ConnectorBuilder for Builder {
-    fn connector_type(&self) -> ConnectorType {
-        "file".into()
-    }
-
-    async fn from_config(
-        &self,
-        id: &TremorUrl,
-        config: &Option<OpConfig>,
-    ) -> Result<Box<dyn Connector>> {
-        if let Some(raw_config) = config {
-            let config = Config::new(raw_config)?;
-            let origin_uri = EventOriginUri {
-                scheme: URL_SCHEME.to_string(),
-                host: hostname(),
-                port: None,
-                path: vec![config.path.display().to_string()],
-            };
-            Ok(Box::new(File {
-                config,
-                origin_uri,
-                source_runtime: None,
-                sink_runtime: None,
-            }))
-        } else {
-            Err(ErrorKind::MissingConfiguration(id.to_instance().to_string()).into())
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl Connector for File {
-    async fn create_sink(
+impl RawConnector for File {
+    fn create_sink(
         &mut self,
         sink_context: SinkContext,
-        builder: SinkManagerBuilder,
-    ) -> Result<Option<SinkAddr>> {
-        Ok(if self.config.mode == Mode::Read {
-            None
+        qsize: usize,
+        reply_tx: BoxedContraflowSender,
+    ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSink>>> {
+        let sink = if self.config.mode == Mode::Read {
+            RNone
         } else {
-            let sink = SingleStreamSink::new_no_meta(builder.qsize(), builder.reply_tx());
+            let reply_tx = reply_tx
+                .obj
+                .downcast_as::<Sender<AsyncSinkReply>>()
+                .expect("contraflow channel not created with TD_CanDowncast");
+            let sink = SingleStreamSink::new_no_meta(qsize, *reply_tx);
             self.sink_runtime = Some(sink.runtime());
-            let addr = builder.spawn(sink, sink_context)?;
-            Some(addr)
-        })
+            // We don't need to be able to downcast the connector back to the
+            // original type, so we just pass it as an opaque type.
+            let sink = BoxedRawSink::from_value(sink, TD_Opaque);
+            RSome(sink)
+        };
+
+        future::ready(ROk(sink)).into_ffi()
     }
 
-    async fn create_source(
+    fn create_source(
         &mut self,
         source_context: SourceContext,
-        builder: SourceManagerBuilder,
-    ) -> Result<Option<SourceAddr>> {
-        Ok(if self.config.mode == Mode::Read {
-            let source = ChannelSource::new(source_context.clone(), builder.qsize());
+        qsize: usize,
+    ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSource>>> {
+        let source = if self.config.mode == Mode::Read {
+            let source = ChannelSource::new(source_context.clone(), qsize);
             self.source_runtime = Some(source.runtime());
-            let addr = builder.spawn(source, source_context)?;
-            Some(addr)
+            // We don't need to be able to downcast the connector back to the original
+            // type, so we just pass it as an opaque type.
+            let source = BoxedRawSource::from_value(source, TD_Opaque);
+            RSome(source)
         } else {
-            None
-        })
+            RNone
+        };
+
+        future::ready(ROk(source)).into_ffi()
     }
 
-    async fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> Result<bool> {
-        // SINK PART: open write file
-        if let Some(sink_runtime) = self.sink_runtime.as_ref() {
-            let mode = if attempt.is_first() || attempt.success() == 0 {
-                &self.config.mode
-            } else {
-                // if we have already opened the file successfully once
-                // we should not truncate it again or overwrite, but indeed append
-                // otherwise the reconnect logic will lead to unwanted effects
-                // e.g. if a simple write failed temporarily
-                &Mode::Append
-            };
-            let write_file =
-                file::open_with(&self.config.path, &mut mode.as_open_options()).await?;
-            let writer = FileWriter::new(write_file, ctx.url.clone());
-            sink_runtime.register_stream_writer(DEFAULT_STREAM_ID, ctx, writer);
-        }
-        // SOURCE PART: open file for reading
-        // open in read-only mode, without creating a new one - will fail if the file is not available
-        if let Some(source_runtime) = self.source_runtime.as_ref() {
-            let meta = ctx.meta(literal!({
-                "path": self.config.path.display().to_string()
-            }));
-            let read_file =
-                file::open_with(&self.config.path, &mut self.config.mode.as_open_options()).await?;
-            // TODO: instead of looking for an extension
-            // check the magic bytes at the beginning of the file to determine the compression applied
-            if let Some("xz") = self.config.path.extension().and_then(OsStr::to_str) {
-                let reader = FileReader::xz(
-                    read_file,
-                    self.config.chunk_size,
-                    ctx.url.clone(),
-                    self.origin_uri.clone(),
-                    meta,
-                );
-                source_runtime.register_stream_reader(DEFAULT_STREAM_ID, ctx, reader);
-            } else {
-                let reader = FileReader::new(
-                    read_file,
-                    self.config.chunk_size,
-                    ctx.url.clone(),
-                    self.origin_uri.clone(),
-                    meta,
-                );
-                source_runtime.register_stream_reader(DEFAULT_STREAM_ID, ctx, reader);
-            };
-        }
+    fn connect<'a>(
+        &'a mut self,
+        ctx: &'a ConnectorContext,
+        attempt: &'a Attempt,
+    ) -> BorrowingFfiFuture<'a, RResult<bool>> {
+        async move {
+            // SINK PART: open write file
+            if let Some(sink_runtime) = self.sink_runtime.as_ref() {
+                let mode = if attempt.is_first() || attempt.success() == 0 {
+                    &self.config.mode
+                } else {
+                    // if we have already opened the file successfully once
+                    // we should not truncate it again or overwrite, but indeed append
+                    // otherwise the reconnect logic will lead to unwanted effects
+                    // e.g. if a simple write failed temporarily
+                    &Mode::Append
+                };
+                let write_file = ttry!(file::open_with(
+                    &self.config.path,
+                    &mut mode.as_open_options()
+                )
+                .await
+                .map_err(Error::from));
+                let writer = FileWriter::new(write_file, ctx.url.clone());
+                sink_runtime.register_stream_writer(DEFAULT_STREAM_ID, ctx, writer);
+            }
+            // SOURCE PART: open file for reading
+            // open in read-only mode, without creating a new one - will fail if the file is not available
+            if let Some(source_runtime) = self.source_runtime.as_ref() {
+                let meta = ctx.meta(literal!({
+                    "path": self.config.path.display().to_string()
+                }));
+                let read_file = ttry!(file::open_with(
+                    &self.config.path,
+                    &mut self.config.mode.as_open_options()
+                )
+                .await
+                .map_err(Error::from));
+                // TODO: instead of looking for an extension
+                // check the magic bytes at the beginning of the file to determine the compression applied
+                if let Some("xz") = self.config.path.extension().and_then(OsStr::to_str) {
+                    let reader = FileReader::xz(
+                        read_file,
+                        self.config.chunk_size,
+                        ctx.url.clone(),
+                        self.origin_uri.clone(),
+                        meta,
+                    );
+                    source_runtime.register_stream_reader(DEFAULT_STREAM_ID, ctx, reader);
+                } else {
+                    let reader = FileReader::new(
+                        read_file,
+                        self.config.chunk_size,
+                        ctx.url.clone(),
+                        self.origin_uri.clone(),
+                        meta,
+                    );
+                    source_runtime.register_stream_reader(DEFAULT_STREAM_ID, ctx, reader);
+                };
+            }
 
-        Ok(true)
+            ROk(true)
+        }
+        .into_ffi()
     }
 
-    fn default_codec(&self) -> &str {
-        "json"
+    fn default_codec(&self) -> RStr<'_> {
+        rstr!("json")
     }
 }
 
@@ -273,15 +322,15 @@ where
             SourceReply::EndStream {
                 origin_uri: self.origin_uri.clone(),
                 stream_id: stream,
-                meta: Some(self.meta.clone()),
+                meta: RSome(self.meta.clone().into()),
             }
         } else {
             SourceReply::Data {
                 origin_uri: self.origin_uri.clone(),
                 stream,
-                meta: Some(self.meta.clone()),
-                data: self.buf[0..bytes_read].to_vec(),
-                port: None,
+                meta: RSome(self.meta.clone().into()),
+                data: RVec::from(&self.buf[0..bytes_read]),
+                port: RNone,
             }
         })
     }

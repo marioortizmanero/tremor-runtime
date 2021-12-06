@@ -1348,7 +1348,7 @@ pub(crate) trait ConnectorBuilder: Sync + Send + std::fmt::Debug {
 #[cfg(not(tarpaulin_include))]
 pub fn builtin_connector_types() -> Vec<ConnectorMod_Ref> {
     vec![
-        // Box::new(impls::file::Builder::default()),
+        impls::file::instantiate_root_module(),
         // Box::new(impls::metrics::Builder::default()),
         // Box::new(impls::stdio::Builder::default()),
         // Box::new(impls::tcp::client::Builder::default()),

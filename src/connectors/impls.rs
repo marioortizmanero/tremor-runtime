@@ -28,8 +28,8 @@
 // pub(crate) mod elastic;
 // /// Exit Connector
 // pub(crate) mod exit;
-// /// file connector implementation
-// pub(crate) mod file;
+/// file connector implementation
+pub(crate) mod file;
 // /// KV
 // pub(crate) mod kv;
 // /// Home of the famous metrics collector
