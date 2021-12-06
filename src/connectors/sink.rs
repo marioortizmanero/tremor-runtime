@@ -27,6 +27,10 @@ use crate::codec::{self, Codec};
 use crate::config::{
     Codec as CodecConfig, Connector as ConnectorConfig, Postprocessor as PostprocessorConfig,
 };
+use crate::connectors::utils::reconnect::Attempt;
+use crate::connectors::utils::{
+    quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier,
+};
 use crate::connectors::{ConnectorType, Context, Msg, StreamDone};
 use crate::errors::{Error, Result};
 use crate::pdk::{RError, RResult};
@@ -56,6 +60,7 @@ use tremor_common::url::{ports::IN, TremorUrl};
 use tremor_pipeline::{
     pdk::PdkEvent, pdk::PdkOpMeta, CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID,
 };
+use tremor_script::ast::DeployEndpoint;
 use tremor_script::{pdk::PdkEventPayload, EventPayload};
 
 use tremor_value::{pdk::PdkValue, Value};
@@ -63,6 +68,8 @@ use tremor_value::{pdk::PdkValue, Value};
 pub use self::channel_sink::SinkMeta;
 
 use super::{utils::metrics::SinkReporter, CodecReq};
+
+use super::quiescence::BoxedQuiescenceBeacon;
 
 /// Result for a sink function that may provide insights or response.
 ///
@@ -228,6 +235,22 @@ pub trait RawSink: Send {
     fn on_start(&mut self, _ctx: &SinkContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
+
+    /// Connect to the external thingy.
+    /// This function is called definitely after `on_start` has been called.
+    ///
+    /// This function might be called multiple times, check the `attempt` where you are at.
+    /// The intended result of this function is to re-establish a connection. It might reuse a working connection.
+    ///
+    /// Return `ROk(true)` if the connection could be successfully established.
+    fn connect(
+        &mut self,
+        _ctx: &SinkContext,
+        _attempt: &Attempt,
+    ) -> BorrowingFfiFuture<'_, RResult<bool>> {
+        future::ready(ROk(true)).into_ffi()
+    }
+
     /// called when paused
     fn on_pause(&mut self, _ctx: &SinkContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
@@ -280,12 +303,11 @@ impl Sink {
         input: RStr<'_>,
         event: PdkEvent,
         ctx: &SinkContext,
-        serializer: MutEventSerializer,
+        serializer: MutEventSerializer<'_>,
         start: u64,
     ) -> Result<SinkReply> {
-        let serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
         self.0
-            .on_event(input.into(), event.into(), ctx, serializer, start)
+            .on_event(input.into(), event.into(), ctx, &mut serializer, start)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -294,11 +316,10 @@ impl Sink {
         &mut self,
         signal: Event,
         ctx: &SinkContext,
-        serializer: &mut EventSerializer,
+        serializer: MutEventSerializer<'_>,
     ) -> Result<SinkReply> {
-        let serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
         self.0
-            .on_signal(signal.into(), ctx, serializer)
+            .on_signal(signal.into(), ctx, &mut serializer)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -316,6 +337,18 @@ impl Sink {
     pub async fn on_start(&mut self, ctx: &mut SinkContext) {
         self.0.on_start(ctx)
     }
+
+    /// Wrapper for [`BoxedRawSink::connect`]
+    #[inline]
+    pub async fn connect(&mut self, ctx: &SinkContext, attempt: &Attempt) -> Result<bool> {
+        self.0
+            .connect(ctx, attempt)
+            .await
+            .map_err(Into::into)
+            .into()
+    }
+
+    /// Wrapper for [`BoxedRawSink::on_pause`]
     #[inline]
     pub async fn on_pause(&mut self, ctx: &mut SinkContext) {
         self.0.on_pause(ctx)
@@ -349,112 +382,6 @@ impl Sink {
     }
 }
 
-// Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
-// types so that it's easier to use with `std`.
-pub struct Sink(pub BoxedRawSink);
-impl Sink {
-    #[inline]
-    pub async fn on_event(
-        &mut self,
-        input: &str,
-        event: Event,
-        ctx: &SinkContext,
-        serializer: &mut EventSerializer,
-        start: u64,
-    ) -> Result<SinkReply> {
-        let mut serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
-        self.0
-            .on_event(input.into(), event.into(), ctx, &mut serializer, start)
-            .await
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-    /// Wrapper for [`BoxedRawSink::on_signal`]
-    #[inline]
-    pub async fn on_signal(
-        &mut self,
-        signal: Event,
-        ctx: &SinkContext,
-        serializer: &mut EventSerializer,
-    ) -> Result<SinkReply> {
-        let mut serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
-        self.0
-            .on_signal(signal.into(), ctx, &mut serializer)
-            .await
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-
-    /// Wrapper for [`BoxedRawSink::metrics`]
-    #[inline]
-    pub fn metrics(&mut self, timestamp: u64) -> Vec<EventPayload> {
-        self.0
-            .metrics(timestamp)
-            .into_iter()
-            .map(Into::into)
-            .collect()
-    }
-
-    /// Wrapper for [`BoxedRawSink::on_start`]
-    #[inline]
-    pub async fn on_start(&mut self, ctx: &SinkContext) -> Result<()> {
-        self.0.on_start(ctx).map_err(Into::into).into()
-    }
-    /// Wrapper for [`BoxedRawSink::on_pause`]
-    #[inline]
-    pub async fn on_pause(&mut self, ctx: &SinkContext) -> Result<()> {
-        self.0
-            .on_pause(ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-    /// Wrapper for [`BoxedRawSink::on_resume`]
-    #[inline]
-    pub async fn on_resume(&mut self, ctx: &SinkContext) -> Result<()> {
-        self.0
-            .on_resume(ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-    /// Wrapper for [`BoxedRawSink::on_stop`]
-    #[inline]
-    pub async fn on_stop(&mut self, ctx: &SinkContext) -> Result<()> {
-        self.0
-            .on_stop(ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-
-    /// Wrapper for [`BoxedRawSink::on_connection_lost`]
-    #[inline]
-    pub async fn on_connection_lost(&mut self, ctx: &SinkContext) -> Result<()> {
-        self.0
-            .on_connection_lost(ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-    /// Wrapper for [`BoxedRawSink::on_connection_established`]
-    #[inline]
-    pub async fn on_connection_established(&mut self, ctx: &SinkContext) -> Result<()> {
-        self.0
-            .on_connection_established(ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-
-    /// Wrapper for [`BoxedRawSink::auto_ack`]
-    #[inline]
-    pub fn auto_ack(&self) -> bool {
-        self.0.auto_ack()
-    }
-
-    /// Wrapper for [`BoxedRawSink::asynchronous`]
-    #[inline]
-    pub fn asynchronous(&self) -> bool {
-        self.0.asynchronous()
-    }
-}
-
 /// handles writing to 1 stream (e.g. file or TCP connection)
 #[async_trait::async_trait]
 pub trait StreamWriter: Send + Sync {
@@ -479,10 +406,10 @@ pub struct SinkContext {
     pub(crate) connector_type: ConnectorType,
 
     /// check if we are paused or should stop reading/writing
-    pub(crate) quiescence_beacon: QuiescenceBeacon,
+    pub(crate) quiescence_beacon: BoxedQuiescenceBeacon,
 
     /// notifier the connector runtime if we lost a connection
-    pub(crate) notifier: ConnectionLostNotifier,
+    pub(crate) notifier: BoxedConnectionLostNotifier,
 }
 
 impl Display for SinkContext {
@@ -496,11 +423,11 @@ impl Context for SinkContext {
         &self.alias
     }
 
-    fn quiescence_beacon(&self) -> &QuiescenceBeacon {
+    fn quiescence_beacon(&self) -> &BoxedQuiescenceBeacon {
         &self.quiescence_beacon
     }
 
-    fn notifier(&self) -> &ConnectionLostNotifier {
+    fn notifier(&self) -> &BoxedConnectionLostNotifier {
         &self.notifier
     }
 

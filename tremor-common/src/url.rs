@@ -330,7 +330,7 @@ impl TremorUrl {
     }
 
     /// Sets the instance of the URL, will extend
-    /// the scope to `Scope::Servant` if it was
+    /// the scope to `Scope::Instance` if it was
     /// `Artefact` before.
     pub fn set_instance<S>(&mut self, i: &S)
     where
@@ -344,7 +344,7 @@ impl TremorUrl {
 
     /// Sets the port of the URL, will extend
     /// the scope to `Scope::Port` if it was
-    /// `Servant` before.
+    /// `Instance` before.
     pub fn set_port<S>(&mut self, i: &S)
     where
         S: ToString + ?Sized,

@@ -46,6 +46,7 @@ use std::fmt::Display;
 use std::iter::Iterator;
 use std::str::FromStr;
 use std::{fmt, sync::Mutex};
+use tremor_script::ast::Helper;
 use tremor_script::prelude::*;
 
 /// Pipeline Errors

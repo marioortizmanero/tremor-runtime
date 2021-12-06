@@ -4,14 +4,13 @@ use crate::{
     config::Connector as ConnectorConfig,
 };
 use tremor_common::url::TremorUrl;
+use tremor_value::pdk::PdkValue;
+
+use std::fmt;
 
 use abi_stable::{
-    declare_root_module_statics,
-    library::RootModule,
-    package_version_strings,
-    sabi_types::VersionStrings,
-    std_types::{ROption, RString},
-    StableAbi,
+    declare_root_module_statics, library::RootModule, package_version_strings,
+    sabi_types::VersionStrings, std_types::ROption, StableAbi,
 };
 use async_ffi::FfiFuture;
 
@@ -53,4 +52,14 @@ impl RootModule for ConnectorMod_Ref {
     // Implements the `RootModule::root_module_statics` function, which is the
     // only required implementation for the `RootModule` trait.
     declare_root_module_statics! {ConnectorMod_Ref}
+}
+
+impl fmt::Debug for ConnectorMod_Ref {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "reference to connector plugin '{}'",
+            self.connector_type()()
+        )
+    }
 }

@@ -115,7 +115,18 @@ where
 {
     /// constructor
     pub fn new_no_meta(qsize: usize, resolver: F, reply_tx: BoxedContraflowSender) -> Self {
-        ChannelSink::new(qsize, resolver, reply_tx)
+        let (tx, rx) = bounded(qsize);
+        ChannelSink::new(resolver, reply_tx, tx, rx)
+    }
+
+    /// Construct a new instance that redacts metadata with prepared `rx` and `tx`
+    pub fn from_channel_no_meta(
+        resolver: F,
+        reply_tx: BoxedContraflowSender,
+        tx: Sender<ChannelSinkMsg<T>>,
+        rx: Receiver<ChannelSinkMsg<T>>,
+    ) -> Self {
+        ChannelSink::new(resolver, reply_tx, tx, rx)
     }
 }
 
@@ -133,7 +144,7 @@ where
     /// Construct a new instance with metadata support with prepared `rx` and `tx`
     pub fn from_channel_with_meta(
         resolver: F,
-        reply_tx: Sender<AsyncSinkReply>,
+        reply_tx: BoxedContraflowSender,
         tx: Sender<ChannelSinkMsg<T>>,
         rx: Receiver<ChannelSinkMsg<T>>,
     ) -> Self {
@@ -302,7 +313,7 @@ where
             let error = match writer.on_done(stream).await {
                 Err(e) => RSome(e),
                 Ok(StreamDone::ConnectorClosed) => ctx
-                    .notifier
+                    .notifier()
                     .notify()
                     .await
                     .err()
