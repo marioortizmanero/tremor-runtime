@@ -27,12 +27,13 @@ use crate::codec::{self, Codec};
 use crate::config::{
     Codec as CodecConfig, Connector as ConnectorConfig, Postprocessor as PostprocessorConfig,
 };
-use crate::connectors::{ConnectorType, Context, Msg, StreamDone};
+use crate::connectors::utils::reconnect::{Attempt, ConnectionLostNotifier};
+use crate::connectors::{ConnectorType, Context, Msg, QuiescenceBeacon, StreamDone};
 use crate::errors::{Error, Result};
-use crate::pdk::{RError, RResult};
 use crate::permge::PriorityMerge;
 use crate::pipeline;
 use crate::postprocessor::{make_postprocessors, postprocess, Postprocessors};
+use crate::pdk::{RError, RResult};
 use abi_stable::{
     rvec,
     std_types::{RBox, RResult::ROk, RStr, RVec, SendRBoxError},
@@ -197,6 +198,18 @@ pub trait RawSink: Send {
     fn on_start(&mut self, _ctx: &SinkContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
+
+    /// Connect to the external thingy.
+    /// This function is called definitely after `on_start` has been called.
+    ///
+    /// This function might be called multiple times, check the `attempt` where you are at.
+    /// The intended result of this function is to re-establish a connection. It might reuse a working connection.
+    ///
+    /// Return `Ok(true)` if the connection could be successfully established.
+    async fn connect(&mut self, _ctx: &SinkContext, _attempt: &Attempt) -> Result<bool> {
+        Ok(true)
+    }
+
     /// called when paused
     fn on_pause(&mut self, _ctx: &SinkContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
@@ -370,6 +383,12 @@ pub struct SinkContext {
     pub(crate) url: TremorUrl,
     /// the connector type
     pub(crate) connector_type: ConnectorType,
+
+    /// check if we are paused or should stop reading/writing
+    pub(crate) quiescence_beacon: QuiescenceBeacon,
+
+    /// notifier the connector runtime if we lost a connection
+    pub(crate) notifier: ConnectionLostNotifier,
 }
 
 impl Display for SinkContext {
@@ -381,6 +400,18 @@ impl Display for SinkContext {
 impl Context for SinkContext {
     fn url(&self) -> &TremorUrl {
         &self.url
+    }
+
+    fn quiescence_beacon(&self) -> &QuiescenceBeacon {
+        &self.quiescence_beacon
+    }
+
+    fn notifier(&self) -> &ConnectionLostNotifier {
+        &self.notifier
+    }
+
+    fn connector_type(&self) -> &ConnectorType {
+        &self.connector_type
     }
 }
 
@@ -398,20 +429,22 @@ pub enum SinkMsg {
         /// the signal event
         signal: Event,
     },
-    /// connect some pipelines to the give port
-    Connect {
+    /// link some pipelines to the give port
+    Link {
         /// the port
         port: Cow<'static, str>,
         /// the pipelines
         pipelines: Vec<(TremorUrl, pipeline::Addr)>,
     },
-    /// disconnect a pipeline
-    Disconnect {
+    /// unlink a pipeline
+    Unlink {
         /// url of the pipeline
         id: TremorUrl,
         /// the port
         port: Cow<'static, str>,
     },
+    /// Connect to the outside world and send the result back
+    Connect(Sender<Result<bool>>, Attempt),
     /// the connection to the outside world wasl ost
     ConnectionLost,
     /// connection established
@@ -730,7 +763,7 @@ impl SinkManager {
             match msg_wrapper {
                 SinkMsgWrapper::ToSink(sink_msg) => {
                     match sink_msg {
-                        SinkMsg::Connect {
+                        SinkMsg::Link {
                             port,
                             mut pipelines,
                         } => {
@@ -741,7 +774,7 @@ impl SinkManager {
                             );
                             self.pipelines.append(&mut pipelines);
                         }
-                        SinkMsg::Disconnect { id, port } => {
+                        SinkMsg::Unlink { id, port } => {
                             debug_assert!(
                                 port == IN,
                                 "[Sink::{}] disconnected from invalid connector sink port",
@@ -759,8 +792,19 @@ impl SinkManager {
                         }
                         SinkMsg::Start => {
                             info!(
-                                "[Sink::{}] Ignoring Start message in {:?} state",
-                                &self.ctx.url, &self.state
+                                "{} Ignoring Start message in {:?} state",
+                                &self.ctx, &self.state
+                            );
+                        }
+                        SinkMsg::Connect(sender, attempt) => {
+                            info!("{} Connecting...", &self.ctx);
+                            let connect_result = self.sink.connect(&self.ctx, &attempt).await;
+                            if let Ok(true) = connect_result {
+                                info!("{} Sink connected.", &self.ctx);
+                            }
+                            self.ctx.log_err(
+                                sender.send(connect_result).await,
+                                "Error sending sink connect result",
                             );
                         }
                         SinkMsg::Resume if self.state == Paused => {

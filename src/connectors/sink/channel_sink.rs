@@ -15,11 +15,11 @@
 //! Sink implementation that keeps track of multiple streams and keeps channels to send to each stream
 
 use crate::connectors::prelude::*;
-use crate::connectors::{ConnectorContext, StreamDone};
+use crate::connectors::{Context, StreamDone};
 use crate::errors::{ErrorKind, Result};
+use crate::QSIZE;
 use crate::pdk::RResult;
 use crate::ttry;
-use crate::QSIZE;
 use abi_stable::std_types::{
     ROption::{RNone, RSome},
     RResult::ROk,
@@ -115,7 +115,18 @@ where
 {
     /// Construct a new instance of a channel sink that redacts metadata
     pub fn new_no_meta(qsize: usize, resolver: F, reply_tx: BoxedContraflowSender) -> Self {
-        ChannelSink::new(qsize, resolver, reply_tx)
+        let (tx, rx) = bounded(qsize);
+        ChannelSink::new(resolver, reply_tx, tx, rx)
+    }
+
+    /// Construct a new instance that redacts metadata with prepared `rx` and `tx`
+    pub fn from_channel_no_meta(
+        resolver: F,
+        reply_tx: Sender<AsyncSinkReply>,
+        tx: Sender<ChannelSinkMsg<T>>,
+        rx: Receiver<ChannelSinkMsg<T>>,
+    ) -> Self {
+        ChannelSink::new(resolver, reply_tx, tx, rx)
     }
 }
 
@@ -126,7 +137,18 @@ where
 {
     /// Construct a new instance of a channel sink with metadata support
     pub fn new_with_meta(qsize: usize, resolver: F, reply_tx: BoxedContraflowSender) -> Self {
-        ChannelSink::new(qsize, resolver, reply_tx)
+        let (tx, rx) = bounded(qsize);
+        ChannelSink::new(resolver, reply_tx, tx, rx)
+    }
+
+    /// Construct a new instance with metadata support with prepared `rx` and `tx`
+    pub fn from_channel_with_meta(
+        resolver: F,
+        reply_tx: Sender<AsyncSinkReply>,
+        tx: Sender<ChannelSinkMsg<T>>,
+        rx: Receiver<ChannelSinkMsg<T>>,
+    ) -> Self {
+        ChannelSink::new(resolver, reply_tx, tx, rx)
     }
 }
 
@@ -140,8 +162,12 @@ where
     /// constructor of a ChannelSink that is sending the event metadata to the StreamWriter
     /// in case it needs it in the write.
     /// This costs a clone.
-    pub fn new(qsize: usize, resolver: F, reply_tx: BoxedContraflowSender) -> Self {
-        let (tx, rx) = bounded(qsize);
+    pub fn new(
+        resolver: F,
+        reply_tx: BoxedContraflowSender,
+        tx: Sender<ChannelSinkMsg<T>>,
+        rx: Receiver<ChannelSinkMsg<T>>,
+    ) -> Self {
         let streams = HashMap::with_capacity(8);
         let streams_meta = BiMap::with_capacity(8);
         Self {
@@ -235,14 +261,19 @@ impl<T> ChannelSinkRuntime<T>
 where
     T: Hash + Eq + Send + 'static,
 {
-    pub(crate) fn register_stream_writer<W>(
+    pub(crate) fn new(tx: Sender<ChannelSinkMsg<T>>) -> Self {
+        Self { tx }
+    }
+
+    pub(crate) fn register_stream_writer<W, C>(
         &self,
         stream: u64,
         connection_meta: Option<T>,
-        ctx: &ConnectorContext,
+        ctx: &C,
         mut writer: W,
     ) where
         W: StreamWriter + 'static,
+        C: Context + Send + Sync + 'static,
     {
         let (stream_tx, stream_rx) = bounded::<SinkData>(QSIZE.load(Ordering::Relaxed));
         let stream_sink_tx = self.tx.clone();
@@ -265,7 +296,7 @@ where
                     start,
                 }),
             ) = (
-                ctx.quiescence_beacon.continue_writing().await,
+                ctx.quiescence_beacon().continue_writing().await,
                 stream_rx.recv().await,
             ) {
                 let failed = writer.write(data, meta).await.is_err();
@@ -278,10 +309,7 @@ where
                         AsyncSinkReply::Ack(cf_data, nanotime() - start)
                     };
                     if let Err(e) = sender.send(reply).await {
-                        error!(
-                            "[Connector::{}] Error sending async sink reply: {}",
-                            ctx.url, e
-                        );
+                        error!("{} Error sending async sink reply: {}", &ctx, e);
                     }
                 }
                 if failed {
@@ -290,18 +318,13 @@ where
             }
             let error = match writer.on_done(stream).await {
                 Err(e) => RSome(e),
-                Ok(StreamDone::ConnectorClosed) => ctx
-                    .notifier
-                    .notify()
-                    .await
-                    .err()
-                    .map(|e| ErrorKind::PluginError(e).into()),
+                Ok(StreamDone::ConnectorClosed) => ctx.notifier.notify().await.err().map(|e| ErrorKind::PluginError(e).into()),
                 Ok(_) => RNone,
             };
             if let RSome(e) = error {
                 error!(
-                    "[Connector::{}] Error shutting down write half of stream {}: {}",
-                    ctx.url, stream, e
+                    "{} Error shutting down write half of stream {}: {}",
+                    &ctx, stream, e
                 );
             }
             stream_sink_tx
