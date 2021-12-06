@@ -18,7 +18,12 @@ use crate::{
     prelude::*,
 };
 use query::{DefinitioalArgs, DefinitioalArgsWith};
-use std::{fmt::Debug, mem, pin::Pin, sync::Arc};
+use std::{fmt::Debug, mem, pin::Pin};
+
+use abi_stable::{
+    rvec,
+    std_types::{RArc, RVec},
+};
 
 ///! This file includes our self referential structs
 
@@ -35,7 +40,7 @@ use std::{fmt::Debug, mem, pin::Pin, sync::Arc};
 #[derive(Clone)]
 pub struct Deploy {
     /// The vector of raw input values
-    raw: Vec<Arc<Pin<Vec<u8>>>>,
+    raw: RVec<RArc<Pin<RVec<u8>>>>,
     pub(crate) script: ast::Deploy<'static>,
 }
 
@@ -106,8 +111,8 @@ impl Deploy {
         // ALLOW: this is sound since we implement a self referential struct
         let structured = unsafe { mem::transmute::<Deploy<'_>, Deploy<'static>>(structured) };
         // This is possibl as String::into_bytes just returns the `vec` of the string
-        let raw = Pin::new(raw.into_bytes());
-        let raw = vec![Arc::new(raw)];
+        let raw = Pin::new(RVec::from(raw.into_bytes()));
+        let raw = rvec![RArc::new(raw)];
         Ok(Self {
             raw,
             script: structured,
@@ -179,7 +184,7 @@ pub struct DeployFlow {
 
 pub struct Script {
     /// The vector of raw input values
-    raw: Vec<Arc<Pin<Vec<u8>>>>,
+    raw: RVec<RArc<Pin<RVec<u8>>>>,
     script: ast::Script<'static>,
 }
 
@@ -217,8 +222,8 @@ impl Script {
         // ALLOW: this is sound since we implement a self referential struct
         let structured = unsafe { mem::transmute::<Script<'_>, Script<'static>>(structured) };
         // This is possibl as String::into_bytes just returns the `vec` of the string
-        let raw = Pin::new(raw.into_bytes());
-        let raw = vec![Arc::new(raw)];
+        let raw = Pin::new(RVec::from(raw.into_bytes()));
+        let raw = rvec![RArc::new(raw)];
         Ok(Self {
             raw,
             script: structured,
@@ -244,7 +249,7 @@ impl Script {
 #[derive(Clone, PartialEq)]
 pub struct QueryInstance {
     /// The vector of raw input values
-    raw: Vec<Arc<Pin<Vec<u8>>>>,
+    raw: RVec<RArc<Pin<RVec<u8>>>>,
     query: ast::Query<'static>,
     /// NodeId of this declaration
     pub artifact_id: NodeId,
@@ -320,8 +325,8 @@ impl QueryInstance {
         // ALLOW: this is sound since we implement a self referential struct
         let structured = unsafe { mem::transmute::<Query<'_>, Query<'static>>(structured) };
         // This is possible as String::into_bytes just returns the `vec` of the string
-        let raw = Pin::new(raw.into_bytes());
-        let raw = vec![Arc::new(raw)];
+        let raw = Pin::new(RVec::from(raw.into_bytes()));
+        let raw = rvec![RArc::new(raw)];
         // This is a top level query and is not embedded - so we don't need to track the origin for referential safety
         // Thus we do not need to track nor pin the origin as we are the top level self referential structure or origin
         // ourselves
@@ -371,7 +376,7 @@ impl QueryInstance {
 #[derive(Clone)]
 pub struct DeployStmt {
     /// The vector of raw input values
-    raw: Vec<Arc<Pin<Vec<u8>>>>,
+    raw: RVec<RArc<Pin<RVec<u8>>>>,
     structured: ast::deploy::DeployStmt<'static>,
 }
 
@@ -452,7 +457,7 @@ impl DeployStmt {
 #[derive(Clone)]
 pub struct Stmt {
     /// The vector of raw input values
-    raw: Vec<Arc<Pin<Vec<u8>>>>,
+    raw: RVec<RArc<Pin<RVec<u8>>>>,
     structured: ast::Stmt<'static>,
 }
 
@@ -519,7 +524,7 @@ impl Stmt {
 /// A connector declaration
 #[derive(Clone, PartialEq)]
 pub struct ConnectorDefinition {
-    raw: Vec<Arc<Pin<Vec<u8>>>>,
+    raw: RVec<RArc<Pin<RVec<u8>>>>,
     /// The local alias of this connector
     pub instance_id: String,
     /// The target identity of this connector
@@ -577,7 +582,7 @@ impl ConnectorDefinition {
 pub struct FlowDefinition {
     /// The identity of this connector
     pub node_id: NodeId,
-    raw: Vec<Arc<Pin<Vec<u8>>>>,
+    raw: RVec<RArc<Pin<RVec<u8>>>>,
     /// Arguments for this flow definition
     pub params: DefinitioalArgs<'static>,
     /// Link specifications
@@ -649,7 +654,7 @@ impl FlowDefinition {
 /// A script declaration
 #[derive(Clone)]
 pub struct ScriptDecl {
-    raw: Vec<Arc<Pin<Vec<u8>>>>,
+    raw: RVec<RArc<Pin<RVec<u8>>>>,
     script: ast::ScriptDefinition<'static>,
 }
 
@@ -663,7 +668,7 @@ impl Debug for ScriptDecl {
 impl ScriptDecl {
     /// Access to the raw part of the script
     #[must_use]
-    pub fn raw(&self) -> &[Arc<Pin<Vec<u8>>>] {
+    pub fn raw(&self) -> &[RArc<Pin<RVec<u8>>>] {
         &self.raw
     }
     /// Creates a new decl from a statement
@@ -729,7 +734,7 @@ impl ScriptDecl {
 /// A select statement
 #[derive(Clone)]
 pub struct Select {
-    raw: Vec<Arc<Pin<Vec<u8>>>>,
+    raw: RVec<RArc<Pin<RVec<u8>>>>,
     select: ast::SelectStmt<'static>,
 }
 
@@ -803,11 +808,16 @@ impl Select {
 /// They **must** remain private. All interactions with them have to be guarded
 /// by the implementation logic to ensure they remain sane.
 ///
-#[repr(C)]
 #[derive(Clone, Default)]
 pub struct EventPayload {
-    /// The vector of raw input values
-    pub(crate) raw: Vec<Arc<Pin<Vec<u8>>>>,
+    /// The vector of raw input values.
+    ///
+    /// Note that this is a self-referential struct, and thus the data it points
+    /// to cannot be modified. This makes it impossible to convert
+    /// `EventPayload` to `PdkEventPayload`. The only solution is to make `raw`
+    /// use types from `abi_stable` even if it's not really `StableAbi` nor
+    /// `repr(C)` (the `ValueAndMeta` type can't be `repr(C)` for now).
+    pub(crate) raw: RVec<RArc<Pin<RVec<u8>>>>,
     pub(crate) data: ValueAndMeta<'static>,
 }
 
@@ -850,12 +860,13 @@ impl EventPayload {
     where
         F: for<'head> FnOnce(&'head mut [u8]) -> ValueAndMeta<'head>,
     {
+        let raw = RVec::from(raw);
         let mut raw = Pin::new(raw);
         let data = f(raw.as_mut().get_mut());
         // This is where the magic happens
         // ALLOW: this is sound since we implement a self referential struct
         let structured = unsafe { mem::transmute::<ValueAndMeta<'_>, ValueAndMeta<'static>>(data) };
-        let raw = vec![Arc::new(raw)];
+        let raw = rvec![RArc::new(raw)];
         Self {
             raw,
             data: structured,
@@ -877,12 +888,13 @@ impl EventPayload {
     where
         F: for<'head> FnOnce(&'head mut [u8]) -> std::result::Result<ValueAndMeta<'head>, E>,
     {
+        let raw = RVec::from(raw);
         let mut raw = Pin::new(raw);
         let data = f(raw.as_mut().get_mut())?;
         // This is where the magic happens
         // ALLOW: this is sound since we implement a self referential struct
         let structured = unsafe { mem::transmute::<ValueAndMeta<'_>, ValueAndMeta<'static>>(data) };
-        let raw = vec![Arc::new(raw)];
+        let raw = rvec![RArc::new(raw)];
         Ok(Self {
             raw,
             data: structured,
@@ -1096,7 +1108,7 @@ where
 {
     fn from(vm: T) -> Self {
         Self {
-            raw: Vec::new(),
+            raw: RVec::new(),
             data: vm.into(),
         }
     }
