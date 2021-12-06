@@ -1,11 +1,11 @@
-define metronome connector clock
+define connector clock from metronome
 with
     config = {
         "interval": 1000
     }
 end;
 
-define tcp_server connector server
+define connector server from tcp_server
 args
     codec = "string"
 with
@@ -15,7 +15,7 @@ with
     }
 end;
 
-define stdio connector io
+define connector io from stdio
 with
     config = {
         "prefix": ">> "
