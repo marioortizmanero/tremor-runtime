@@ -62,6 +62,8 @@ use tremor_value::{pdk::PdkValue, Value};
 
 pub use self::channel_sink::SinkMeta;
 
+use super::prelude::ConnectionLostNotifier;
+use super::quiescence::BoxedQuiescenceBeacon;
 use super::utils::metrics::SinkReporter;
 
 /// Result for a sink function that may provide insights or response.
@@ -262,12 +264,11 @@ impl Sink {
         input: RStr<'_>,
         event: PdkEvent,
         ctx: &SinkContext,
-        serializer: MutEventSerializer,
+        serializer: MutEventSerializer<'_>,
         start: u64,
     ) -> Result<SinkReply> {
-        let serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
         self.0
-            .on_event(input.into(), event.into(), ctx, serializer, start)
+            .on_event(input.into(), event.into(), ctx, &mut serializer, start)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -276,11 +277,10 @@ impl Sink {
         &mut self,
         signal: Event,
         ctx: &SinkContext,
-        serializer: &mut EventSerializer,
+        serializer: MutEventSerializer<'_>,
     ) -> Result<SinkReply> {
-        let serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
         self.0
-            .on_signal(signal.into(), ctx, serializer)
+            .on_signal(signal.into(), ctx, &mut serializer)
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -331,112 +331,6 @@ impl Sink {
     }
 }
 
-// Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
-// types so that it's easier to use with `std`.
-pub struct Sink(pub BoxedRawSink);
-impl Sink {
-    #[inline]
-    pub async fn on_event(
-        &mut self,
-        input: &str,
-        event: Event,
-        ctx: &SinkContext,
-        serializer: &mut EventSerializer,
-        start: u64,
-    ) -> Result<SinkReply> {
-        let mut serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
-        self.0
-            .on_event(input.into(), event.into(), ctx, &mut serializer, start)
-            .await
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-    /// Wrapper for [`BoxedRawSink::on_signal`]
-    #[inline]
-    pub async fn on_signal(
-        &mut self,
-        signal: Event,
-        ctx: &SinkContext,
-        serializer: &mut EventSerializer,
-    ) -> Result<SinkReply> {
-        let mut serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
-        self.0
-            .on_signal(signal.into(), ctx, &mut serializer)
-            .await
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-
-    /// Wrapper for [`BoxedRawSink::metrics`]
-    #[inline]
-    pub fn metrics(&mut self, timestamp: u64) -> Vec<EventPayload> {
-        self.0
-            .metrics(timestamp)
-            .into_iter()
-            .map(Into::into)
-            .collect()
-    }
-
-    /// Wrapper for [`BoxedRawSink::on_start`]
-    #[inline]
-    pub async fn on_start(&mut self, ctx: &SinkContext) -> Result<()> {
-        self.0.on_start(ctx).map_err(Into::into).into()
-    }
-    /// Wrapper for [`BoxedRawSink::on_pause`]
-    #[inline]
-    pub async fn on_pause(&mut self, ctx: &SinkContext) -> Result<()> {
-        self.0
-            .on_pause(ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-    /// Wrapper for [`BoxedRawSink::on_resume`]
-    #[inline]
-    pub async fn on_resume(&mut self, ctx: &SinkContext) -> Result<()> {
-        self.0
-            .on_resume(ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-    /// Wrapper for [`BoxedRawSink::on_stop`]
-    #[inline]
-    pub async fn on_stop(&mut self, ctx: &SinkContext) -> Result<()> {
-        self.0
-            .on_stop(ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-
-    /// Wrapper for [`BoxedRawSink::on_connection_lost`]
-    #[inline]
-    pub async fn on_connection_lost(&mut self, ctx: &SinkContext) -> Result<()> {
-        self.0
-            .on_connection_lost(ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-    /// Wrapper for [`BoxedRawSink::on_connection_established`]
-    #[inline]
-    pub async fn on_connection_established(&mut self, ctx: &SinkContext) -> Result<()> {
-        self.0
-            .on_connection_established(ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-
-    /// Wrapper for [`BoxedRawSink::auto_ack`]
-    #[inline]
-    pub fn auto_ack(&self) -> bool {
-        self.0.auto_ack()
-    }
-
-    /// Wrapper for [`BoxedRawSink::asynchronous`]
-    #[inline]
-    pub fn asynchronous(&self) -> bool {
-        self.0.asynchronous()
-    }
-}
-
 /// handles writing to 1 stream (e.g. file or TCP connection)
 #[async_trait::async_trait]
 pub trait StreamWriter: Send + Sync {
@@ -461,7 +355,7 @@ pub struct SinkContext {
     pub(crate) connector_type: ConnectorType,
 
     /// check if we are paused or should stop reading/writing
-    pub(crate) quiescence_beacon: QuiescenceBeacon,
+    pub(crate) quiescence_beacon: BoxedQuiescenceBeacon,
 
     /// notifier the connector runtime if we lost a connection
     pub(crate) notifier: ConnectionLostNotifier,

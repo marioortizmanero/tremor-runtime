@@ -19,14 +19,13 @@ pub mod channel_source;
 
 pub use channel_source::{ChannelSource, ChannelSourceRuntime};
 
-use async_std::channel::unbounded;
 use async_std::task;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
-use std::fmt::Display;
 use std::future;
 use std::time::Duration;
 use tremor_common::time::nanotime;
+use tremor_script::ast::DeployEndpoint;
 use tremor_script::{pdk::PdkEventPayload, EventPayload, ValueAndMeta};
 
 use crate::config::{
@@ -61,6 +60,7 @@ use tremor_value::{literal, pdk::PdkValue, Value};
 use value_trait::Builder;
 
 use super::metrics::SourceReporter;
+use super::prelude::Attempt;
 use super::quiescence::BoxedQuiescenceBeacon;
 use super::{ConnectorContext, StreamDone};
 
@@ -165,6 +165,17 @@ pub type BoxedRawSource = RawSource_TO<'static, RBox<()>>;
 /// source part of a connector
 #[abi_stable::sabi_trait]
 pub trait RawSource: Send {
+    /// Establish a connection to the source of data/events.
+    ///
+    /// This method can be called multiple times during the lifecycle of a source / connector.
+    /// It will be called the first time after `on_start` is executed and furthermore
+    /// to re-establish connectivity when the connector / the source detected that the connection is broken.
+    fn connect<'a>(
+        &'a mut self,
+        ctx: &'a SourceContext,
+        attempt: &'a Attempt,
+    ) -> BorrowingFfiFuture<'a, RResult<bool>>;
+
     /// Pulls an event from the source if one exists
     /// `idgen` is passed in so the source can inspect what event id it would get if it was producing 1 event from the pulled data
     fn pull_data<'a>(
@@ -255,6 +266,15 @@ pub trait RawSource: Send {
     /// Is this source transactional or can acks/fails be ignored
     fn is_transactional(&self) -> bool;
 
+    /// if true events are consumed from an external resource asynchronously
+    /// and not directly in the call to `pull_data`, but in another task.
+    ///
+    /// This distinction is important for the runtime to handle pausing/resuming
+    /// and quiescence correctly.
+    fn asynchronous(&self) -> bool {
+        true
+    }
+}
 /// Source part of a connector.
 ///
 /// Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
@@ -336,135 +356,6 @@ impl Source {
         self.0.on_connection_established(ctx)
     }
 
-    #[inline]
-    pub fn is_transactional(&self) -> bool {
-        self.0.is_transactional()
-    }
-}
-
-/// Source part of a connector.
-///
-/// Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
-/// types so that it's easier to use with `std`.
-pub(crate) struct Source(pub BoxedRawSource);
-impl Source {
-    /// Wrapper for [`BoxedRawSource::pull_data`]
-    #[inline]
-    pub async fn pull_data(&mut self, pull_id: u64, ctx: &SourceContext) -> Result<SourceReply> {
-        self.0
-            .pull_data(pull_id, ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-    /// Wrapper for [`BoxedRawSource::on_no_events`]
-    #[inline]
-    pub async fn on_no_events(
-        &mut self,
-        pull_id: u64,
-        stream: u64,
-        ctx: &SourceContext,
-    ) -> Result<()> {
-        self.0
-            .on_no_events(pull_id, stream, ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-
-    /// Wrapper for [`BoxedRawSource::metrics`]
-    #[inline]
-    pub fn metrics(&mut self, timestamp: u64) -> Vec<EventPayload> {
-        self.0
-            .metrics(timestamp)
-            .into_iter()
-            .map(Into::into)
-            .collect()
-    }
-
-    /// Wrapper for [`BoxedRawSource::on_start`]
-    #[inline]
-    pub async fn on_start(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0
-            .on_start(ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-    /// Wrapper for [`BoxedRawSource::on_pause`]
-    #[inline]
-    pub async fn on_pause(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0
-            .on_pause(ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-    /// Wrapper for [`BoxedRawSource::on_resume`]
-    #[inline]
-    pub async fn on_resume(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0
-            .on_resume(ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-    /// Wrapper for [`BoxedRawSource::on_stop`]
-    #[inline]
-    pub async fn on_stop(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0
-            .on_stop(ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-
-    /// Wrapper for [`BoxedRawSource::on_cb_close`]
-    #[inline]
-    pub async fn on_cb_close(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0
-            .on_cb_close(ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-    /// Wrapper for [`BoxedRawSource::on_cb_open`]
-    #[inline]
-    pub async fn on_cb_open(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0
-            .on_cb_open(ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-
-    /// Wrapper for [`BoxedRawSource::ack`]
-    #[inline]
-    pub async fn ack(&mut self, stream_id: u64, pull_id: u64) -> Result<()> {
-        self.0
-            .ack(stream_id, pull_id)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-    /// Wrapper for [`BoxedRawSource::fail`]
-    #[inline]
-    pub async fn fail(&mut self, stream_id: u64, pull_id: u64) -> Result<()> {
-        self.0
-            .fail(stream_id, pull_id)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-
-    /// Wrapper for [`BoxedRawSource::on_connection_lost`]
-    #[inline]
-    pub async fn on_connection_lost(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0
-            .on_connection_lost(ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-    /// Wrapper for [`BoxedRawSource::on_connection_established`]
-    #[inline]
-    pub async fn on_connection_established(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0
-            .on_connection_established(ctx)
-            .map_err(Into::into) // RBoxError -> Box<dyn Error>
-            .into() // RResult -> Result
-    }
-
-    /// Wrapper for [`BoxedRawSource::is_transactional`]
     #[inline]
     pub fn is_transactional(&self) -> bool {
         self.0.is_transactional()

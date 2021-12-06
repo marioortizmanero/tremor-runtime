@@ -14,15 +14,17 @@
 
 /// reconnect logic and execution for connectors
 use crate::config::Reconnect;
-use crate::connectors::{Addr, Connectivity, Connector, ConnectorContext, Msg};
-use crate::errors::Result;
+use crate::connectors::sink::SinkMsg;
+use crate::connectors::source::SourceMsg;
+use crate::connectors::{Addr, Connectivity, Connector, ConnectorContext, Context, Msg};
+use crate::errors::{Error, Result};
 use crate::pdk::RResult;
 use abi_stable::{
     std_types::{RBox, SendRBoxError},
     StableAbi,
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
-use async_std::channel::Sender;
+use async_std::channel::{bounded, Sender};
 use async_std::task;
 use futures::future::{join3, ready, FutureExt};
 use std::convert::identity;
@@ -151,6 +153,12 @@ pub(crate) struct ReconnectRuntime {
 /// This will change the connector state properly and trigger a new reconnect attempt (according to the configured logic)
 #[derive(Clone)]
 pub struct ConnectionLostNotifier(Sender<Msg>);
+
+impl ConnectionLostNotifier {
+    pub(crate) fn new(sender: Sender<Msg>) -> Self {
+        Self(sender)
+    }
+}
 
 /// Note that since `ConnectionLostNotifier` is used for the plugin system, it
 /// must be `#[repr(C)]` in order to interact with it. However, since it uses a
