@@ -23,7 +23,6 @@ pub(crate) mod single_stream_sink;
 /// Utility for limiting concurrency (by sending `CB::Close` messages when a maximum concurrency value is reached)
 pub(crate) mod concurrency_cap;
 
-
 use crate::codec::{self, Codec};
 use crate::config::{
     Codec as CodecConfig, Connector as ConnectorConfig, Postprocessor as PostprocessorConfig,
@@ -278,13 +277,14 @@ impl Sink {
     pub async fn on_event(
         &mut self,
         input: RStr<'_>,
-        event: PdkEvent,
+        event: Event,
         ctx: &SinkContext,
         serializer: MutEventSerializer<'_>,
         start: u64,
     ) -> Result<SinkReply> {
         self.0
             .on_event(input.into(), event.into(), ctx, &mut serializer, start)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -297,6 +297,7 @@ impl Sink {
     ) -> Result<SinkReply> {
         self.0
             .on_signal(signal.into(), ctx, &mut serializer)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -311,8 +312,8 @@ impl Sink {
     }
 
     #[inline]
-    pub async fn on_start(&mut self, ctx: &mut SinkContext) {
-        self.0.on_start(ctx)
+    pub async fn on_start(&mut self, ctx: &SinkContext) -> Result<()> {
+        self.0.on_start(ctx).await.map_err(Into::into).into()
     }
 
     /// Wrapper for [`BoxedRawSink::connect`]
@@ -327,25 +328,33 @@ impl Sink {
 
     /// Wrapper for [`BoxedRawSink::on_pause`]
     #[inline]
-    pub async fn on_pause(&mut self, ctx: &mut SinkContext) {
-        self.0.on_pause(ctx)
+    pub async fn on_pause(&mut self, ctx: &SinkContext) -> Result<()> {
+        self.0.on_pause(ctx).await.map_err(Into::into).into()
     }
     #[inline]
-    pub async fn on_resume(&mut self, ctx: &mut SinkContext) {
-        self.0.on_resume(ctx)
+    pub async fn on_resume(&mut self, ctx: &SinkContext) -> Result<()> {
+        self.0.on_resume(ctx).await.map_err(Into::into).into()
     }
     #[inline]
-    pub async fn on_stop(&mut self, ctx: &mut SinkContext) {
-        self.0.on_stop(ctx)
+    pub async fn on_stop(&mut self, ctx: &SinkContext) -> Result<()> {
+        self.0.on_stop(ctx).await.map_err(Into::into).into()
     }
 
     #[inline]
-    pub async fn on_connection_lost(&mut self, ctx: &mut SinkContext) {
-        self.0.on_connection_lost(ctx)
+    pub async fn on_connection_lost(&mut self, ctx: &SinkContext) -> Result<()> {
+        self.0
+            .on_connection_lost(ctx)
+            .await
+            .map_err(Into::into)
+            .into()
     }
     #[inline]
-    pub async fn on_connection_established(&mut self, ctx: &mut SinkContext) {
-        self.0.on_connection_established(ctx)
+    pub async fn on_connection_established(&mut self, ctx: &SinkContext) -> Result<()> {
+        self.0
+            .on_connection_established(ctx)
+            .await
+            .map_err(Into::into)
+            .into()
     }
 
     #[inline]
@@ -382,7 +391,7 @@ pub(crate) struct SinkContext {
     /// the connector unique identifier
     pub(crate) uid: u64,
     /// the connector url
-    pub(crate) alias: String,
+    pub(crate) alias: RString,
     /// the connector type
     pub(crate) connector_type: ConnectorType,
 
