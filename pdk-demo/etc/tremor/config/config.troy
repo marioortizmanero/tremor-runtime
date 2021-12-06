@@ -23,6 +23,7 @@ with
 end;
 
 define pipeline main
+into out
 pipeline
     select event from in into out;
 end;
