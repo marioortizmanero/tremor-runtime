@@ -23,6 +23,7 @@ pub(crate) mod single_stream_sink;
 /// Utility for limiting concurrency (by sending `CB::Close` messages when a maximum concurrency value is reached)
 pub(crate) mod concurrency_cap;
 
+
 use crate::codec::{self, Codec};
 use crate::config::{
     Codec as CodecConfig, Connector as ConnectorConfig, Postprocessor as PostprocessorConfig,
@@ -52,6 +53,18 @@ use tremor_value::Value;
 pub(crate) use self::channel_sink::SinkMeta;
 
 use super::{utils::metrics::SinkReporter, CodecReq};
+
+use crate::connectors::prelude::*;
+use crate::errors::Error;
+use crate::pdk::{RError, RResult};
+use abi_stable::{
+    rvec,
+    std_types::{RBox, ROption::RSome, RResult::ROk, RStr, RString, RVec, SendRBoxError},
+    type_level::downcasting::TD_Opaque,
+    RMut, StableAbi,
+};
+use async_ffi::{BorrowingFfiFuture, FutureExt};
+use std::future;
 
 /// Result for a sink function that may provide insights or response.
 ///
@@ -209,9 +222,13 @@ pub(crate) trait Sink: Send {
     /// This function might be called multiple times, check the `attempt` where you are at.
     /// The intended result of this function is to re-establish a connection. It might reuse a working connection.
     ///
-    /// Return `Ok(true)` if the connection could be successfully established.
-    async fn connect(&mut self, _ctx: &SinkContext, _attempt: &Attempt) -> Result<bool> {
-        Ok(true)
+    /// Return `ROk(true)` if the connection could be successfully established.
+    fn connect(
+        &mut self,
+        _ctx: &SinkContext,
+        _attempt: &Attempt,
+    ) -> BorrowingFfiFuture<'_, RResult<bool>> {
+        future::ready(ROk(true)).into_ffi()
     }
 
     /// called when paused
@@ -250,6 +267,98 @@ pub(crate) trait Sink: Send {
     }
 }
 
+/// Sink part of a connector.
+///
+/// Just like `Connector`, this wraps the FFI dynamic sink with `abi_stable`
+/// types so that it's easier to use with `std`.
+pub(crate) struct Sink(pub BoxedRawSink);
+impl Sink {
+    /// Wrapper for [`BoxedRawSink::on_event`]
+    #[inline]
+    pub async fn on_event(
+        &mut self,
+        input: RStr<'_>,
+        event: PdkEvent,
+        ctx: &SinkContext,
+        serializer: MutEventSerializer<'_>,
+        start: u64,
+    ) -> Result<SinkReply> {
+        self.0
+            .on_event(input.into(), event.into(), ctx, &mut serializer, start)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
+    }
+    #[inline]
+    pub async fn on_signal(
+        &mut self,
+        signal: Event,
+        ctx: &SinkContext,
+        serializer: MutEventSerializer<'_>,
+    ) -> Result<SinkReply> {
+        self.0
+            .on_signal(signal.into(), ctx, &mut serializer)
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
+    }
+
+    #[inline]
+    pub fn metrics(&mut self, timestamp: u64) -> Vec<EventPayload> {
+        self.0
+            .metrics(timestamp)
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+
+    #[inline]
+    pub async fn on_start(&mut self, ctx: &mut SinkContext) {
+        self.0.on_start(ctx)
+    }
+
+    /// Wrapper for [`BoxedRawSink::connect`]
+    #[inline]
+    pub async fn connect(&mut self, ctx: &SinkContext, attempt: &Attempt) -> Result<bool> {
+        self.0
+            .connect(ctx, attempt)
+            .await
+            .map_err(Into::into)
+            .into()
+    }
+
+    /// Wrapper for [`BoxedRawSink::on_pause`]
+    #[inline]
+    pub async fn on_pause(&mut self, ctx: &mut SinkContext) {
+        self.0.on_pause(ctx)
+    }
+    #[inline]
+    pub async fn on_resume(&mut self, ctx: &mut SinkContext) {
+        self.0.on_resume(ctx)
+    }
+    #[inline]
+    pub async fn on_stop(&mut self, ctx: &mut SinkContext) {
+        self.0.on_stop(ctx)
+    }
+
+    #[inline]
+    pub async fn on_connection_lost(&mut self, ctx: &mut SinkContext) {
+        self.0.on_connection_lost(ctx)
+    }
+    #[inline]
+    pub async fn on_connection_established(&mut self, ctx: &mut SinkContext) {
+        self.0.on_connection_established(ctx)
+    }
+
+    #[inline]
+    pub fn auto_ack(&self) -> bool {
+        self.0.auto_ack()
+    }
+
+    #[inline]
+    pub fn asynchronous(&self) -> bool {
+        self.0.asynchronous()
+    }
+}
+
 /// handles writing to 1 stream (e.g. file or TCP connection)
 #[async_trait::async_trait]
 pub(crate) trait StreamWriter: Send + Sync {
@@ -278,10 +387,10 @@ pub(crate) struct SinkContext {
     pub(crate) connector_type: ConnectorType,
 
     /// check if we are paused or should stop reading/writing
-    pub(crate) quiescence_beacon: QuiescenceBeacon,
+    pub(crate) quiescence_beacon: BoxedQuiescenceBeacon,
 
     /// notifier the connector runtime if we lost a connection
-    pub(crate) notifier: ConnectionLostNotifier,
+    pub(crate) notifier: BoxedConnectionLostNotifier,
 }
 
 impl Display for SinkContext {
@@ -295,11 +404,11 @@ impl Context for SinkContext {
         &self.alias
     }
 
-    fn quiescence_beacon(&self) -> &QuiescenceBeacon {
+    fn quiescence_beacon(&self) -> &BoxedQuiescenceBeacon {
         &self.quiescence_beacon
     }
 
-    fn notifier(&self) -> &ConnectionLostNotifier {
+    fn notifier(&self) -> &BoxedConnectionLostNotifier {
         &self.notifier
     }
 
