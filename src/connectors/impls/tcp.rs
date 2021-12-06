@@ -113,7 +113,7 @@ where
             return Ok(SourceReply::EndStream {
                 origin_uri: self.origin_uri.clone(),
                 meta: RSome(self.meta.clone().into()),
-                stream_id: stream,
+                stream: stream,
             });
         }
         debug!("[Connector::{}] Read {} bytes", &self.alias, bytes_read);
@@ -193,7 +193,7 @@ where
         }
         Ok(())
     }
-    async fn on_done(&self, _stream: u64) -> Result<StreamDone> {
+    async fn on_done(&mut self, _stream: u64) -> Result<StreamDone> {
         self.underlying_stream.shutdown(std::net::Shutdown::Write)?;
         Ok(StreamDone::StreamClosed)
     }

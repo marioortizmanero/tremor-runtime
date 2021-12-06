@@ -14,6 +14,23 @@
 
 // TODO: support all these connectors
 
+// /// benchmarking connector
+// pub(crate) mod bench;
+// /// connector for checking guaranteed delivery and circuit breaker logic
+// pub(crate) mod cb;
+// /// Crononome
+// pub(crate) mod crononome;
+// /// Discord connector
+// pub(crate) mod discord;
+// /// DNS
+// pub(crate) mod dns;
+// /// Elasticsearch Connector
+// pub(crate) mod elastic;
+// /// Exit Connector
+// pub(crate) mod exit;
+/// file connector implementation
+pub(crate) mod file;
+// 
 // /// HTTP
 // pub(crate) mod http;
 // /// Kafka consumer and producer
