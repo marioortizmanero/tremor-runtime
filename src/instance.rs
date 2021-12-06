@@ -20,7 +20,8 @@
 use std::fmt::Display;
 
 /// Possible lifecycle states of an instance
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[repr(c)]
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize, StableAbi)]
 #[serde(rename_all = "lowercase")]
 pub enum InstanceState {
     /// initialized - first state after coming to life

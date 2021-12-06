@@ -37,6 +37,7 @@ use crate::pdk::{RError, RResult};
 use crate::permge::PriorityMerge;
 use crate::pipeline;
 use crate::postprocessor::{make_postprocessors, postprocess, Postprocessors};
+use abi_stable::std_types::RString;
 use abi_stable::{
     rvec,
     std_types::{RBox, RResult::ROk, RStr, RVec, SendRBoxError},
@@ -67,9 +68,14 @@ use tremor_value::{pdk::PdkValue, Value};
 
 pub use self::channel_sink::SinkMeta;
 
+<<<<<<< HEAD
 use super::{utils::metrics::SinkReporter, CodecReq};
 
 use super::quiescence::BoxedQuiescenceBeacon;
+=======
+use super::prelude::ConnectionLostNotifier;
+use super::utils::metrics::SinkReporter;
+>>>>>>> 0dae03db (PDK file connector)
 
 /// Result for a sink function that may provide insights or response.
 ///
@@ -283,13 +289,14 @@ impl Sink {
     pub async fn on_event(
         &mut self,
         input: RStr<'_>,
-        event: PdkEvent,
+        event: Event,
         ctx: &SinkContext,
         serializer: MutEventSerializer<'_>,
         start: u64,
     ) -> Result<SinkReply> {
         self.0
             .on_event(input.into(), event.into(), ctx, &mut serializer, start)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -302,6 +309,7 @@ impl Sink {
     ) -> Result<SinkReply> {
         self.0
             .on_signal(signal.into(), ctx, &mut serializer)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -316,8 +324,8 @@ impl Sink {
     }
 
     #[inline]
-    pub async fn on_start(&mut self, ctx: &mut SinkContext) {
-        self.0.on_start(ctx)
+    pub async fn on_start(&mut self, ctx: &SinkContext) -> Result<()> {
+        self.0.on_start(ctx).await.map_err(Into::into).into()
     }
 
     /// Wrapper for [`BoxedRawSink::connect`]
@@ -332,25 +340,33 @@ impl Sink {
 
     /// Wrapper for [`BoxedRawSink::on_pause`]
     #[inline]
-    pub async fn on_pause(&mut self, ctx: &mut SinkContext) {
-        self.0.on_pause(ctx)
+    pub async fn on_pause(&mut self, ctx: &SinkContext) -> Result<()> {
+        self.0.on_pause(ctx).await.map_err(Into::into).into()
     }
     #[inline]
-    pub async fn on_resume(&mut self, ctx: &mut SinkContext) {
-        self.0.on_resume(ctx)
+    pub async fn on_resume(&mut self, ctx: &SinkContext) -> Result<()> {
+        self.0.on_resume(ctx).await.map_err(Into::into).into()
     }
     #[inline]
-    pub async fn on_stop(&mut self, ctx: &mut SinkContext) {
-        self.0.on_stop(ctx)
+    pub async fn on_stop(&mut self, ctx: &SinkContext) -> Result<()> {
+        self.0.on_stop(ctx).await.map_err(Into::into).into()
     }
 
     #[inline]
-    pub async fn on_connection_lost(&mut self, ctx: &mut SinkContext) {
-        self.0.on_connection_lost(ctx)
+    pub async fn on_connection_lost(&mut self, ctx: &SinkContext) -> Result<()> {
+        self.0
+            .on_connection_lost(ctx)
+            .await
+            .map_err(Into::into)
+            .into()
     }
     #[inline]
-    pub async fn on_connection_established(&mut self, ctx: &mut SinkContext) {
-        self.0.on_connection_established(ctx)
+    pub async fn on_connection_established(&mut self, ctx: &SinkContext) -> Result<()> {
+        self.0
+            .on_connection_established(ctx)
+            .await
+            .map_err(Into::into)
+            .into()
     }
 
     #[inline]
@@ -382,8 +398,8 @@ pub trait StreamWriter: Send + Sync {
 pub struct SinkContext {
     /// the connector unique identifier
     pub uid: u64,
-    /// the connector url
-    pub(crate) alias: String,
+    /// the connector alias
+    pub(crate) alias: RString,
     /// the connector type
     pub(crate) connector_type: ConnectorType,
 

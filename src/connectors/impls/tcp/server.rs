@@ -15,7 +15,7 @@ use super::{TcpReader, TcpWriter};
 use crate::connectors::prelude::*;
 use crate::connectors::sink::channel_sink::ChannelSinkMsg;
 use crate::connectors::utils::tls::{load_server_config, TLSServerConfig};
-use crate::errors::{Error, ErrorKind};
+use crate::errors::{Error, Kind as ErrorKind};
 use crate::ttry;
 use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
 use async_std::net::TcpListener;
@@ -24,10 +24,8 @@ use async_tls::TlsAcceptor;
 use futures::io::AsyncReadExt;
 use rustls::ServerConfig;
 use simd_json::ValueAccess;
-use std::future;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tremor_value::pdk::PdkValue;
 
 use abi_stable::{
     prefix_type::PrefixTypeTrait,
@@ -40,6 +38,8 @@ use abi_stable::{
     type_level::downcasting::TD_Opaque,
 };
 use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt};
+use std::future;
+use tremor_value::pdk::PdkValue;
 
 const URL_SCHEME: &str = "tremor-tcp-server";
 
@@ -87,7 +87,7 @@ pub fn from_config(
     .into_ffi()
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     // kept as a str, so it is re-resolved upon each connect
@@ -168,6 +168,7 @@ impl RawConnector for TcpServer {
         future::ready(ROk(RSome(sink))).into_ffi()
     }
 
+<<<<<<< HEAD
 <<<<<<< HEAD
     fn codec_requirements(&self) -> CodecReq {
         CodecReq::Required
@@ -353,6 +354,8 @@ impl Source for TcpServerSource {
         .into_ffi()
     }
 
+=======
+>>>>>>> 0dae03db (PDK file connector)
     fn default_codec(&self) -> RStr<'_> {
         rstr!("json")
     }
@@ -389,11 +392,11 @@ impl TcpServerSource {
 #[async_trait::async_trait()]
 impl RawSource for TcpServerSource {
     #[allow(clippy::too_many_lines)]
-    fn connect<'a>(
-        &'a mut self,
-        ctx: &'a SourceContext,
-        _attempt: &'a Attempt,
-    ) -> BorrowingFfiFuture<'a, RResult<bool>> {
+    fn connect(
+        &mut self,
+        ctx: &SourceContext,
+        _attempt: &Attempt,
+    ) -> BorrowingFfiFuture<'_, RResult<bool>> {
         async move {
             let path = vec![self.config.port.to_string()];
             let accept_ctx = ctx.clone();
@@ -504,7 +507,7 @@ impl RawSource for TcpServerSource {
         _ctx: &'a SourceContext,
     ) -> BorrowingFfiFuture<'a, RResult<SourceReply>> {
         match self.connection_rx.try_recv() {
-            Ok(reply) => Ok(reply),
+            Ok(reply) => ROk(reply),
             Err(TryRecvError::Empty) => {
                 // TODO: configure pull interval in connector config?
                 ROk(SourceReply::Empty(DEFAULT_POLL_INTERVAL))
@@ -513,7 +516,7 @@ impl RawSource for TcpServerSource {
         }
     }
 
-    fn on_stop<'a>(&'a mut self, _ctx: &'a SourceContext) -> BorrowingFfiFuture<'a, RResult<()>> {
+    fn on_stop(&mut self, _ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         async move {
             if let Some(accept_task) = self.accept_task.take() {
                 // stop acceptin' new connections

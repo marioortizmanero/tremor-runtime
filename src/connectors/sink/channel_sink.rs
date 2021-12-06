@@ -15,7 +15,7 @@
 //! Sink implementation that keeps track of multiple streams and keeps channels to send to each stream
 
 use crate::connectors::prelude::*;
-use crate::connectors::{ConnectorContext, StreamDone};
+use crate::connectors::StreamDone;
 use crate::errors::{ErrorKind, Result};
 use crate::pdk::RResult;
 use crate::ttry;
@@ -28,6 +28,7 @@ use abi_stable::std_types::{
 use async_ffi::{BorrowingFfiFuture, FutureExt};
 use async_std::channel::{bounded, Receiver, Sender};
 use async_std::task;
+use beef::Cow;
 use bimap::BiMap;
 use either::Either;
 use hashbrown::HashMap;
