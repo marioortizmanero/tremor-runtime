@@ -27,6 +27,7 @@ use simd_json::ValueAccess;
 use std::future;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tremor_value::pdk::PdkValue;
 
 use abi_stable::{
     prefix_type::PrefixTypeTrait,
@@ -60,11 +61,11 @@ fn connector_type() -> ConnectorType {
 #[sabi_extern_fn]
 pub fn from_config(
     id: TremorUrl,
-    raw_config: ROption<RString>,
+    raw_config: ROption<PdkValue<'static>>,
 ) -> FfiFuture<RResult<BoxedRawConnector>> {
     async move {
         if let RSome(raw_config) = raw_config {
-            let config = ttry!(Config::from_str(raw_config));
+            let config = ttry!(Config::new(&raw_config.into()));
 
             let tls_server_config = if let Some(tls_config) = config.tls.as_ref() {
                 Some(ttry!(load_server_config(tls_config)))

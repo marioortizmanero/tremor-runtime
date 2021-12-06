@@ -29,7 +29,13 @@ use tremor_script::ast::DeployEndpoint;
 use tremor_script::{pdk::PdkEventPayload, EventPayload, ValueAndMeta};
 
 use crate::config::{
-    Codec as CodecConfig, Connector as ConnectorConfig, Preprocessor as PreprocessorConfig,
+    self, Codec as CodecConfig, Connector as ConnectorConfig, Preprocessor as PreprocessorConfig,
+};
+use crate::connectors::utils::{
+    quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier,
+};
+use crate::connectors::{
+    metrics::SourceReporter, utils::reconnect::Attempt, ConnectorType, Context, Msg, StreamDone,
 };
 use crate::connectors::{ConnectorType, Context, Msg};
 use crate::errors::{Error, Result};
@@ -165,17 +171,6 @@ pub type BoxedRawSource = RawSource_TO<'static, RBox<()>>;
 /// source part of a connector
 #[abi_stable::sabi_trait]
 pub trait RawSource: Send {
-    /// Establish a connection to the source of data/events.
-    ///
-    /// This method can be called multiple times during the lifecycle of a source / connector.
-    /// It will be called the first time after `on_start` is executed and furthermore
-    /// to re-establish connectivity when the connector / the source detected that the connection is broken.
-    fn connect<'a>(
-        &'a mut self,
-        ctx: &'a SourceContext,
-        attempt: &'a Attempt,
-    ) -> BorrowingFfiFuture<'a, RResult<bool>>;
-
     /// Pulls an event from the source if one exists
     /// `idgen` is passed in so the source can inspect what event id it would get if it was producing 1 event from the pulled data
     fn pull_data<'a>(
@@ -209,6 +204,22 @@ pub trait RawSource: Send {
     fn on_start(&mut self, _ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
+
+    /// Connect to the external thingy.
+    /// This function is called definitely after `on_start` has been called.
+    ///
+    /// This function might be called multiple times, check the `attempt` where you are at.
+    /// The intended result of this function is to re-establish a connection. It might reuse a working connection.
+    ///
+    /// Return `Ok(true)` if the connection could be successfully established.
+    fn connect(
+        &mut self,
+        _ctx: &SourceContext,
+        _attempt: &Attempt,
+    ) -> BorrowingFfiFuture<'_, RResult<bool>> {
+        future::ready(ROk(true)).into_ffi()
+    }
+
     /// called when the source is explicitly paused as result of a user/operator interaction
     /// in contrast to `on_cb_close` which happens automatically depending on downstream pipeline or sink connector logic.
     fn on_pause(&mut self, _ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<()>> {
@@ -316,6 +327,17 @@ impl Source {
     pub async fn on_start(&mut self, ctx: &mut SourceContext) {
         self.0.on_start(ctx)
     }
+
+    /// Wrapper for [`BoxedRawSource::connect`]
+    pub async fn connect(&mut self, ctx: &SourceContext, attempt: &Attempt) -> Result<bool> {
+        self.0
+            .connect(ctx, attempt)
+            .await
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
+    }
+
+    /// Wrapper for [`BoxedRawSource::on_pause`]
     #[inline]
     pub async fn on_pause(&mut self, ctx: &mut SourceContext) {
         self.0.on_pause(ctx)
@@ -359,60 +381,6 @@ impl Source {
     #[inline]
     pub fn is_transactional(&self) -> bool {
         self.0.is_transactional()
-    }
-}
-
-/// A source that receives `SourceReply` messages via a channel.
-/// It does not handle acks/fails.
-///
-/// Connector implementations handling their stuff in a separate task can use the
-/// channel obtained by `ChannelSource::sender()` to send `SourceReply`s to the
-/// runtime.
-pub struct ChannelSource {
-    rx: Receiver<SourceReply>,
-    tx: SourceReplySender,
-    ctx: SourceContext,
-}
-
-impl ChannelSource {
-    /// constructor
-    pub fn new(ctx: SourceContext, qsize: usize) -> Self {
-        let (tx, rx) = bounded(qsize);
-        Self { rx, tx, ctx }
-    }
-
-    /// get the sender for the source
-    /// FIXME: change the name
-    pub fn runtime(&self) -> ChannelSourceRuntime {
-        ChannelSourceRuntime {
-            sender: self.tx.clone(),
-            ctx: self.ctx.clone(),
-        }
-    }
-}
-
-impl RawSource for ChannelSource {
-    fn pull_data<'a>(
-        &'a mut self,
-        _pull_id: u64,
-        _ctx: &'a SourceContext,
-    ) -> BorrowingFfiFuture<'a, RResult<SourceReply>> {
-        async move {
-            match self.rx.try_recv() {
-                Ok(reply) => ROk(reply),
-                Err(TryRecvError::Empty) => {
-                    // TODO: configure pull interval in connector config?
-                    ROk(SourceReply::Empty(DEFAULT_POLL_INTERVAL))
-                }
-                Err(e) => RErr(RError::new(Error::from(e))),
-            }
-        }
-        .into_ffi()
-    }
-
-    /// this source is not handling acks/fails
-    fn is_transactional(&self) -> bool {
-        false
     }
 }
 
@@ -491,7 +459,34 @@ pub struct SourceContext {
     /// connector type
     pub(crate) connector_type: ConnectorType,
     /// The Quiescence Beacon
-    pub quiescence_beacon: BoxedQuiescenceBeacon,
+    pub(crate) quiescence_beacon: BoxedQuiescenceBeacon,
+
+    /// tool to notify the connector when the connection is lost
+    pub(crate) notifier: BoxedConnectionLostNotifier,
+}
+
+impl Display for SourceContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[Source::{}]", &self.url)
+    }
+}
+
+impl Context for SourceContext {
+    fn url(&self) -> &TremorUrl {
+        &self.url
+    }
+
+    fn quiescence_beacon(&self) -> &BoxedQuiescenceBeacon {
+        &self.quiescence_beacon
+    }
+
+    fn notifier(&self) -> &BoxedConnectionLostNotifier {
+        &self.notifier
+    }
+
+    fn connector_type(&self) -> &ConnectorType {
+        &self.connector_type
+    }
 }
 
 /// address of a source

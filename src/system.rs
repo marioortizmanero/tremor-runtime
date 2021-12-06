@@ -81,7 +81,7 @@ pub(crate) enum ManagerMsg {
         /// the type of connector
         connector_type: ConnectorType,
         /// the builder
-        builder: Box<dyn ConnectorBuilder>,
+        builder: ConnectorMod_Ref,
     },
     /// Initiate the Quiescence process
     Drain(Sender<Result<()>>),
@@ -119,7 +119,7 @@ impl Manager {
                         {
                             error!(
                                 "FIXME: error on duplicate connectors: {}",
-                                old.connector_type()
+                                old.connector_type()()
                             );
                         }
                     }

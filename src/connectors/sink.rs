@@ -27,6 +27,10 @@ use crate::codec::{self, Codec};
 use crate::config::{
     Codec as CodecConfig, Connector as ConnectorConfig, Postprocessor as PostprocessorConfig,
 };
+use crate::connectors::utils::reconnect::Attempt;
+use crate::connectors::utils::{
+    quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier,
+};
 use crate::connectors::{ConnectorType, Context, Msg, StreamDone};
 use crate::errors::{Error, Result};
 use crate::pdk::{RError, RResult};
@@ -56,6 +60,7 @@ use tremor_common::url::{ports::IN, TremorUrl};
 use tremor_pipeline::{
     pdk::PdkEvent, pdk::PdkOpMeta, CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID,
 };
+use tremor_script::ast::DeployEndpoint;
 use tremor_script::{pdk::PdkEventPayload, EventPayload};
 
 use tremor_value::{pdk::PdkValue, Value};
@@ -212,6 +217,22 @@ pub trait RawSink: Send {
     fn on_start(&mut self, _ctx: &SinkContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
+
+    /// Connect to the external thingy.
+    /// This function is called definitely after `on_start` has been called.
+    ///
+    /// This function might be called multiple times, check the `attempt` where you are at.
+    /// The intended result of this function is to re-establish a connection. It might reuse a working connection.
+    ///
+    /// Return `ROk(true)` if the connection could be successfully established.
+    fn connect(
+        &mut self,
+        _ctx: &SinkContext,
+        _attempt: &Attempt,
+    ) -> BorrowingFfiFuture<'_, RResult<bool>> {
+        future::ready(ROk(true)).into_ffi()
+    }
+
     /// called when paused
     fn on_pause(&mut self, _ctx: &SinkContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
@@ -298,6 +319,18 @@ impl Sink {
     pub async fn on_start(&mut self, ctx: &mut SinkContext) {
         self.0.on_start(ctx)
     }
+
+    /// Wrapper for [`BoxedRawSink::connect`]
+    #[inline]
+    pub async fn connect(&mut self, ctx: &SinkContext, attempt: &Attempt) -> Result<bool> {
+        self.0
+            .connect(ctx, attempt)
+            .await
+            .map_err(Into::into)
+            .into()
+    }
+
+    /// Wrapper for [`BoxedRawSink::on_pause`]
     #[inline]
     pub async fn on_pause(&mut self, ctx: &mut SinkContext) {
         self.0.on_pause(ctx)
@@ -358,7 +391,7 @@ pub struct SinkContext {
     pub(crate) quiescence_beacon: BoxedQuiescenceBeacon,
 
     /// notifier the connector runtime if we lost a connection
-    pub(crate) notifier: ConnectionLostNotifier,
+    pub(crate) notifier: BoxedConnectionLostNotifier,
 }
 
 impl Display for SinkContext {
@@ -372,11 +405,11 @@ impl Context for SinkContext {
         &self.alias
     }
 
-    fn quiescence_beacon(&self) -> &QuiescenceBeacon {
+    fn quiescence_beacon(&self) -> &BoxedQuiescenceBeacon {
         &self.quiescence_beacon
     }
 
-    fn notifier(&self) -> &ConnectionLostNotifier {
+    fn notifier(&self) -> &BoxedConnectionLostNotifier {
         &self.notifier
     }
 
