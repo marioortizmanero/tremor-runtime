@@ -1,0 +1,43 @@
+define metronome connector clock
+with
+    config = {
+        "interval": 1000
+    }
+end;
+
+define tcp_server connector server
+args
+    codec = "string"
+with
+    config = {
+        "port": 4242,
+        "host": "127.0.0.1"
+    }
+end;
+
+define stdio connector io
+with
+    config = {
+        "prefix": ">> "
+    }
+end;
+
+define pipeline main
+pipeline
+    select event from in into out;
+end;
+
+define flow demo
+flow
+    create connector clock;
+    create connector server;
+    create connector io;
+
+    # create pipeline main;
+
+    connect /connector/server/out to /pipeline/main/main;
+    connect /connector/clock/out to /pipeline/main/main;
+    connect /pipeline/main/main to /connector/io/in;
+end;
+
+deploy flow demo_01 from demo;
