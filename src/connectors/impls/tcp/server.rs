@@ -28,7 +28,6 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use abi_stable::{
-    export_root_module,
     prefix_type::PrefixTypeTrait,
     rstr, rvec, sabi_extern_fn,
     std_types::{
