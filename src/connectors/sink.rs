@@ -283,7 +283,7 @@ impl Sink {
     pub async fn on_event(
         &mut self,
         input: RStr<'_>,
-        event: PdkEvent,
+        event: Event,
         ctx: &SinkContext,
         serializer: MutEventSerializer<'_>,
         start: u64,

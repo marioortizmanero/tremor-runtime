@@ -34,6 +34,7 @@ use abi_stable::{
         RStr, RString, RVec,
     },
     type_level::downcasting::TD_Opaque,
+    StableAbi,
 };
 use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt};
 use async_std::channel::Sender;
@@ -134,7 +135,7 @@ pub struct File {
 impl RawConnector for File {
     fn create_sink(
         &mut self,
-        sink_context: SinkContext,
+        _sink_context: SinkContext,
         qsize: usize,
         reply_tx: BoxedContraflowSender,
     ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSink>>> {
@@ -184,10 +185,10 @@ impl FileSource {
     fn new(config: Config) -> Self {
         let buf = vec![0; config.chunk_size];
         let origin_uri = EventOriginUri {
-            scheme: URL_SCHEME.to_string(),
-            host: hostname(),
-            port: None,
-            path: vec![config.path.display().to_string()],
+            scheme: URL_SCHEME.into(),
+            host: hostname().into(),
+            port: RNone,
+            path: rvec![config.path.display().to_string().into()],
         };
         Self {
             config,
@@ -213,7 +214,9 @@ impl RawSource for FileSource {
                 "path": self.config.path.display().to_string()
             }));
             let read_file =
-                file::open_with(&self.config.path, &mut self.config.mode.as_open_options()).await?;
+                file::open_with(&self.config.path, &mut self.config.mode.as_open_options())
+                    .await
+                    .into()?;
             // TODO: instead of looking for an extension
             // check the magic bytes at the beginning of the file to determine the compression applied
             if let Some("xz") = self.config.path.extension().and_then(OsStr::to_str) {

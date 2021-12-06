@@ -437,7 +437,7 @@ async fn connector_task(
     let source_ctx = SourceContext {
         uid,
         connector_type: config.connector_type.clone(),
-        alias: alias.clone(),
+        alias: alias.clone().into(),
         quiescence_beacon: BoxedQuiescenceBeacon::from_value(quiescence_beacon.clone(), TD_Opaque),
         notifier: notifier.clone(),
     };
@@ -450,7 +450,7 @@ async fn connector_task(
     let sink_builder = sink::builder(&config, default_codec, qsize, sink_metrics_reporter)?;
     let sink_ctx = SinkContext {
         uid,
-        alias: alias.clone(),
+        alias: alias.clone().into(),
         connector_type: config.connector_type.clone(),
         quiescence_beacon: BoxedQuiescenceBeacon::from_value(quiescence_beacon.clone(), TD_Opaque),
         notifier: notifier.clone(),
