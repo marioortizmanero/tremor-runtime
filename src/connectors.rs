@@ -32,8 +32,6 @@ pub mod source;
 #[macro_use]
 pub mod utils;
 
-use std::{env, future};
-
 use tremor_script::ast::DeployEndpoint;
 /// quiescence stuff
 pub(crate) use utils::{metrics, quiescence, reconnect};
@@ -230,14 +228,14 @@ pub struct ConnectorResult<T: std::fmt::Debug> {
 impl ConnectorResult<()> {
     fn ok(ctx: &ConnectorContext) -> Self {
         Self {
-            alias: ctx.alias.clone(),
+            alias: ctx.alias.to_string(),
             res: Ok(()),
         }
     }
 
     fn err(ctx: &ConnectorContext, err_msg: &'static str) -> Self {
         Self {
-            alias: ctx.alias.clone(),
+            alias: ctx.alias.to_string(),
             res: Err(Error::from(err_msg)),
         }
     }
@@ -286,7 +284,7 @@ pub struct ConnectorContext {
     /// unique identifier
     pub uid: u64,
     /// url of the connector
-    pub alias: String,
+    pub alias: RString,
     /// type of the connector
     connector_type: ConnectorType,
     /// The Quiescence Beacon
@@ -390,21 +388,18 @@ pub async fn spawn(
         .ok_or_else(|| ErrorKind::UnknownConnectorType(config.connector_type.to_string()))?;
     let connector_config = config.config.clone().map(Into::into).into();
     let connector = Result::from(
-        builder.from_config()(url.clone(), connector_config)
+        builder.from_config()(alias.clone().into(), connector_config)
             .await
             .map_err(Error::from),
     )?;
 
-    Ok((
-        url.clone(),
-        connector_task(
-            url.clone(),
-            Connector(connector),
-            config,
-            connector_id_gen.next_id(),
-        )
-        .await?,
-    ))
+    Ok(connector_task(
+        alias.clone(),
+        Connector(connector),
+        config,
+        connector_id_gen.next_id(),
+    )
+    .await?)
 }
 
 #[allow(clippy::too_many_lines)]
@@ -442,7 +437,7 @@ async fn connector_task(
     let source_ctx = SourceContext {
         uid,
         connector_type: config.connector_type.clone(),
-        alias: alias.clone(),
+        alias: alias.clone().into(),
         quiescence_beacon: BoxedQuiescenceBeacon::from_value(quiescence_beacon.clone(), TD_Opaque),
         notifier: notifier.clone(),
     };
@@ -455,7 +450,7 @@ async fn connector_task(
     let sink_builder = sink::builder(&config, default_codec, qsize, sink_metrics_reporter)?;
     let sink_ctx = SinkContext {
         uid,
-        alias: alias.clone(),
+        alias: alias.clone().into(),
         connector_type: config.connector_type.clone(),
         quiescence_beacon: BoxedQuiescenceBeacon::from_value(quiescence_beacon.clone(), TD_Opaque),
         notifier: notifier.clone(),
@@ -474,44 +469,47 @@ async fn connector_task(
         sink: sink_addr,
     };
 
-    let mut reconnect: ReconnectRuntime = ReconnectRuntime::new(&connector_addr, &config.reconnect);
-    let notifier = reconnect.notifier();
+    let mut reconnect: ReconnectRuntime =
+        ReconnectRuntime::new(&connector_addr, notifier.clone(), &config.reconnect);
 
     let ctx = ConnectorContext {
         uid,
-        alias: alias.clone(),
+        alias: alias.clone().into(),
         connector_type: config.connector_type.clone(),
         quiescence_beacon: BoxedQuiescenceBeacon::from_value(quiescence_beacon.clone(), TD_Opaque),
         notifier: reconnect::BoxedConnectionLostNotifier::from_value(notifier.clone(), TD_Opaque),
     };
 
     let send_addr = connector_addr.clone();
-    let mut connector_state = ConnectorState::Initialized;
+    let mut connector_state = InstanceState::Initialized;
     let mut drainage = None;
     let mut start_sender: Option<Sender<ConnectorResult<()>>> = None;
     // TODO: add connector metrics reporter (e.g. for reconnect attempts, cb's received, uptime, etc.)
     task::spawn::<_, Result<()>>(async move {
         // typical 1 pipeline connected to IN, OUT, ERR
-        let mut connected_pipelines: HashMap<Cow<'static, str>, Vec<(TremorUrl, pipeline::Addr)>> =
-            HashMap::with_capacity(3);
+        let mut connected_pipelines: HashMap<
+            Cow<'static, str>,
+            Vec<(DeployEndpoint, pipeline::Addr)>,
+        > = HashMap::with_capacity(3);
         // connector control plane loop
         while let Ok(msg) = msg_rx.recv().await {
             match msg {
                 Msg::Report(tx) => {
                     // request a status report from this connector
-                    let pipes: HashMap<Cow<'static, str>, Vec<TremorUrl>> = connected_pipelines
-                        .iter()
-                        .map(|(port, connected)| {
-                            (
-                                port.clone(),
-                                connected
-                                    .iter()
-                                    .map(|(endpoint, _)| endpoint)
-                                    .cloned()
-                                    .collect::<Vec<_>>(),
-                            )
-                        })
-                        .collect();
+                    let pipes: HashMap<Cow<'static, str>, Vec<DeployEndpoint>> =
+                        connected_pipelines
+                            .iter()
+                            .map(|(port, connected)| {
+                                (
+                                    port.clone(),
+                                    connected
+                                        .iter()
+                                        .map(|(endpoint, _)| endpoint)
+                                        .cloned()
+                                        .collect::<Vec<_>>(),
+                                )
+                            })
+                            .collect();
                     if let Err(e) = tx
                         .send(StatusReport {
                             alias: alias.clone(),
@@ -663,7 +661,7 @@ async fn connector_task(
                 Msg::Reconnect => {
                     // reconnect if we are below max_retries, otherwise bail out and fail the connector
                     info!("[Connector::{}] Connecting...", &connector_addr.alias);
-                    let (new, will_retry) = reconnect.attempt(connector.as_mut(), &ctx).await?;
+                    let (new, will_retry) = reconnect.attempt(&mut connector, &ctx).await?;
                     match (&connectivity, &new) {
                         (Connectivity::Disconnected, Connectivity::Connected) => {
                             info!("[Connector::{}] Connected.", &connector_addr.alias);
@@ -1270,6 +1268,7 @@ impl Connector {
     pub async fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> Result<bool> {
         self.0
             .connect(ctx, attempt)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -1279,6 +1278,7 @@ impl Connector {
     pub async fn on_start(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
             .on_start(ctx)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -1288,6 +1288,7 @@ impl Connector {
     pub async fn on_pause(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
             .on_pause(ctx)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -1297,6 +1298,7 @@ impl Connector {
     pub async fn on_resume(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
             .on_resume(ctx)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -1306,6 +1308,7 @@ impl Connector {
     pub async fn on_drain(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
             .on_drain(ctx)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -1315,6 +1318,7 @@ impl Connector {
     pub async fn on_stop(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
             .on_stop(ctx)
+            .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
     }
@@ -1389,7 +1393,6 @@ pub fn builtin_connector_types() -> Vec<ConnectorMod_Ref> {
     // FIXME: implement basic connectors
     vec![
         /*
-        Box::new(impls::file::Builder::default()),
         Box::new(impls::metrics::Builder::default()),
         Box::new(impls::stdio::Builder::default()),
         Box::new(impls::tcp::client::Builder::default()),
@@ -1407,6 +1410,7 @@ pub fn builtin_connector_types() -> Vec<ConnectorMod_Ref> {
         Box::new(impls::s3::Builder::default()),
         Box::new(impls::kafka::consumer::Builder::default()),
         */
+        impls::file::instantiate_root_module(),
         impls::tcp::server::instantiate_root_module(),
     ]
 }
@@ -1427,11 +1431,11 @@ pub fn debug_connector_types() -> Vec<ConnectorMod_Ref> {
 #[cfg(not(tarpaulin_include))]
 pub async fn register_builtin_connector_types(world: &World, debug: bool) -> Result<()> {
     for builder in builtin_connector_types() {
-        world.register_builtin_connector_type(builder).await?;
+        world.register_connector_type(builder).await?;
     }
     if debug {
         for builder in debug_connector_types() {
-            world.register_builtin_connector_type(builder).await?;
+            world.register_connector_type(builder).await?;
         }
     }
 
@@ -1446,7 +1450,7 @@ pub async fn register_builtin_connector_types(world: &World, debug: bool) -> Res
         log::info!("Dynamically loading plugins in directory '{}'", path);
         for plugin in pdk::find_recursively(&path) {
             log::info!("Found and loaded plugin '{}'", plugin.connector_type()());
-            world.register_builtin_connector_type(plugin).await?;
+            world.register_connector_type(plugin).await?;
         }
     }
 
