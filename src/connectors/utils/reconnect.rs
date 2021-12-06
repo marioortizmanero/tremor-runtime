@@ -14,15 +14,18 @@
 
 /// reconnect logic and execution for connectors
 use crate::config::Reconnect;
-use crate::connectors::{Addr, Connectivity, Connector, ConnectorContext, Msg};
-use crate::errors::Result;
+use crate::connectors::sink::SinkMsg;
+use crate::connectors::source::SourceMsg;
+use crate::connectors::{Addr, Connectivity, Connector, ConnectorContext, Context, Msg};
+use crate::errors::{Error, Result};
 use crate::pdk::RResult;
 use abi_stable::{
     std_types::{RBox, SendRBoxError},
+    type_level::downcasting::TD_Opaque,
     StableAbi,
 };
-use async_ffi::{BorrowingFfiFuture, FutureExt};
-use async_std::channel::Sender;
+use async_ffi::{BorrowingFfiFuture, FutureExt as AsyncFfiFutureExt};
+use async_std::channel::{bounded, Sender};
 use async_std::task;
 use futures::future::{join3, ready, FutureExt};
 use std::convert::identity;
@@ -141,7 +144,7 @@ pub(crate) struct ReconnectRuntime {
     interval_ms: Option<u64>,
     strategy: Box<dyn ReconnectStrategy>,
     addr: Addr,
-    notifier: ConnectionLostNotifier,
+    notifier: BoxedConnectionLostNotifier,
     alias: String,
 }
 
@@ -151,6 +154,12 @@ pub(crate) struct ReconnectRuntime {
 /// This will change the connector state properly and trigger a new reconnect attempt (according to the configured logic)
 #[derive(Clone)]
 pub struct ConnectionLostNotifier(Sender<Msg>);
+
+impl ConnectionLostNotifier {
+    pub(crate) fn new(sender: Sender<Msg>) -> Self {
+        Self(sender)
+    }
+}
 
 /// Note that since `ConnectionLostNotifier` is used for the plugin system, it
 /// must be `#[repr(C)]` in order to interact with it. However, since it uses a
@@ -181,13 +190,13 @@ impl ConnectionLostNotifierOpaque for ConnectionLostNotifier {
 pub type BoxedConnectionLostNotifier = ConnectionLostNotifierOpaque_TO<'static, RBox<()>>;
 
 impl ReconnectRuntime {
-    pub(crate) fn notifier(&self) -> ConnectionLostNotifier {
+    pub(crate) fn notifier(&self) -> BoxedConnectionLostNotifier {
         self.notifier.clone()
     }
     /// constructor
     pub(crate) fn new(
         connector_addr: &Addr,
-        notifier: ConnectionLostNotifier,
+        notifier: BoxedConnectionLostNotifier,
         config: &Reconnect,
     ) -> Self {
         Self::inner(
@@ -200,7 +209,7 @@ impl ReconnectRuntime {
     fn inner(
         addr: Addr,
         alias: String,
-        notifier: ConnectionLostNotifier,
+        notifier: BoxedConnectionLostNotifier,
         config: &Reconnect,
     ) -> Self {
         let strategy: Box<dyn ReconnectStrategy> = match config {
@@ -220,7 +229,7 @@ impl ReconnectRuntime {
             interval_ms: None,
             strategy,
             addr,
-            notifier,
+            notifier: BoxedConnectionLostNotifier::from_value(notifier, TD_Opaque),
             alias,
         }
     }

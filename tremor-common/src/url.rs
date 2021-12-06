@@ -174,12 +174,12 @@ impl TremorUrl {
         instance_id: &str,
     ) -> Self {
         Self {
-            resource_type: Some(resource_type),
-            artefact: Some(artefact_id.to_string()),
+            resource_type: RSome(resource_type),
+            artefact: RSome(artefact_id.into()),
             scope: Scope::Instance,
-            host: "localhost".to_string(),
-            instance: Some(instance_id.to_string()),
-            instance_port: None,
+            host: "localhost".into(),
+            instance: RSome(instance_id.into()),
+            instance_port: RNone,
         }
     }
 
@@ -247,7 +247,7 @@ impl TremorUrl {
                         RSome(RString::from(*port)),
                     ),
                     [resource_type, artefact, instance] => (
-                        Scope::Servant,
+                        Scope::Instance,
                         RSome(decode_type(resource_type)?),
                         RSome(RString::from(*artefact)),
                         RSome(RString::from(*instance)),
@@ -308,7 +308,7 @@ impl TremorUrl {
     /// Trims the url to the instance
     pub fn trim_to_instance(&mut self) {
         self.instance_port = RNone;
-        self.scope = Scope::Servant;
+        self.scope = Scope::Instance;
     }
 
     /// Return a clone which is trimmed to the instance
@@ -327,7 +327,7 @@ impl TremorUrl {
     }
 
     /// Sets the instance of the URL, will extend
-    /// the scope to `Scope::Servant` if it was
+    /// the scope to `Scope::Instance` if it was
     /// `Artefact` before.
     pub fn set_instance<S>(&mut self, i: &S)
     where
@@ -341,13 +341,13 @@ impl TremorUrl {
 
     /// Sets the port of the URL, will extend
     /// the scope to `Scope::Port` if it was
-    /// `Servant` before.
+    /// `Instance` before.
     pub fn set_port<S>(&mut self, i: &S)
     where
         S: ToString + ?Sized,
     {
         self.instance_port = RSome(i.to_string().into());
-        if self.scope == Scope::Servant {
+        if self.scope == Scope::Instance {
             self.scope = Scope::Port;
         }
     }
@@ -358,7 +358,7 @@ impl TremorUrl {
         S: ToString + ?Sized,
     {
         self.instance_port = RSome(i.to_string().into());
-        if self.scope == Scope::Servant {
+        if self.scope == Scope::Instance {
             self.scope = Scope::Port;
         }
         self

@@ -30,7 +30,6 @@ extern crate serde_derive;
 extern crate log;
 
 use crate::errors::{ErrorKind, Result};
-use crate::op::prelude::*;
 use abi_stable::{std_types::RVec, StableAbi};
 use beef::Cow;
 use executable_graph::NodeConfig;
@@ -45,6 +44,7 @@ use std::fmt::Display;
 use std::iter::Iterator;
 use std::str::FromStr;
 use std::{fmt, sync::Mutex};
+use tremor_script::ast::Helper;
 use tremor_script::prelude::*;
 
 /// Pipeline Errors
