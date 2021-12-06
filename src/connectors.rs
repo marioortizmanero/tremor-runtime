@@ -1441,10 +1441,13 @@ pub async fn register_builtin_connector_types(world: &World, debug: bool) -> Res
     //
     // FIXME: the `plugins` fallback is only for development, this should have a
     // proper default value.
-    let base_dir = env::var("TREMOR_PLUGIN_PATH").unwrap_or_else(|_| String::from("plugins"));
-
-    for plugin in pdk::find_recursively(&base_dir) {
-        world.register_builtin_connector_type(plugin).await?;
+    let plugin_path = env::var("TREMOR_PLUGIN_PATH").unwrap_or_else(|_| String::from("plugins"));
+    for path in plugin_path.split(':') {
+        log::info!("Dynamically loading plugins in directory '{}'", path);
+        for plugin in pdk::find_recursively(&path) {
+            log::info!("Found and loaded plugin '{}'", plugin.connector_type()());
+            world.register_builtin_connector_type(plugin).await?;
+        }
     }
 
     Ok(())

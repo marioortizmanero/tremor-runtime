@@ -49,12 +49,14 @@ pub fn find_recursively(base_dir: &str) -> Vec<ConnectorMod_Ref> {
                 .map(|ext| ext == env::consts::DLL_EXTENSION)
                 .unwrap_or(false)
         })
-        // Try to load the plugins and if successful, add them to the result
+        // Try to load the plugins and if successful, add them to the result.
+        // Not being able to load a plugin shouldn't be fatal, errors will just
+        // be printed to the logs.
         .filter_map(|file| {
             match ConnectorMod_Ref::load_from_file(file.path()) {
                 Ok(plugin) => Some(plugin),
-                Err(_e) => {
-                    // TODO: log the error
+                Err(e) => {
+                    log::debug!("Failed to load plugin in '{:?}': {}", file.path(), e);
                     None
                 }
             }
