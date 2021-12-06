@@ -16,8 +16,6 @@
 //!
 //! With some shenanigans removed, compared to `ChannelSink`.
 
-use std::marker::PhantomData;
-
 use crate::connectors::{ConnectorContext, StreamDone};
 use crate::errors::{ErrorKind, Result};
 use abi_stable::std_types::ROption::{RNone, RSome};
