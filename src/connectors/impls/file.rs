@@ -148,7 +148,7 @@ pub struct File {
 impl RawConnector for File {
     fn create_sink(
         &mut self,
-        sink_context: SinkContext,
+        _sink_context: SinkContext,
         qsize: usize,
         reply_tx: BoxedContraflowSender,
     ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSink>>> {
@@ -158,8 +158,9 @@ impl RawConnector for File {
             let reply_tx = reply_tx
                 .obj
                 .downcast_as::<Sender<AsyncSinkReply>>()
-                .expect("contraflow channel not created with TD_CanDowncast");
-            let sink = SingleStreamSink::new_no_meta(qsize, *reply_tx);
+                .expect("contraflow channel not created with TD_CanDowncast")
+                .clone();
+            let sink = SingleStreamSink::new_no_meta(qsize, reply_tx);
             self.sink_runtime = Some(sink.runtime());
             // We don't need to be able to downcast the connector back to the
             // original type, so we just pass it as an opaque type.
