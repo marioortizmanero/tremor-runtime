@@ -38,10 +38,11 @@ use self::source::{BoxedRawSource, Source, SourceAddr, SourceContext, SourceMsg}
 use self::utils::quiescence::QuiescenceBeacon;
 use crate::errors::{Error, Kind as ErrorKind, Result};
 use crate::instance::InstanceState;
+use crate::pdk::{self, connectors::ConnectorMod_Ref, RResult};
 use crate::pipeline;
 use crate::system::World;
 use crate::OpConfig;
-use crate::pdk::{self, connectors::ConnectorMod_Ref, RResult};
+use crate::{config::Connector as ConnectorConfig, connectors::utils::metrics::METRICS_CHANNEL};
 use abi_stable::{
     std_types::{
         RBox, RCow,
@@ -53,7 +54,6 @@ use abi_stable::{
     StableAbi,
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
-use crate::{config::Connector as ConnectorConfig, connectors::utils::metrics::METRICS_CHANNEL};
 use async_std::channel::{bounded, Sender};
 use async_std::task::{self};
 use beef::Cow;
@@ -1358,7 +1358,6 @@ pub fn debug_connector_types() -> Vec<Box<dyn ConnectorBuilder + 'static>> {
     ]
 }
 
-
 /// registering builtin and debug connector types
 ///
 /// # Errors
@@ -1375,7 +1374,7 @@ pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
     }
     world
         .register_builtin_connector_type(Box::new(impls::exit::Builder::new(world)))
-        .await
+        .await;
 
     // After loading all the in-tree connectors, we try to find all the
     // available plugins and we load them dynamically. For now, plugins are
@@ -1387,5 +1386,4 @@ pub async fn register_builtin_connector_types(world: &World) -> Result<()> {
     for plugin in pdk::find_recursively(&base_dir) {
         world.register_connector_type(plugin).await?;
     }
-
 }

@@ -16,8 +16,8 @@ mod deployment;
 
 use crate::connectors::{self, ConnectorBuilder};
 use crate::errors::Result;
-use crate::QSIZE;
 use crate::pdk::connectors::ConnectorMod_Ref;
+use crate::QSIZE;
 use async_std::channel::bounded;
 use async_std::task::{self, JoinHandle};
 use deployment::{Deployment, DeploymentId};

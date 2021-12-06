@@ -18,13 +18,13 @@ use crate::connectors::sink::SinkMsg;
 use crate::connectors::source::SourceMsg;
 use crate::connectors::{Addr, Connectivity, Connector, ConnectorContext, Context, Msg};
 use crate::errors::{Error, Result};
-use async_std::channel::{bounded, Sender};
 use crate::pdk::RResult;
 use abi_stable::{
     std_types::{RBox, SendRBoxError},
     StableAbi,
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
+use async_std::channel::{bounded, Sender};
 use async_std::task;
 use futures::future::{join3, ready, FutureExt};
 use std::convert::identity;

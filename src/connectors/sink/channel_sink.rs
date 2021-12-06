@@ -17,9 +17,9 @@
 use crate::connectors::prelude::*;
 use crate::connectors::{Context, StreamDone};
 use crate::errors::{ErrorKind, Result};
-use crate::QSIZE;
 use crate::pdk::RResult;
 use crate::ttry;
+use crate::QSIZE;
 use abi_stable::std_types::{
     ROption::{RNone, RSome},
     RResult::ROk,
@@ -318,7 +318,12 @@ where
             }
             let error = match writer.on_done(stream).await {
                 Err(e) => RSome(e),
-                Ok(StreamDone::ConnectorClosed) => ctx.notifier.notify().await.err().map(|e| ErrorKind::PluginError(e).into()),
+                Ok(StreamDone::ConnectorClosed) => ctx
+                    .notifier
+                    .notify()
+                    .await
+                    .err()
+                    .map(|e| ErrorKind::PluginError(e).into()),
                 Ok(_) => RNone,
             };
             if let RSome(e) = error {

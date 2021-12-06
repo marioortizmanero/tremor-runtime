@@ -30,10 +30,10 @@ use crate::config::{
 use crate::connectors::utils::reconnect::{Attempt, ConnectionLostNotifier};
 use crate::connectors::{ConnectorType, Context, Msg, QuiescenceBeacon, StreamDone};
 use crate::errors::{Error, Result};
+use crate::pdk::{RError, RResult};
 use crate::permge::PriorityMerge;
 use crate::pipeline;
 use crate::postprocessor::{make_postprocessors, postprocess, Postprocessors};
-use crate::pdk::{RError, RResult};
 use abi_stable::{
     rvec,
     std_types::{RBox, RResult::ROk, RStr, RVec, SendRBoxError},
