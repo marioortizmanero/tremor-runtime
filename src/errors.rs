@@ -109,9 +109,20 @@ impl<P> From<std::sync::PoisonError<P>> for Error {
     }
 }
 
-impl<T: std::fmt::Debug> From<aws_sdk_s3::types::SdkError<T>> for Error {
-    fn from(e: aws_sdk_s3::types::SdkError<T>) -> Self {
-        Self::from(ErrorKind::S3Error(format!("{:?}", e)))
+/// For more ergonomic error-handling in PDK contexts
+/// TODO: use `tremor_pdk::RError` when it exists
+impl From<Error> for abi_stable::std_types::SendRBoxError {
+    fn from(e: Error) -> Self {
+        Self::new(e)
+    }
+}
+
+/// For more ergonomic error-handling in PDK contexts
+/// TODO: use `tremor_pdk::RError` when it exists
+impl From<ErrorKind> for abi_stable::std_types::SendRBoxError {
+    fn from(e: ErrorKind) -> Self {
+        let e: Error = e.into();
+        Self::new(e)
     }
 }
 
@@ -157,7 +168,7 @@ error_chain! {
         MsgPackEncoderError(rmp_serde::encode::Error);
         ParseIntError(std::num::ParseIntError);
         ParseFloatError(std::num::ParseFloatError);
-        Postgres(postgres::Error);
+        PluginError(crate::pdk::RError);
         RegexError(regex::Error);
         ReqwestError(reqwest::Error);
         RustlsError(rustls::TLSError);
