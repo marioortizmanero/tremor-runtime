@@ -7,7 +7,7 @@
 
 use crate::{EventPayload, ValueAndMeta};
 
-use std::{pin::Pin, sync::Arc};
+use std::pin::Pin;
 
 use abi_stable::{
     std_types::{RArc, RVec},
@@ -84,17 +84,10 @@ impl From<EventPayload> for PdkEventPayload {
 /// functionality.
 impl From<PdkEventPayload> for EventPayload {
     fn from(original: PdkEventPayload) -> Self {
-        let raw = original
-            .raw
-            .into_iter()
-            .map(|x| {
-                // FIXME: this conversion could probably be simpler
-                let x: Arc<Pin<Vec<u8>>> = Arc::new(Pin::new((**x).into()));
-                x
-            })
-            .collect();
         EventPayload {
-            raw,
+            // Note that there is no conversion for the raw field because it's a
+            // self-referential type, and modifying its data would be unsound.
+            raw: original.raw,
             data: original.data.into(),
         }
     }
