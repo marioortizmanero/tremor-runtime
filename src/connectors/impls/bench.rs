@@ -192,7 +192,7 @@ impl Connector for Bench {
     }
 
     fn codec_requirements(&self) -> CodecReq {
-        CodecReq::Optional("json")
+        CodecReq::Optional(rstr!("json"))
     }
 }
 

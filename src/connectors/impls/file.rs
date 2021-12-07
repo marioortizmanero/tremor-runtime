@@ -14,7 +14,7 @@
 
 use std::{ffi::OsStr, path::PathBuf};
 
-use crate::connectors::prelude::*;
+use crate::{connectors::prelude::*, pdk::utils::conv_cow_str_inv};
 use async_compression::futures::bufread::XzDecoder;
 use async_std::{
     fs::{File as FSFile, OpenOptions},
@@ -33,11 +33,9 @@ use abi_stable::{
         RResult::{RErr, ROk},
         RStr, RString, RVec,
     },
-    type_level::downcasting::TD_Opaque,
-    StableAbi,
+    type_level::downcasting::TD_Opaque, rtry,
 };
 use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt};
-use async_std::channel::Sender;
 use std::future;
 use tremor_value::pdk::PdkValue;
 
@@ -136,8 +134,8 @@ impl RawConnector for File {
     fn create_sink(
         &mut self,
         _sink_context: SinkContext,
-        qsize: usize,
-        reply_tx: BoxedContraflowSender,
+        _qsize: usize,
+        _reply_tx: BoxedContraflowSender,
     ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSink>>> {
         let sink = if self.config.mode == Mode::Read {
             RNone
@@ -154,16 +152,15 @@ impl RawConnector for File {
 
     fn create_source(
         &mut self,
-        source_context: SourceContext,
-        qsize: usize,
+        _source_context: SourceContext,
+        _qsize: usize,
     ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSource>>> {
         let source = if self.config.mode == Mode::Read {
-            RSome(FileSource::new(self.config.clone()))
+            RSome(BoxedRawSource::from_value(FileSource::new(self.config.clone()), TD_Opaque))
         } else {
             RNone
         };
-        let source = BoxedRawSource::from_value(source, TD_Opaque);
-        future::ready(ROk(RSome(source))).into_ffi()
+        future::ready(ROk(source)).into_ffi()
     }
 
 <<<<<<< HEAD
@@ -228,6 +225,7 @@ impl RawConnector for File {
     }
 }
 
+
 struct FileSource {
     config: Config,
     reader: Option<Box<dyn AsyncRead + Send + Sync + Unpin>>,
@@ -261,19 +259,19 @@ impl FileSource {
 
 #[async_trait::async_trait]
 impl RawSource for FileSource {
-    fn connect(
-        &mut self,
-        ctx: &SourceContext,
-        _attempt: &Attempt,
-    ) -> BorrowingFfiFuture<'_, RResult<bool>> {
+    fn connect<'a>(
+        &'a mut self,
+        ctx: &'a SourceContext,
+        _attempt: &'a Attempt,
+    ) -> BorrowingFfiFuture<'a, RResult<bool>> {
         async move {
             self.meta = ctx.meta(literal!({
                 "path": self.config.path.display().to_string()
             }));
             let read_file =
-                file::open_with(&self.config.path, &mut self.config.mode.as_open_options())
+                ttry!(file::open_with(&self.config.path, &mut self.config.mode.as_open_options())
                     .await
-                    .into()?;
+                    .into());
             // TODO: instead of looking for an extension
             // check the magic bytes at the beginning of the file to determine the compression applied
             if let Some("xz") = self.config.path.extension().and_then(OsStr::to_str) {
@@ -290,34 +288,35 @@ impl RawSource for FileSource {
 
     fn pull_data<'a>(
         &'a mut self,
-        pull_id: &'a mut u64,
+        _pull_id: &'a mut u64,
         ctx: &'a SourceContext,
     ) -> BorrowingFfiFuture<'a, RResult<SourceReply>> {
         async move {
             let reply = if self.eof {
                 SourceReply::Empty(DEFAULT_POLL_INTERVAL)
             } else {
-                let reader = self
+                let reader = ttry!(self
                     .reader
                     .as_mut()
-                    .ok_or_else(|| Error::from("No file available."))?;
-                let bytes_read = reader.read(&mut self.buf).await?;
+                    .ok_or_else(|| Error::from("No file available.")));
+                let bytes_read = ttry!(reader.read(&mut self.buf).await.map_err(Error::from));
                 if bytes_read == 0 {
                     self.eof = true;
                     debug!("{} EOF", &ctx);
                     SourceReply::EndStream {
                         origin_uri: self.origin_uri.clone(),
                         stream: DEFAULT_STREAM_ID,
-                        meta: Some(self.meta.clone()),
+                        meta: RSome(self.meta.clone().into()),
                     }
                 } else {
                     SourceReply::Data {
                         origin_uri: self.origin_uri.clone(),
                         stream: DEFAULT_STREAM_ID,
-                        meta: Some(self.meta.clone()),
+                        meta: RSome(self.meta.clone().into()),
                         // ALLOW: with the read above we ensure that this access is valid, unless async_std is broken
-                        data: self.buf[0..bytes_read].to_vec(),
-                        port: Some(OUT),
+                        data: RVec::from(&self.buf[0..bytes_read]),
+                        port: RSome(conv_cow_str_inv(OUT)),
+                        
                     }
                 }
             };
@@ -327,6 +326,7 @@ impl RawSource for FileSource {
     }
 
     fn on_stop(&mut self, ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<()>> {
+        let ctx = ctx.clone();
         async move {
             if let Some(mut file) = self.underlying_file.take() {
                 if let Err(e) = file.close().await {
@@ -364,11 +364,11 @@ impl FileSink {
 
 #[async_trait::async_trait]
 impl RawSink for FileSink {
-    fn connect(
-        &mut self,
-        _ctx: &SinkContext,
-        attempt: &Attempt,
-    ) -> BorrowingFfiFuture<'_, RResult<bool>> {
+    fn connect<'a>(
+        &'a mut self,
+        _ctx: &'a SinkContext,
+        attempt: &'a Attempt,
+    ) -> BorrowingFfiFuture<'a, RResult<bool>> {
         async move {
             let mode = if attempt.is_first() || attempt.success() == 0 {
                 &self.config.mode
@@ -379,7 +379,7 @@ impl RawSink for FileSink {
                 // e.g. if a simple write failed temporarily
                 &Mode::Append
             };
-            let file = file::open_with(&self.config.path, &mut mode.as_open_options()).await?;
+            let file = ttry!(file::open_with(&self.config.path, &mut mode.as_open_options()).await);
             self.file = Some(file);
             ROk(true)
         }
@@ -387,38 +387,39 @@ impl RawSink for FileSink {
     }
     fn on_event<'a>(
         &'a mut self,
-        input: RStr<'a>,
+        _input: RStr<'a>,
         event: PdkEvent,
         ctx: &'a SinkContext,
         serializer: &'a mut MutEventSerializer,
-        start: u64,
+        _start: u64,
     ) -> BorrowingFfiFuture<'a, RResult<SinkReply>> {
         async move {
-            let file = self
+            let event: Event = event.into();
+            let file = ttry!(self
                 .file
                 .as_mut()
-                .ok_or_else(|| Error::from("No file available."))?;
+                .ok_or_else(|| Error::from("No file available.")));
             let ingest_ns = event.ingest_ns;
             for value in event.value_iter() {
-                let data = serializer.serialize(value, ingest_ns)?;
+                // TODO: try to find a way around cloning the value reference to turn it into a PdkValue
+                let data = rtry!(serializer.serialize(&value.clone().into(), ingest_ns));
                 for chunk in data {
-                    if let Err(e) = file.write_all(&chunk).await {
+                    if let Err(e) = file.write_all(chunk.as_slice()).await {
                         error!("{} Error writing to file: {}", &ctx, &e);
                         self.file = None;
-                        ctx.notifier().notify().await?;
-                        return RErr(e.into());
+                        rtry!(ctx.notifier().notify().await);
+                        return RErr(Error::from(e).into());
                     }
                 }
                 if let Err(e) = file.flush().await {
                     error!("{} Error flushing file: {}", &ctx, &e);
                     self.file = None;
-                    ctx.notifier().notify().await?;
-                    return RErr(e.into());
+                    rtry!(ctx.notifier().notify().await);
+                    return RErr(Error::from(e).into());
                 }
             }
             ROk(SinkReply::NONE)
-        }
-        .into_ffi()
+        }.into_ffi()
     }
 
     fn auto_ack(&self) -> bool {
@@ -430,6 +431,7 @@ impl RawSink for FileSink {
     }
 
     fn on_stop(&mut self, ctx: &SinkContext) -> BorrowingFfiFuture<'_, RResult<()>> {
+        let ctx = ctx.clone();
         async move {
             if let Some(file) = self.file.take() {
                 if let Err(e) = file.sync_all().await {

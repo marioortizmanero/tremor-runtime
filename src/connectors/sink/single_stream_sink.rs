@@ -29,7 +29,7 @@ use super::channel_sink::{NoMeta, SinkMeta, SinkMetaBehaviour, WithMeta};
 use super::{AsyncSinkReply, ContraflowData, StreamWriter};
 
 use crate::connectors::prelude::*;
-use crate::errors::ErrorKind;
+use crate::errors::Kind as ErrorKind;
 use crate::pdk::RResult;
 use crate::ttry;
 use abi_stable::std_types::{
@@ -103,7 +103,7 @@ pub struct SingleStreamSinkRuntime {
 }
 
 impl SingleStreamSinkRuntime {
-    pub(crate) fn register_stream_writer<W>(
+    pub fn register_stream_writer<W>(
         &self,
         stream: u64,
         ctx: &ConnectorContext,
@@ -205,7 +205,7 @@ where
                         start,
                     };
                     if self.tx.send(sink_data).await.is_err() {
-                        error!("[Sink::{}] Error sending to closed stream: 0", &ctx.url);
+                        error!("{} Error sending to closed stream: 0", &ctx);
                         return ROk(SinkReply::FAIL);
                     }
                 }
@@ -225,7 +225,7 @@ where
                     start,
                 };
                 if self.tx.send(sink_data).await.is_err() {
-                    error!("[Sink::{}] Error sending to closed stream: 0", &ctx.url);
+                    error!("{} Error sending to closed stream: 0", &ctx);
                     ROk(SinkReply::FAIL)
                 } else {
                     ROk(SinkReply::NONE)

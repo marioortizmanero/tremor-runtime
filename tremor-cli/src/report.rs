@@ -15,6 +15,7 @@
 use crate::test::stats;
 use std::collections::HashMap;
 
+
 /// A test run is a collection of test reports that
 /// have executed in the context of a test run
 ///
@@ -96,7 +97,5 @@ pub(crate) fn metadata() -> HashMap<String, String> {
         "allocator".into(),
         crate::alloc::get_allocator_name().into(),
     );
-    meta.insert("librdkafka".into(), tremor_runtime::version::rdkafka());
-
     meta
 }

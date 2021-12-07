@@ -19,8 +19,10 @@
 
 use std::fmt::Display;
 
+use abi_stable::StableAbi;
+
 /// Possible lifecycle states of an instance
-#[repr(c)]
+#[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize, StableAbi)]
 #[serde(rename_all = "lowercase")]
 pub enum InstanceState {

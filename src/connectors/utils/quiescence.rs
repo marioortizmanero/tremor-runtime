@@ -147,7 +147,7 @@ pub type BoxedQuiescenceBeacon = QuiescenceBeaconOpaque_TO<'static, RBox<()>>;
 mod tests {
     use super::*;
     use crate::errors::Result;
-    use async_std::prelude::*;
+    use async_std::prelude::FutureExt as AsyncFutureExt;
     use std::time::Duration;
 
     #[async_std::test]
