@@ -563,7 +563,7 @@ pub type BoxedContraflowSender = ContraflowSenderOpaque_TO<'static, RBox<()>>;
 /// create a builder for a `SinkManager`.
 /// with the generic information available in the connector
 /// the builder then in a second step takes the source specific information to assemble and spawn the actual `SinkManager`.
-pub fn builder(
+pub(crate) fn builder(
     config: &ConnectorConfig,
     connector_default_codec: &str,
     qsize: usize,
