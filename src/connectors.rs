@@ -13,7 +13,6 @@
 // limitations under the License.
 
 pub(crate) mod impls;
-
 /// prelude with commonly needed stuff imported
 // FIXME: clean up after creation of `tremor-pdk`, this used to be `pub(crate)`.
 pub mod prelude;
@@ -62,7 +61,10 @@ use crate::connectors::utils::{
     quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier,
 };
 use crate::pdk::{
-    self, connectors::ConnectorMod_Ref, utils::conv_cow_str, RResult, DEFAULT_PLUGIN_PATH,
+    self,
+    connectors::ConnectorMod_Ref,
+    utils::{conv_cow_str, conv_cow_str_inv},
+    RResult, DEFAULT_PLUGIN_PATH,
 };
 use abi_stable::{
     std_types::{
@@ -1022,10 +1024,10 @@ pub enum Connectivity {
     Disconnected,
 }
 
-const IN_PORTS: [&str; 1] = [IN];
-const IN_PORTS_REF: &'static [&str; 1] = &IN_PORTS;
-const OUT_PORTS: [&str; 2] = [OUT, ERR];
-const OUT_PORTS_REF: &'static [&str; 2] = &OUT_PORTS;
+const IN_PORTS: [Cow<'static, str>; 1] = [IN];
+const IN_PORTS_REF: &'static [Cow<'static, str>; 1] = &IN_PORTS;
+const OUT_PORTS: [Cow<'static, str>; 2] = [OUT, ERR];
+const OUT_PORTS_REF: &'static [Cow<'static, str>; 2] = &OUT_PORTS;
 
 /// A Connector connects the tremor runtime to the outside world.
 ///
@@ -1046,13 +1048,17 @@ const OUT_PORTS_REF: &'static [&str; 2] = &OUT_PORTS;
 pub trait RawConnector: Send {
     /// Valid input ports for the connector, by default this is `in`
     fn input_ports(&self) -> RVec<RCow<'static, str>> {
-        // FIXME: make static? `RCow` can't be const, I think.
-        IN_PORTS_REF.into_iter().map(|s| RCow::from(*s)).collect()
+        IN_PORTS_REF
+            .into_iter()
+            .map(|port| conv_cow_str_inv(port.clone()))
+            .collect()
     }
     /// Valid output ports for the connector, by default this is `out` and `err`
     fn output_ports(&self) -> RVec<RCow<'static, str>> {
-        // FIXME: make static? `RCow` can't be const, I think.
-        OUT_PORTS_REF.into_iter().map(|s| RCow::from(*s)).collect()
+        OUT_PORTS_REF
+            .into_iter()
+            .map(|port| conv_cow_str_inv(port.clone()))
+            .collect()
     }
 
     /// Tests if a input port is valid, by default does a case insensitive search against

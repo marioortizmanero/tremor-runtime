@@ -287,8 +287,7 @@ pub trait RawSource: Send {
 /// Source part of a connector.
 ///
 /// Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
-/// types so that it's easier to use with `std`. This may be removed in the
-/// future for performance reasons.
+/// types so that it's easier to use with `std`.
 pub struct Source(pub BoxedRawSource);
 impl Source {
     #[inline]
@@ -462,7 +461,7 @@ impl SourceAddr {
 
 /// Builder for the SourceManager
 #[allow(clippy::module_name_repetitions)]
-pub(crate) struct SourceManagerBuilder {
+pub struct SourceManagerBuilder {
     qsize: usize,
     streams: Streams,
     source_metrics_reporter: SourceReporter,
@@ -710,9 +709,9 @@ impl SourceManager {
                 port,
                 mut pipelines,
             } => {
-                let pipes = if port.eq_ignore_ascii_case(OUT) {
+                let pipes = if port.eq_ignore_ascii_case(OUT.as_ref()) {
                     &mut self.pipelines_out
-                } else if port.eq_ignore_ascii_case(ERR) {
+                } else if port.eq_ignore_ascii_case(ERR.as_ref()) {
                     &mut self.pipelines_err
                 } else {
                     error!("{} Tried to connect to invalid port: {}", &self.ctx, &port);
@@ -733,9 +732,9 @@ impl SourceManager {
                 Ok(Control::Continue)
             }
             SourceMsg::Unlink { id, port } => {
-                let pipelines = if port.eq_ignore_ascii_case(OUT) {
+                let pipelines = if port.eq_ignore_ascii_case(OUT.as_ref()) {
                     &mut self.pipelines_out
-                } else if port.eq_ignore_ascii_case(ERR) {
+                } else if port.eq_ignore_ascii_case(ERR.as_ref()) {
                     &mut self.pipelines_err
                 } else {
                     error!(
@@ -960,10 +959,10 @@ impl SourceManager {
         let mut send_error = false;
 
         for (port, event) in events {
-            let pipelines = if port.eq_ignore_ascii_case(OUT) {
+            let pipelines = if port.eq_ignore_ascii_case(OUT.as_ref()) {
                 self.metrics_reporter.increment_out();
                 &mut self.pipelines_out
-            } else if port.eq_ignore_ascii_case(ERR) {
+            } else if port.eq_ignore_ascii_case(ERR.as_ref()) {
                 self.metrics_reporter.increment_err();
                 &mut self.pipelines_err
             } else {
@@ -1161,7 +1160,7 @@ impl SourceManager {
                     self.is_transactional,
                 );
 
-                let port: Cow<'static, str> = port.map(conv_cow_str).unwrap_or(Cow::from(OUT));
+                let port: Cow<'static, str> = port.map(conv_cow_str).unwrap_or(OUT);
 
                 let error = self.route_events(vec![(port, event)]).await;
                 if error {
@@ -1335,12 +1334,9 @@ fn build_events(
                     }
                 });
                 let (port, payload) = match line_value {
-                    Ok(decoded) => (port.unwrap_or(&Cow::from(OUT)).clone(), decoded),
+                    Ok(decoded) => (port.unwrap_or(&OUT).clone(), decoded),
                     Err(None) => continue,
-                    Err(Some(e)) => (
-                        Cow::from(ERR),
-                        make_error(alias, &e, stream_state.stream_id, pull_id),
-                    ),
+                    Err(Some(e)) => (ERR, make_error(url, &e, stream_state.stream_id, pull_id)),
                 };
                 let event = build_event(
                     stream_state,
@@ -1365,7 +1361,7 @@ fn build_events(
                 origin_uri,
                 is_transactional,
             );
-            vec![(Cow::from(ERR), event)]
+            vec![(ERR, event)]
         }
     }
 }
@@ -1398,12 +1394,9 @@ fn build_last_events(
                     }
                 });
                 let (port, payload) = match line_value {
-                    Ok(decoded) => (port.unwrap_or(&Cow::from(OUT)).clone(), decoded),
+                    Ok(decoded) => (port.unwrap_or(&OUT).clone(), decoded),
                     Err(None) => continue,
-                    Err(Some(e)) => (
-                        Cow::from(ERR),
-                        make_error(alias, &e, stream_state.stream_id, pull_id),
-                    ),
+                    Err(Some(e)) => (ERR, make_error(url, &e, stream_state.stream_id, pull_id)),
                 };
                 let event = build_event(
                     stream_state,
@@ -1428,7 +1421,7 @@ fn build_last_events(
                 origin_uri,
                 is_transactional,
             );
-            vec![(Cow::from(ERR), event)]
+            vec![(ERR, event)]
         }
     }
 }

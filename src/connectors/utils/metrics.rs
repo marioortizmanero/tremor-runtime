@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// FIXME: Properly re-organize `MetricsChannel`, currently copy-pasted from
-// `impl`
-
 use std::sync::atomic::Ordering;
 
-use crate::connectors::impls::metrics::{MetricsChannel, Msg};
+// FIXME: Properly re-organize `MetricsChannel`, this is currently copy-pasted
+// from `impl`.
+// use crate::connectors::impls::metrics::{MetricsChannel, Msg};
 use async_broadcast::Sender;
 use beef::Cow;
 use halfbrown::HashMap;
