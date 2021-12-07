@@ -1325,7 +1325,7 @@ where
 
 /// something that is able to create a connector instance
 #[async_trait::async_trait]
-pub(crate) trait ConnectorBuilder: Sync + Send + std::fmt::Debug {
+pub trait ConnectorBuilder: Sync + Send + std::fmt::Debug {
     /// the type of the connector
     fn connector_type(&self) -> ConnectorType;
 
