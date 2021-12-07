@@ -16,7 +16,7 @@
 
 use crate::connectors::prelude::*;
 use crate::connectors::StreamDone;
-use crate::errors::{ErrorKind, Result};
+use crate::errors::{Kind as ErrorKind, Result};
 use crate::pdk::RResult;
 use crate::ttry;
 use crate::QSIZE;
