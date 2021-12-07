@@ -12,40 +12,54 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// FIXME: uncomment
 pub(crate) mod impls;
 
 /// prelude with commonly needed stuff imported
-// FIXME: this should be reorganized after the pdk is moved to a separate crate
-// (it used to be `pub(crate)`).
+// FIXME: clean up after creation of `tremor-pdk`, this used to be `pub(crate)`.
 pub mod prelude;
 
 /// sink parts
 pub mod sink;
 
 /// source parts
-// FIXME: this should be reorganized after the pdk is moved to a separate crate
-// (it used to be `pub(crate)`).
+// FIXME: clean up after creation of `tremor-pdk`, this used to be `pub(crate)`.
 pub mod source;
-// FIXME: this should be reorganized after the pdk is moved to a separate crate
-// (it used to be `pub(crate)`).
+// FIXME: clean up after creation of `tremor-pdk`, this used to be `pub(crate)`.
 #[macro_use]
 pub mod utils;
 
 use self::metrics::{SinkReporter, SourceReporter};
-use self::sink::{BoxedContraflowSender, BoxedRawSink, Sink, SinkAddr, SinkContext, SinkMsg};
-use self::source::{BoxedRawSource, Source, SourceAddr, SourceContext, SourceMsg};
+use self::sink::{SinkAddr, SinkContext, SinkMsg};
+use self::source::{SourceAddr, SourceContext, SourceMsg};
 use self::utils::quiescence::QuiescenceBeacon;
-use crate::connectors::utils::{
-    quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier,
-};
 use crate::errors::{Error, Kind as ErrorKind, Result};
 use crate::instance::InstanceState;
-use crate::pdk::{self, connectors::ConnectorMod_Ref, RResult};
 use crate::pipeline;
 use crate::system::World;
 use crate::OpConfig;
 use crate::{config::Connector as ConnectorConfig, connectors::utils::metrics::METRICS_CHANNEL};
+use async_std::channel::{bounded, Sender};
+use async_std::task::{self};
+use beef::Cow;
+use halfbrown::HashMap;
+use std::{fmt::Display, sync::atomic::Ordering};
+use tremor_common::ids::ConnectorIdGen;
+use tremor_common::url::{
+    ports::{ERR, IN, OUT},
+    TremorUrl,
+};
+use tremor_value::Value;
+use utils::reconnect::{Attempt, ConnectionLostNotifier, ReconnectRuntime};
+use value_trait::{Builder, Mutable};
+
+use self::sink::{BoxedContraflowSender, BoxedRawSink, Sink};
+use self::source::{BoxedRawSource, Source};
+use crate::connectors::utils::{
+    quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier,
+};
+use crate::pdk::{
+    self, connectors::ConnectorMod_Ref, utils::conv_cow_str, RResult, DEFAULT_PLUGIN_PATH,
+};
 use abi_stable::{
     std_types::{
         RBox, RCow,
@@ -58,34 +72,10 @@ use abi_stable::{
     StableAbi,
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
-use async_std::channel::{bounded, Sender};
-use async_std::task::{self};
-use beef::Cow;
-use halfbrown::HashMap;
 use std::{env, future};
-use std::{fmt::Display, sync::atomic::Ordering};
-use tremor_common::ids::ConnectorIdGen;
-use tremor_common::url::{
-    ports::{ERR, IN, OUT},
-    TremorUrl,
-};
-use tremor_value::Value;
-use utils::reconnect::{Attempt, ConnectionLostNotifier, ReconnectRuntime};
-use value_trait::{Builder, Mutable};
 
 /// quiescence stuff
 pub(crate) use utils::{metrics, quiescence, reconnect};
-
-// FIXME: make prettier or avoid duplication in pdk mod? It's a bit out of place
-// for now.
-fn conv_cow_str(cow: RCow<str>) -> beef::Cow<str> {
-    let cow: std::borrow::Cow<str> = cow.into();
-    cow.into()
-}
-// fn conv_value(value: serde_yaml::Value) -> PdkValue<'static> {
-//     let value: Value = value.into();
-//     value.into()
-// }
 
 /// connector address
 #[derive(Clone, Debug)]
@@ -1136,7 +1126,7 @@ pub type BoxedRawConnector = RawConnector_TO<'static, RBox<()>>;
 ///
 /// Note that it may hurt performance in some parts of the connector interface,
 /// so some of the functionality may not be fully wrapped.
-pub(crate) struct Connector(pub BoxedRawConnector);
+pub struct Connector(pub BoxedRawConnector);
 impl Connector {
     /// Wrapper for [`BoxedRawConnector::input_ports`]
     #[inline]
@@ -1397,10 +1387,8 @@ pub async fn register_builtin_connector_types(world: &World, debug: bool) -> Res
     // After loading all the in-tree connectors, we try to find all the
     // available plugins and we load them dynamically. For now, plugins are
     // loaded from the path defined by `TREMOR_PLUGIN_PATH`.
-    //
-    // FIXME: the `plugins` fallback is only for development, this should have a
-    // proper default value.
-    let plugin_path = env::var("TREMOR_PLUGIN_PATH").unwrap_or_else(|_| String::from("plugins"));
+    let plugin_path =
+        env::var("TREMOR_PLUGIN_PATH").unwrap_or_else(|_| String::from(DEFAULT_PLUGIN_PATH));
     for path in plugin_path.split(':') {
         log::info!("Dynamically loading plugins in directory '{}'", path);
         for plugin in pdk::find_recursively(&path) {
