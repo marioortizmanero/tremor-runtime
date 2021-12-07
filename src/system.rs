@@ -16,7 +16,6 @@ mod deployment;
 
 use crate::connectors;
 use crate::errors::Result;
-use crate::pdk::connectors::ConnectorMod_Ref;
 use crate::QSIZE;
 use async_std::channel::bounded;
 use async_std::task::{self, JoinHandle};
@@ -26,6 +25,8 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tremor_common::ids::{ConnectorIdGen, OperatorIdGen};
 use tremor_script::srs::DeployFlow;
+
+use crate::pdk::connectors::ConnectorMod_Ref;
 
 /// Configuration for the runtime
 pub struct WorldConfig {

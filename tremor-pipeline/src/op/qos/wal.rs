@@ -13,10 +13,6 @@
 // limitations under the License.
 
 use crate::{op::prelude::*, EventId, DEFAULT_STREAM_ID};
-use abi_stable::{
-    rvec,
-    std_types::{ROption::RNone, RString},
-};
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use simd_json_derive::{Deserialize, Serialize};
 use sled::IVec;
@@ -24,6 +20,11 @@ use std::io::Cursor;
 use std::mem;
 use std::ops::{Add, AddAssign};
 use tremor_script::prelude::*;
+
+use abi_stable::{
+    rvec,
+    std_types::{ROption::RNone, RString},
+};
 
 #[derive(Clone, Copy, Default, PartialEq)]
 struct Idx([u8; 8]);

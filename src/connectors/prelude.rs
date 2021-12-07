@@ -14,25 +14,17 @@
 
 pub use crate::connectors::quiescence::QuiescenceBeacon;
 pub use crate::connectors::sink::{
-    AsyncSinkReply, BoxedContraflowSender, BoxedEventSerializer, BoxedRawSink, ChannelSink,
-    ChannelSinkRuntime, ContraflowData, ContraflowSenderOpaque, EventSerializerOpaque,
-    MutEventSerializer, RawSink, SingleStreamSink, SingleStreamSinkRuntime, SinkAck, SinkAddr,
-    SinkContext, SinkMeta, SinkReply, StreamWriter,
+    AsyncSinkReply, ChannelSink, ChannelSinkRuntime, ContraflowData, EventSerializer,
+    SingleStreamSink, SingleStreamSinkRuntime, Sink, SinkAck, SinkAddr, SinkContext,
+    SinkManagerBuilder, SinkMeta, SinkReply, StreamWriter,
 };
 pub use crate::connectors::source::{
-    BoxedRawSource, ChannelSource, ChannelSourceRuntime, RawSource, SourceAddr, SourceContext,
-    SourceReply, SourceReplySender, StreamReader, DEFAULT_POLL_INTERVAL,
+    ChannelSource, ChannelSourceRuntime, SourceAddr, SourceContext, SourceReply, SourceReplySender,
+    StreamReader, DEFAULT_POLL_INTERVAL,
 };
 pub use crate::connectors::utils::reconnect::{Attempt, ConnectionLostNotifier};
-pub use crate::connectors::{
-    BoxedRawConnector, ConnectorContext, ConnectorType, Context, RawConnector, StreamDone,
-    StreamIdGen,
-};
+pub use crate::connectors::{ConnectorContext, ConnectorType, Context, StreamDone, StreamIdGen};
 pub use crate::errors::{Error, ErrorKind, Result};
-pub use crate::pdk::{
-    connectors::{ConnectorMod, ConnectorMod_Ref},
-    RResult,
-};
 pub use crate::utils::hostname;
 pub use crate::{Event, OpConfig, QSIZE};
 pub use std::sync::atomic::Ordering;
@@ -53,3 +45,18 @@ pub(crate) const DEFAULT_BUF_SIZE: usize = 8 * 1024;
 pub(crate) fn default_buf_size() -> usize {
     DEFAULT_BUF_SIZE
 }
+
+// For the PDK
+pub use crate::connectors::sink::{
+    BoxedContraflowSender, BoxedEventSerializer, BoxedRawSink, ContraflowSenderOpaque,
+    EventSerializerOpaque, MutEventSerializer, RawSink,
+};
+pub use crate::connectors::source::{
+    BoxedRawSource, ChannelSource, ChannelSourceRuntime, RawSource, SourceAddr, SourceContext,
+    SourceReply, SourceReplySender, StreamReader, DEFAULT_POLL_INTERVAL,
+};
+pub use crate::connectors::{BoxedRawConnector, RawConnector};
+pub use crate::pdk::{
+    connectors::{ConnectorMod, ConnectorMod_Ref},
+    RResult,
+};

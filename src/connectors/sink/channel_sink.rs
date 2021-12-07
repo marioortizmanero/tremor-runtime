@@ -16,29 +16,31 @@
 
 use crate::connectors::prelude::*;
 use crate::connectors::{Context, StreamDone};
+use crate::QSIZE;
+use async_std::channel::{bounded, Receiver, Sender};
+use async_std::task;
+use bimap::BiMap;
+use either::Either;
+use hashbrown::HashMap;
+use std::hash::Hash;
+use std::marker::PhantomData;
+use std::sync::atomic::Ordering;
+use tremor_common::time::nanotime;
+use tremor_pipeline::{CbAction, Event, SignalKind};
+use tremor_value::Value;
+use value_trait::ValueAccess;
+
 use crate::errors::{ErrorKind, Result};
 use crate::pdk::RResult;
 use crate::ttry;
-use crate::QSIZE;
 use abi_stable::std_types::{
     ROption::{RNone, RSome},
     RResult::ROk,
     RStr,
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
-use async_std::channel::{bounded, Receiver, Sender};
-use async_std::task;
-use bimap::BiMap;
-use either::Either;
-use hashbrown::HashMap;
 use std::future;
-use std::hash::Hash;
-use std::marker::PhantomData;
-use std::sync::atomic::Ordering;
-use tremor_common::time::nanotime;
-use tremor_pipeline::{pdk::PdkEvent, CbAction, Event, SignalKind};
-use tremor_value::Value;
-use value_trait::ValueAccess;
+use tremor_pipeline::pdk::PdkEvent;
 
 /// Behavioral trait for defining if a Channel Sink needs metadata or not
 pub trait SinkMetaBehaviour: Send + Sync {

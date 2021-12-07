@@ -19,7 +19,7 @@
 use std::marker::PhantomData;
 
 use crate::connectors::{ConnectorContext, StreamDone};
-use crate::errors::{ErrorKind, Result};
+use crate::errors::Result;
 use async_std::{
     channel::{bounded, Receiver, Sender},
     task,
@@ -30,6 +30,7 @@ use super::channel_sink::{NoMeta, SinkMeta, SinkMetaBehaviour, WithMeta};
 use super::{AsyncSinkReply, ContraflowData, StreamWriter};
 
 use crate::connectors::prelude::*;
+use crate::errors::ErrorKind;
 use crate::pdk::RResult;
 use crate::ttry;
 use abi_stable::std_types::{

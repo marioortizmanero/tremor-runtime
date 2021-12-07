@@ -19,28 +19,39 @@ use async_std::{channel::unbounded, future::timeout};
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::fmt::Display;
-use std::future;
 use std::time::{Duration, Instant};
 use tremor_common::time::nanotime;
-use tremor_script::{pdk::PdkEventPayload, EventPayload, ValueAndMeta};
+use tremor_script::{EventPayload, ValueAndMeta};
 
 use crate::config::{
     self, Codec as CodecConfig, Connector as ConnectorConfig, Preprocessor as PreprocessorConfig,
-};
-use crate::connectors::utils::{
-    quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier,
 };
 use crate::connectors::{
     metrics::SourceReporter, utils::reconnect::Attempt, ConnectorType, Context, Msg, StreamDone,
 };
 use crate::errors::{Error, Result};
-use crate::pdk::{RError, RResult};
 use crate::pipeline;
 use crate::preprocessor::{finish, make_preprocessors, preprocess, Preprocessors};
 use crate::{
     codec::{self, Codec},
     pipeline::InputTarget,
 };
+use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
+use beef::Cow;
+use tremor_common::url::{
+    ports::{ERR, OUT},
+    TremorUrl,
+};
+use tremor_pipeline::{
+    CbAction, Event, EventId, EventIdGenerator, EventOriginUri, DEFAULT_STREAM_ID,
+};
+use tremor_value::{literal, Value};
+use value_trait::Builder;
+
+use crate::connectors::utils::{
+    quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier,
+};
+use crate::pdk::{RError, RResult};
 use abi_stable::{
     rvec,
     std_types::{
@@ -51,17 +62,9 @@ use abi_stable::{
     StableAbi,
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
-use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
-use beef::Cow;
-use tremor_common::url::{
-    ports::{ERR, OUT},
-    TremorUrl,
-};
-use tremor_pipeline::{
-    CbAction, Event, EventId, EventIdGenerator, EventOriginUri, DEFAULT_STREAM_ID,
-};
-use tremor_value::{literal, pdk::PdkValue, Value};
-use value_trait::Builder;
+use std::future;
+use tremor_script::pdk::PdkEventPayload;
+use tremor_value::pdk::PdkValue;
 
 /// The default poll interval for `try_recv` on channels in connectors
 pub const DEFAULT_POLL_INTERVAL: u64 = 10;
