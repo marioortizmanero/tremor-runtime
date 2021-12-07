@@ -1405,6 +1405,7 @@ pub fn builtin_connector_types() -> Vec<ConnectorMod_Ref> {
         Box::new(impls::kafka::consumer::Builder::default()),
         */
         impls::file::instantiate_root_module(),
+        impls::metrics::instantiate_root_module(),
         impls::tcp::server::instantiate_root_module(),
     ]
 }
