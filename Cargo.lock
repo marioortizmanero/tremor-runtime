@@ -5,7 +5,7 @@ version = 3
 [[package]]
 name = "abi_stable"
 version = "0.10.3"
-source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=rvec-append#1be21ac496ea634ce6815ce5a117cea13c1f448f"
+source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=rvec-append#1946b2b79b4074882a6812f1c0dd28b66eeffdcf"
 dependencies = [
  "abi_stable_derive",
  "abi_stable_shared",
@@ -26,7 +26,7 @@ dependencies = [
 [[package]]
 name = "abi_stable_derive"
 version = "0.10.3"
-source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=rvec-append#1be21ac496ea634ce6815ce5a117cea13c1f448f"
+source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=rvec-append#1946b2b79b4074882a6812f1c0dd28b66eeffdcf"
 dependencies = [
  "abi_stable_shared",
  "as_derive_utils",
@@ -41,7 +41,7 @@ dependencies = [
 [[package]]
 name = "abi_stable_shared"
 version = "0.10.3"
-source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=rvec-append#1be21ac496ea634ce6815ce5a117cea13c1f448f"
+source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=rvec-append#1946b2b79b4074882a6812f1c0dd28b66eeffdcf"
 dependencies = [
  "core_extensions",
 ]
@@ -229,7 +229,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "as_derive_utils"
 version = "0.10.3"
-source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=rvec-append#1be21ac496ea634ce6815ce5a117cea13c1f448f"
+source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=rvec-append#1946b2b79b4074882a6812f1c0dd28b66eeffdcf"
 dependencies = [
  "core_extensions",
  "proc-macro2",
