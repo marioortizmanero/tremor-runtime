@@ -14,16 +14,8 @@
 
 use crate::config::{BindingVec, Config, MappingMap};
 use crate::connectors::utils::metrics::METRICS_CHANNEL;
-use crate::errors::{Error, ErrorKind, Result};
-use crate::pdk::connectors::ConnectorMod_Ref;
-use crate::registry::Registries;
-use crate::repository::{
-    Artefact, BindingArtefact, ConnectorArtefact, PipelineArtefact, Repositories,
-};
-
 use crate::connectors::{self, ConnectorBuilder};
 use crate::errors::{Error, Kind as ErrorKind, Result};
-use crate::pdk::connectors::ConnectorMod_Ref;
 use crate::QSIZE;
 use async_std::channel::{bounded, Sender};
 use async_std::prelude::*;
@@ -34,6 +26,8 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tremor_common::ids::{ConnectorIdGen, OperatorIdGen};
 use tremor_script::{highlighter::Highlighter, srs::DeployFlow};
+
+use crate::pdk::connectors::ConnectorMod_Ref;
 
 /// Configuration for the runtime
 pub struct WorldConfig {

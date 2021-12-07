@@ -29,11 +29,12 @@ pub type Object<'value> = RHashMap<RCow<'value, str>, PdkValue<'value>>;
 /// Bytes
 pub type Bytes<'value> = RCow<'value, [u8]>;
 
-/// There are no direct conversions between `beef::Cow` and `RCow`, so the type
-/// has to be converted to std as the intermediate. These conversions are cheap
-/// and they shouldn't be a performance issue.
-///
-/// FIXME: move to `tremor-pdk` once it's ready to avoid code duplication.
+// There are no direct conversions between `beef::Cow` and `RCow`, so the type
+// has to be converted to std as the intermediate. These conversions are cheap
+// and they shouldn't be a performance issue.
+//
+// FIXME: clean up after creation of `tremor-pdk`, this is repeated in other
+// crates.
 fn conv_str(cow: beef::Cow<str>) -> RCow<str> {
     let cow: std::borrow::Cow<str> = cow.into();
     cow.into()

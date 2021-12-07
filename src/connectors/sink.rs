@@ -27,23 +27,10 @@ use crate::codec::{self, Codec};
 use crate::config::{
     Codec as CodecConfig, Connector as ConnectorConfig, Postprocessor as PostprocessorConfig,
 };
-use crate::connectors::utils::reconnect::Attempt;
-use crate::connectors::utils::{
-    quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier,
-};
-use crate::connectors::{ConnectorType, Context, Msg, StreamDone};
-use crate::errors::{Error, Result};
-use crate::pdk::{RError, RResult};
 use crate::permge::PriorityMerge;
 use crate::pipeline;
 use crate::postprocessor::{make_postprocessors, postprocess, Postprocessors};
 use abi_stable::std_types::RString;
-use abi_stable::{
-    rvec,
-    std_types::{RBox, RResult::ROk, RStr, RVec, SendRBoxError},
-    type_level::downcasting::TD_Opaque,
-    RMut, StableAbi,
-};
 use async_ffi::{BorrowingFfiFuture, FutureExt};
 use async_std::channel::{bounded, unbounded, Receiver, Sender};
 use async_std::stream::StreamExt; // for .next() on PriorityMerge
@@ -55,16 +42,36 @@ use std::borrow::Borrow;
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Display;
-use std::future;
 use tremor_common::time::nanotime;
 use tremor_common::url::{ports::IN, TremorUrl};
 use tremor_pipeline::{
     pdk::PdkEvent, pdk::PdkOpMeta, CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID,
 };
+use tremor_pipeline::{CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID};
 use tremor_script::ast::DeployEndpoint;
+use tremor_script::EventPayload;
 use tremor_script::{pdk::PdkEventPayload, EventPayload};
 
-use tremor_value::{pdk::PdkValue, Value};
+use tremor_value::Value;
+
+use crate::connectors::utils::reconnect::Attempt;
+use crate::connectors::utils::{
+    quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier,
+};
+use crate::connectors::{ConnectorType, Context, Msg, StreamDone};
+use crate::errors::{Error, Result};
+use crate::pdk::{RError, RResult};
+use abi_stable::{
+    rvec,
+    std_types::{RBox, RResult::ROk, RStr, RVec, SendRBoxError},
+    type_level::downcasting::TD_Opaque,
+    RMut, StableAbi,
+};
+use async_ffi::{BorrowingFfiFuture, FutureExt};
+use std::future;
+use tremor_pipeline::{pdk::PdkEvent, pdk::PdkOpMeta};
+use tremor_script::pdk::PdkEventPayload;
+use tremor_value::pdk::PdkValue;
 
 pub use self::channel_sink::SinkMeta;
 
@@ -276,7 +283,7 @@ pub trait RawSink: Send {
 ///
 /// Just like `Connector`, this wraps the FFI dynamic sink with `abi_stable`
 /// types so that it's easier to use with `std`.
-pub(crate) struct Sink(pub BoxedRawSink);
+pub struct Sink(pub BoxedRawSink);
 impl Sink {
     /// Wrapper for [`BoxedRawSink::on_event`]
     #[inline]
@@ -500,7 +507,7 @@ impl SinkAddr {
 }
 
 /// Builder for the sink manager
-pub(crate) struct SinkManagerBuilder {
+pub struct SinkManagerBuilder {
     qsize: usize,
     serializer: EventSerializer,
     reply_channel: (Sender<AsyncSinkReply>, Receiver<AsyncSinkReply>),
@@ -556,7 +563,7 @@ pub type BoxedContraflowSender = ContraflowSenderOpaque_TO<'static, RBox<()>>;
 /// create a builder for a `SinkManager`.
 /// with the generic information available in the connector
 /// the builder then in a second step takes the source specific information to assemble and spawn the actual `SinkManager`.
-pub(crate) fn builder(
+pub fn builder(
     config: &ConnectorConfig,
     connector_default_codec: &str,
     qsize: usize,
