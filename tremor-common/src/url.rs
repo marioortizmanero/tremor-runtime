@@ -13,6 +13,9 @@
 // limitations under the License.
 
 use crate::errors::{Error, Result};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt;
+
 use abi_stable::{
     std_types::{
         ROption::{self, RNone, RSome},
@@ -20,8 +23,6 @@ use abi_stable::{
     },
     StableAbi,
 };
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fmt;
 
 /// The type or resource the url references
 #[repr(C)]

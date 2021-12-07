@@ -17,14 +17,15 @@ pub(crate) mod server;
 // pub(crate) mod simple_server;
 
 use crate::connectors::prelude::*;
-use abi_stable::std_types::{
-    ROption::{RNone, RSome},
-    RVec,
-};
 use async_std::net::TcpStream;
 use futures::{
     io::{ReadHalf, WriteHalf},
     AsyncReadExt, AsyncWriteExt,
+};
+
+use abi_stable::std_types::{
+    ROption::{RNone, RSome},
+    RVec,
 };
 
 struct TcpReader<S>
