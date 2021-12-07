@@ -56,8 +56,8 @@ fn connector_type() -> ConnectorType {
 }
 #[sabi_extern_fn]
 pub fn from_config(
-    id: TremorUrl,
-    raw_config: ROption<PdkValue<'static>>,
+    _alias: RString,
+    _raw_config: ROption<PdkValue<'static>>,
 ) -> FfiFuture<RResult<BoxedRawConnector>> {
     let connector = BoxedRawConnector::from_value(MetricsConnector::new(), TD_Opaque);
     future::ready(ROk(connector)).into_ffi()
@@ -140,8 +140,8 @@ impl RawConnector for MetricsConnector {
 
     fn create_source(
         &mut self,
-        ctx: SourceContext,
-        qsize: usize,
+        _ctx: SourceContext,
+        _qsize: usize,
     ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSource>>> {
         let source = MetricsSource::new(self.rx.clone());
         // We don't need to be able to downcast the connector back to the original
@@ -152,7 +152,7 @@ impl RawConnector for MetricsConnector {
 
     fn create_sink(
         &mut self,
-        sink_context: SinkContext,
+        _ctx: SinkContext,
         _qsize: usize,
         _reply_tx: BoxedContraflowSender,
     ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSink>>> {
@@ -190,7 +190,7 @@ impl MetricsSource {
 impl RawSource for MetricsSource {
     fn pull_data<'a>(
         &'a mut self,
-        _pull_id: u64,
+        _pull_id: &'a mut u64,
         _ctx: &'a SourceContext,
     ) -> BorrowingFfiFuture<'a, RResult<SourceReply>> {
         let reply = match self.rx.try_recv() {
@@ -257,11 +257,11 @@ impl RawSink for MetricsSink {
     /// entrypoint for custom metrics events
     fn on_event<'a>(
         &'a mut self,
-        input: RStr<'a>,
+        _input: RStr<'a>,
         event: PdkEvent,
-        ctx: &'a SinkContext,
-        serializer: &'a mut MutEventSerializer,
-        start: u64,
+        _ctx: &'a SinkContext,
+        _serializer: &'a mut MutEventSerializer,
+        _start: u64,
     ) -> BorrowingFfiFuture<'a, RResult<SinkReply>> {
         // Conversion to use the full functionality of `Event`
         let event = Event::from(event);

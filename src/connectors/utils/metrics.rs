@@ -126,7 +126,7 @@ impl SinkReporter {
                     self.metrics_in,
                     &self.alias,
                 );
-                send(&self.tx, payload, &self.artefact_url);
+                send(&self.tx, payload, &self.alias);
                 self.last_flush_ns = timestamp;
                 return Some(timestamp);
             }

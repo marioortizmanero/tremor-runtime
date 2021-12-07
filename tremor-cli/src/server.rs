@@ -132,12 +132,7 @@ pub(crate) async fn run_dun(matches: &ArgMatches) -> Result<i32> {
         .ok_or_else(|| Error::from("invalid recursion limit"))?;
     tremor_script::RECURSION_LIMIT.store(l, Ordering::Relaxed);
 
-    let storage_directory = matches
-        .value_of("storage-directory")
-        .map(std::string::ToString::to_string);
-    // TODO: Allow configuring this for offramps and pipelines
     let config = WorldConfig {
-        storage_directory,
         debug_connectors: matches.is_present("debug-connectors"),
         ..WorldConfig::default()
     };

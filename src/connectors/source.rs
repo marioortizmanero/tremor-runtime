@@ -43,7 +43,7 @@ use crate::{
     codec::{self, Codec},
     pipeline::InputTarget,
 };
-use async_std::channel::{bounded, Receiver, Sender};
+use async_std::channel::{unbounded, Receiver, Sender};
 use beef::Cow;
 use tremor_common::url::ports::{ERR, OUT};
 use tremor_pipeline::{
@@ -58,11 +58,7 @@ use crate::connectors::utils::{
 use crate::pdk::RResult;
 use abi_stable::{
     rvec,
-    std_types::{
-        RBox, RCow, ROption,
-        RResult::{RErr, ROk},
-        RVec, Tuple2,
-    },
+    std_types::{RBox, RCow, ROption, RResult::ROk, RVec, Tuple2},
     StableAbi,
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
@@ -210,11 +206,11 @@ pub trait RawSource: Send {
     /// The intended result of this function is to re-establish a connection. It might reuse a working connection.
     ///
     /// Return `Ok(true)` if the connection could be successfully established.
-    fn connect(
-        &mut self,
-        _ctx: &SourceContext,
-        _attempt: &Attempt,
-    ) -> BorrowingFfiFuture<'_, RResult<bool>> {
+    fn connect<'a>(
+        &'a mut self,
+        _ctx: &'a SourceContext,
+        _attempt: &'a Attempt,
+    ) -> BorrowingFfiFuture<'a, RResult<bool>> {
         future::ready(ROk(true)).into_ffi()
     }
 
@@ -250,12 +246,22 @@ pub trait RawSource: Send {
     // guaranteed delivery callbacks
     /// an event has been acknowledged and can be considered delivered
     /// multiple acks for the same set of ids are always possible
-    fn ack(&mut self, _stream_id: u64, _pull_id: u64) -> BorrowingFfiFuture<'_, RResult<()>> {
+    fn ack(
+        &mut self,
+        _stream_id: u64,
+        _pull_id: u64,
+        _ctx: &SourceContext,
+    ) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
     /// an event has failed along its way and can be considered failed
     /// multiple fails for the same set of ids are always possible
-    fn fail(&mut self, _stream_id: u64, _pull_id: u64) -> BorrowingFfiFuture<'_, RResult<()>> {
+    fn fail(
+        &mut self,
+        _stream_id: u64,
+        _pull_id: u64,
+        _ctx: &SourceContext,
+    ) -> BorrowingFfiFuture<'_, RResult<()>> {
         future::ready(ROk(())).into_ffi()
     }
 
@@ -327,7 +333,7 @@ impl Source {
     }
 
     #[inline]
-    pub async fn on_start(&mut self, ctx: &mut SourceContext) -> Result<()> {
+    pub async fn on_start(&mut self, ctx: &SourceContext) -> Result<()> {
         self.0.on_start(ctx).await.map_err(Into::into).into()
     }
 
@@ -342,48 +348,69 @@ impl Source {
 
     /// Wrapper for [`BoxedRawSource::on_pause`]
     #[inline]
-    pub async fn on_pause(&mut self, ctx: &mut SourceContext) {
-        self.0.on_pause(ctx)
+    pub async fn on_pause(&mut self, ctx: &SourceContext) -> Result<()> {
+        self.0.on_pause(ctx).await.map_err(Into::into).into()
     }
     #[inline]
-    pub async fn on_resume(&mut self, ctx: &mut SourceContext) {
-        self.0.on_resume(ctx)
+    pub async fn on_resume(&mut self, ctx: &SourceContext) -> Result<()> {
+        self.0.on_resume(ctx).await.map_err(Into::into).into()
     }
     #[inline]
-    pub async fn on_stop(&mut self, ctx: &mut SourceContext) {
-        self.0.on_stop(ctx)
-    }
-
-    #[inline]
-    pub async fn on_cb_close(&mut self, ctx: &mut SourceContext) {
-        self.0.on_cb_close(ctx)
-    }
-    #[inline]
-    pub async fn on_cb_open(&mut self, ctx: &mut SourceContext) {
-        self.0.on_cb_open(ctx)
+    pub async fn on_stop(&mut self, ctx: &SourceContext) -> Result<()> {
+        self.0.on_stop(ctx).await.map_err(Into::into).into()
     }
 
     #[inline]
-    pub async fn ack(&mut self, stream_id: u64, pull_id: u64) {
-        self.0.ack(stream_id, pull_id)
+    pub async fn on_cb_close(&mut self, ctx: &SourceContext) -> Result<()> {
+        self.0.on_cb_close(ctx).await.map_err(Into::into).into()
     }
     #[inline]
-    pub async fn fail(&mut self, stream_id: u64, pull_id: u64) {
-        self.0.fail(stream_id, pull_id)
+    pub async fn on_cb_open(&mut self, ctx: &SourceContext) -> Result<()> {
+        self.0.on_cb_open(ctx).await.map_err(Into::into).into()
     }
 
     #[inline]
-    pub async fn on_connection_lost(&mut self, ctx: &mut SourceContext) {
-        self.0.on_connection_lost(ctx)
+    pub async fn ack(&mut self, stream_id: u64, pull_id: u64, ctx: &SourceContext) -> Result<()> {
+        self.0
+            .ack(stream_id, pull_id, ctx)
+            .await
+            .map_err(Into::into)
+            .into()
     }
     #[inline]
-    pub async fn on_connection_established(&mut self, ctx: &mut SourceContext) {
-        self.0.on_connection_established(ctx)
+    pub async fn fail(&mut self, stream_id: u64, pull_id: u64, ctx: &SourceContext) -> Result<()> {
+        self.0
+            .fail(stream_id, pull_id, ctx)
+            .await
+            .map_err(Into::into)
+            .into()
+    }
+
+    #[inline]
+    pub async fn on_connection_lost(&mut self, ctx: &SourceContext) -> Result<()> {
+        self.0
+            .on_connection_lost(ctx)
+            .await
+            .map_err(Into::into)
+            .into()
+    }
+    #[inline]
+    pub async fn on_connection_established(&mut self, ctx: &SourceContext) -> Result<()> {
+        self.0
+            .on_connection_established(ctx)
+            .await
+            .map_err(Into::into)
+            .into()
     }
 
     #[inline]
     pub fn is_transactional(&self) -> bool {
         self.0.is_transactional()
+    }
+
+    #[inline]
+    pub fn asynchronous(&self) -> bool {
+        self.0.asynchronous()
     }
 }
 
@@ -420,13 +447,13 @@ pub struct SourceContext {
 
 impl Display for SourceContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[Source::{}]", &self.url)
+        write!(f, "[Source::{}]", &self.alias)
     }
 }
 
 impl Context for SourceContext {
     fn alias(&self) -> &str {
-        self.alias
+        &self.alias
     }
 
     fn quiescence_beacon(&self) -> &BoxedQuiescenceBeacon {
@@ -474,9 +501,29 @@ impl SourceManagerBuilder {
     }
 
     pub fn spawn(self, source: Source, ctx: SourceContext) -> Result<SourceAddr> {
-        let qsize = self.qsize;
-        let name = ctx.url.short_id("c-src"); // connector source
-        let (source_tx, source_rx) = bounded(qsize);
+        // We use a unbounded channel for counterflow, while an unbounded channel seems dangerous
+        // there is soundness to this.
+        // The unbounded channel ensures that on counterflow we never have to block, or in other
+        // words that sinks or pipelines sending data backwards always can progress past
+        // the sending.
+        // This prevents a deadlock where the pipeline is waiting for a full channel to send data to
+        // the source and the source is waiting for a full channel to send data to the pipeline.
+        // We prevent unbounded growth by two mechanisms:
+        // 1) counterflow is ALWAYS and ONLY created in response to a message
+        // 2) we always process counterflow prior to forward flow
+        //
+        // As long as we have counterflow messages to process, and channel size is growing we do
+        // not process any forward flow. Without forward flow we stave the counterflow ensuring that
+        // the counterflow channel is always bounded by the forward flow in a 1:N relationship where
+        // N is the maximum number of counterflow events a single event can trigger.
+        // N is normally < 1.
+        //
+        // In other words, DO NOT REMOVE THE UNBOUNDED QUEUE, it will lead to deadlocks where
+        // the pipeline is waiting for the source to process contraflow and the source waits for
+        // the pipeline to process forward flow.
+
+        let name = format!("{}-src", ctx.alias()); // connector source
+        let (source_tx, source_rx) = unbounded();
         let source_addr = SourceAddr { addr: source_tx };
         let manager = SourceManager::new(source, ctx, self, source_rx, source_addr.clone());
         // spawn manager task
@@ -604,12 +651,6 @@ enum SourceState {
     Draining,
     Drained,
     Stopped,
-}
-
-impl SourceState {
-    fn should_pull_data(&self) -> bool {
-        *self == SourceState::Running || *self == SourceState::Draining
-    }
 }
 
 // FIXME: make prettier or avoid duplication in pdk mod? It's a bit out of place
@@ -872,9 +913,9 @@ impl SourceManager {
                 Ok(Control::Continue)
             }
             SourceMsg::Cb(CbAction::Fail, id) => {
-                if let Some((stream_id, id)) = id.get_min_by_source(self.ctx.uid) {
+                if let Some((stream_id, pull_id)) = id.get_min_by_source(self.ctx.uid) {
                     self.ctx.log_err(
-                        self.source.fail(stream_id, id, &self.ctx).await,
+                        self.source.fail(stream_id, pull_id, &self.ctx).await,
                         "fail failed",
                     );
                 }
@@ -1073,14 +1114,16 @@ impl SourceManager {
             } => {
                 let mut ingest_ns = nanotime();
                 let stream_state = self.streams.get_or_create_stream(stream, &self.ctx)?; // we fail if we cannot create a stream (due to misconfigured codec, preprocessors, ...) (should not happen)
+                let port: Option<Cow<'static, str>> = port.map(conv_cow_str).into();
+                let meta: Option<Value> = meta.map(Value::from).into();
                 let results = build_events(
                     &self.ctx.alias,
                     stream_state,
                     &mut ingest_ns,
-                    self.pull_counter,
+                    pull_id,
                     origin_uri.into(),
                     port.as_ref(),
-                    data,
+                    data.into(),
                     &meta.unwrap_or_else(Value::object),
                     self.is_transactional,
                 );
@@ -1109,19 +1152,21 @@ impl SourceManager {
             } => {
                 let mut ingest_ns = nanotime();
                 let stream_state = self.streams.get_or_create_stream(stream, &self.ctx)?; // we only error here due to misconfigured codec etc
-                let connector_url = &self.ctx.alias;
+                let alias = &self.ctx.alias;
+                let port: Option<Cow<'static, str>> = port.map(conv_cow_str).into();
 
                 let mut results = Vec::with_capacity(batch_data.len()); // assuming 1:1 mapping
-                for (data, meta) in batch_data {
+                for Tuple2(data, meta) in batch_data {
+                    let meta: Value<'static> = meta.map(Value::from).unwrap_or_else(Value::object);
                     let mut events = build_events(
-                        connector_url,
+                        alias,
                         stream_state,
                         &mut ingest_ns,
-                        self.pull_counter,
+                        pull_id,
                         origin_uri.clone().into(), // TODO: use split_last on batch_data to avoid last clone
                         port.as_ref(),
-                        data,
-                        &meta.unwrap_or_else(Value::object),
+                        data.into(),
+                        &meta,
                         self.is_transactional,
                     );
                     results.append(&mut events);
@@ -1153,10 +1198,10 @@ impl SourceManager {
                 let stream_state = self.streams.get_or_create_stream(stream, &self.ctx)?;
                 let event = build_event(
                     stream_state,
-                    self.pull_counter,
+                    pull_id,
                     ingest_ns,
-                    payload,
-                    origin_uri,
+                    EventPayload::from(payload),
+                    origin_uri.into(),
                     self.is_transactional,
                 );
 
@@ -1175,14 +1220,14 @@ impl SourceManager {
                 meta,
                 stream: stream_id,
             } => {
-                debug!("[Source::{}] Ending stream {}", &self.ctx.alias, stream_id);
+                debug!("{} Ending stream {}", &self.ctx, stream_id);
                 let mut ingest_ns = nanotime();
                 if let Some(mut stream_state) = self.streams.end_stream(stream_id) {
                     let results = build_last_events(
                         &self.ctx.alias,
                         &mut stream_state,
                         &mut ingest_ns,
-                        self.pull_counter,
+                        pull_id,
                         origin_uri.into(),
                         None,
                         &meta.map(Into::into).unwrap_or_else(Value::object),
@@ -1194,10 +1239,7 @@ impl SourceManager {
                             .on_no_events(pull_id, stream_id, &self.ctx)
                             .await
                         {
-                            error!(
-                                "[Source::{}] Error on no events callback: {}",
-                                &self.ctx.alias, e
-                            );
+                            error!("{} Error on no events callback: {}", &self.ctx, e);
                         }
                     } else {
                         let error = self.route_events(results).await;
@@ -1336,7 +1378,7 @@ fn build_events(
                 let (port, payload) = match line_value {
                     Ok(decoded) => (port.unwrap_or(&OUT).clone(), decoded),
                     Err(None) => continue,
-                    Err(Some(e)) => (ERR, make_error(url, &e, stream_state.stream_id, pull_id)),
+                    Err(Some(e)) => (ERR, make_error(alias, &e, stream_state.stream_id, pull_id)),
                 };
                 let event = build_event(
                     stream_state,
@@ -1396,7 +1438,7 @@ fn build_last_events(
                 let (port, payload) = match line_value {
                     Ok(decoded) => (port.unwrap_or(&OUT).clone(), decoded),
                     Err(None) => continue,
-                    Err(Some(e)) => (ERR, make_error(url, &e, stream_state.stream_id, pull_id)),
+                    Err(Some(e)) => (ERR, make_error(alias, &e, stream_state.stream_id, pull_id)),
                 };
                 let event = build_event(
                     stream_state,

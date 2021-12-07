@@ -431,7 +431,6 @@ fn run_troy_source(_matches: &ArgMatches, file_name: &str) -> Result<()> {
 
     block_on(async {
         let config = WorldConfig {
-            storage_directory: None,
             debug_connectors: true,
             ..WorldConfig::default()
         };
