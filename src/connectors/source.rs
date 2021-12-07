@@ -489,7 +489,7 @@ impl SourceManagerBuilder {
 /// create a builder for a `SourceManager`.
 /// with the generic information available in the connector
 /// the builder then in a second step takes the source specific information to assemble and spawn the actual `SourceManager`.
-pub(crate) fn builder(
+pub fn builder(
     connector_uid: u64,
     config: &ConnectorConfig,
     connector_default_codec: &str,
