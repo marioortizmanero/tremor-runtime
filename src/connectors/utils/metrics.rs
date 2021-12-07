@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// FIXME: Properly re-organize `MetricsChannel`, currently copy-pasted from
-// `impl`
-
 use std::sync::atomic::Ordering;
 
-use crate::connectors::impls::metrics::{MetricsChannel, Msg};
+// FIXME: Properly re-organize `MetricsChannel`, this is currently copy-pasted
+// from `impl`.
+// use crate::connectors::impls::metrics::{MetricsChannel, Msg};
 use async_broadcast::Sender;
 use beef::Cow;
 use halfbrown::HashMap;
@@ -112,18 +111,10 @@ impl SourceReporter {
     pub(crate) fn periodic_flush(&mut self, timestamp: u64) -> Option<u64> {
         if let Some(interval) = self.flush_interval_ns {
             if timestamp >= self.last_flush_ns + interval {
-                let payload_out = make_metrics_payload(
-                    timestamp,
-                    Cow::from(OUT),
-                    self.metrics_out,
-                    &self.artefact_url,
-                );
-                let payload_err = make_metrics_payload(
-                    timestamp,
-                    Cow::from(ERR),
-                    self.metrics_err,
-                    &self.artefact_url,
-                );
+                let payload_out =
+                    make_metrics_payload(timestamp, OUT, self.metrics_out, &self.artefact_url);
+                let payload_err =
+                    make_metrics_payload(timestamp, ERR, self.metrics_err, &self.artefact_url);
                 send(&self.tx, payload_out, &self.artefact_url);
                 send(&self.tx, payload_err, &self.artefact_url);
                 self.last_flush_ns = timestamp;
@@ -168,12 +159,8 @@ impl SinkReporter {
     pub(crate) fn periodic_flush(&mut self, timestamp: u64) -> Option<u64> {
         if let Some(interval) = self.flush_interval_ns {
             if timestamp >= self.last_flush_ns + interval {
-                let payload = make_metrics_payload(
-                    timestamp,
-                    Cow::from(IN),
-                    self.metrics_in,
-                    &self.artefact_url,
-                );
+                let payload =
+                    make_metrics_payload(timestamp, IN, self.metrics_in, &self.artefact_url);
                 send(&self.tx, payload, &self.artefact_url);
                 self.last_flush_ns = timestamp;
                 return Some(timestamp);

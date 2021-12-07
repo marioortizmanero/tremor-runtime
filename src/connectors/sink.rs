@@ -262,7 +262,7 @@ pub trait RawSink: Send {
 ///
 /// Just like `Connector`, this wraps the FFI dynamic sink with `abi_stable`
 /// types so that it's easier to use with `std`.
-pub(crate) struct Sink(pub BoxedRawSink);
+pub struct Sink(pub BoxedRawSink);
 impl Sink {
     /// Wrapper for [`BoxedRawSink::on_event`]
     #[inline]
@@ -507,7 +507,7 @@ impl SinkAddr {
 }
 
 /// Builder for the sink manager
-pub(crate) struct SinkManagerBuilder {
+pub struct SinkManagerBuilder {
     qsize: usize,
     serializer: EventSerializer,
     reply_channel: (Sender<AsyncSinkReply>, Receiver<AsyncSinkReply>),

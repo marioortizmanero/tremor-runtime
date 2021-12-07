@@ -52,17 +52,19 @@ pub enum Scope {
 
 /// module for standard port names
 pub mod ports {
+    use beef::Cow;
+
     /// standard input port
-    pub const IN: &str = "in";
+    pub const IN: Cow<'static, str> = Cow::const_str("in");
 
     /// standard output port
-    pub const OUT: &str = "out";
+    pub const OUT: Cow<'static, str> = Cow::const_str("out");
 
     /// standard err port
-    pub const ERR: &str = "err";
+    pub const ERR: Cow<'static, str> = Cow::const_str("err");
 
     /// standard metrics port
-    pub const METRICS: &str = "metrics";
+    pub const METRICS: Cow<'static, str> = Cow::const_str("metrics");
 }
 
 /// A tremor URL identifying an entity in tremor
