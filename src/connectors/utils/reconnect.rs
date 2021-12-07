@@ -18,21 +18,18 @@ use crate::connectors::sink::SinkMsg;
 use crate::connectors::source::SourceMsg;
 use crate::connectors::{Addr, Connectivity, Connector, ConnectorContext, Context, Msg};
 use crate::errors::{Error, Result};
-use crate::pdk::RResult;
-use abi_stable::{
-    std_types::{RBox, SendRBoxError},
-    type_level::downcasting::TD_Opaque,
-    StableAbi,
-};
-use async_ffi::{BorrowingFfiFuture, FutureExt as AsyncFfiFutureExt};
 use async_std::channel::{bounded, Sender};
-use async_std::task;
+use async_std::task::{self, JoinHandle};
 use futures::future::{join3, ready, FutureExt};
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use std::convert::identity;
 use std::fmt::Display;
 use std::time::Duration;
+
+use crate::pdk::{RError, RResult};
+use abi_stable::{std_types::RBox, StableAbi};
+use async_ffi::{BorrowingFfiFuture, FutureExt as AsyncFfiFutureExt};
 
 #[derive(Debug, PartialEq, Clone)]
 enum ShouldRetry {
@@ -141,7 +138,7 @@ impl ReconnectStrategy for RetryWithBackoff {
 
 /// describing the number of previous connection attempts
 #[repr(C)]
-#[derive(Debug, Default, PartialEq, Eq, StableAbi)]
+#[derive(Debug, Default, PartialEq, Eq, StableAbi, Clone)]
 pub struct Attempt {
     overall: u64,
     success: u64,
@@ -199,7 +196,7 @@ pub(crate) struct ReconnectRuntime {
     interval_ms: Option<u64>,
     strategy: Box<dyn ReconnectStrategy>,
     addr: Addr,
-    notifier: ConnectionLostNotifier,
+    notifier: BoxedConnectionLostNotifier,
     retry_task: Option<JoinHandle<()>>,
     alias: String,
 }
@@ -212,8 +209,9 @@ pub(crate) struct ReconnectRuntime {
 pub struct ConnectionLostNotifier(Sender<Msg>);
 
 impl ConnectionLostNotifier {
-    pub(crate) fn new(sender: Sender<Msg>) -> Self {
-        Self(sender)
+    /// constructor
+    pub fn new(tx: Sender<Msg>) -> Self {
+        Self(tx)
     }
 }
 
@@ -235,14 +233,14 @@ impl ConnectionLostNotifierOpaque for ConnectionLostNotifier {
                 .map_err(|e| {
                     // First converting to our own error type, and then to abi_stable's
                     let e: crate::errors::Error = e.into();
-                    SendRBoxError::new(e)
+                    RError::new(e)
                 })
                 .into()
         }
         .into_ffi()
     }
 }
-/// Alias for the type used in FFI
+/// Alias for the FFI-safe notifier, boxed
 pub type BoxedConnectionLostNotifier = ConnectionLostNotifierOpaque_TO<'static, RBox<()>>;
 
 impl ReconnectRuntime {
@@ -287,12 +285,8 @@ impl ReconnectRuntime {
             interval_ms: None,
             strategy,
             addr,
-<<<<<<< HEAD
             notifier,
             retry_task: None,
-=======
-            notifier: BoxedConnectionLostNotifier::from_value(notifier, TD_Opaque),
->>>>>>> 31427fed (Rebase to new connectors interface with troy)
             alias,
         }
     }
@@ -413,12 +407,21 @@ impl ReconnectRuntime {
 mod tests {
     // use crate::connectors::quiescence::QuiescenceBeacon;
 
-    use crate::connectors::{quiescence::QuiescenceBeacon, RawConnector, CodeReq};
-    use crate::errors::Error;
-    use crate::pdk::{RError, RResult};
-    use abi_stable::{rstr, std_types::RStr};
+    use crate::connectors::{quiescence::QuiescenceBeacon, CodecReq};
 
     use super::*;
+
+    use crate::{
+        connectors::{prelude::*, quiescence::BoxedQuiescenceBeacon},
+        errors::Error,
+        pdk::{RError, RResult},
+    };
+    use abi_stable::{
+        rstr,
+        std_types::{RStr, RString},
+        type_level::downcasting::TD_Opaque,
+    };
+    use async_std::future;
 
     /// does not connect
     struct FakeConnector {
@@ -430,9 +433,12 @@ mod tests {
             _ctx: &'a ConnectorContext,
             _attempt: &'a Attempt,
         ) -> BorrowingFfiFuture<'a, RResult<bool>> {
-            self.answer
-                .ok_or(RError::new(Error::from("Blergh!")))
-                .into()
+            future::ready(
+                self.answer
+                    .ok_or(RError::new(Error::from("Blergh!")))
+                    .into(),
+            )
+            .into_ffi()
         }
 
         fn codec_requirements(&self) -> CodecReq {
@@ -488,6 +494,7 @@ mod tests {
     async fn failfast_runtime() -> Result<()> {
         let (tx, rx) = async_std::channel::bounded(1);
         let notifier = ConnectionLostNotifier::new(tx.clone());
+        let notifier = BoxedConnectionLostNotifier::from_value(notifier, TD_Opaque);
         let alias = String::from("test");
         let addr = Addr {
             alias: alias.clone(),
@@ -496,14 +503,17 @@ mod tests {
             sender: tx.clone(),
         };
         let config = Reconnect::None;
-        let mut runtime = ReconnectRuntime::inner(addr, alias.clone(), notifier, &config);
-        let mut connector = FakeConnector {
-            answer: Some(false),
-        };
-        let qb = QuiescenceBeacon::default();
+        let mut runtime = ReconnectRuntime::inner(addr, alias.to_string(), notifier, &config);
+        let mut connector = Connector(BoxedRawConnector::from_value(
+            FakeConnector {
+                answer: Some(false),
+            },
+            TD_Opaque,
+        ));
+        let qb = BoxedQuiescenceBeacon::from_value(QuiescenceBeacon::default(), TD_Opaque);
         let ctx = ConnectorContext {
             uid: 1,
-            alias,
+            alias: alias.into(),
             connector_type: "fake".into(),
             quiescence_beacon: qb,
             notifier: runtime.notifier(),
@@ -522,6 +532,7 @@ mod tests {
     async fn backoff_runtime() -> Result<()> {
         let (tx, rx) = async_std::channel::bounded(1);
         let notifier = ConnectionLostNotifier::new(tx.clone());
+        let notifier = BoxedConnectionLostNotifier::from_value(notifier, TD_Opaque);
         let alias = String::from("test");
         let addr = Addr {
             alias: alias.clone(),
@@ -535,14 +546,17 @@ mod tests {
             max_retries: Some(3),
             randomized: true,
         };
-        let mut runtime = ReconnectRuntime::inner(addr, alias.clone(), notifier, &config);
-        let mut connector = FakeConnector {
-            answer: Some(false),
-        };
-        let qb = QuiescenceBeacon::default();
+        let mut runtime = ReconnectRuntime::inner(addr, alias.to_string(), notifier, &config);
+        let mut connector = Connector(BoxedRawConnector::from_value(
+            FakeConnector {
+                answer: Some(false),
+            },
+            TD_Opaque,
+        ));
+        let qb = BoxedQuiescenceBeacon::from_value(QuiescenceBeacon::default(), TD_Opaque);
         let ctx = ConnectorContext {
             uid: 1,
-            alias,
+            alias: alias.into(),
             connector_type: "fake".into(),
             quiescence_beacon: qb,
             notifier: runtime.notifier(),

@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use abi_stable::std_types::RBox;
-use async_ffi::{BorrowingFfiFuture, FutureExt};
 use event_listener::Event;
-
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+
+use abi_stable::std_types::RBox;
+use async_ffi::{BorrowingFfiFuture, FutureExt};
 
 #[derive(Debug)]
 struct Inner {
@@ -52,11 +52,15 @@ pub struct QuiescenceBeacon(Arc<Inner>);
 #[abi_stable::sabi_trait]
 pub trait QuiescenceBeaconOpaque: fmt::Debug + Clone + Send + Sync {
     /// returns `true` if consumers should continue reading
-    /// doesn't return until the beacon is unpaused
+    /// If the connector is paused, it awaits until it is resumed.
+    ///
+    /// Use this function in asynchronous tasks consuming from external resources to check
+    /// whether it should still read from the external resource. This will also pause external consumption if the
+    /// connector is paused.
     fn continue_reading(&self) -> BorrowingFfiFuture<'_, bool>;
 
-    /// returns `true` if consumers should continue writing.
-    ///
+    /// Returns `true` if consumers should continue writing.
+    /// If the connector is paused, it awaits until it is resumed.
     fn continue_writing(&self) -> BorrowingFfiFuture<'_, bool>;
 
     /// notify consumers of this beacon that reading should be stopped
@@ -140,14 +144,14 @@ impl QuiescenceBeaconOpaque for QuiescenceBeacon {
         self.0.resume_event.notify(Self::MAX_LISTENERS); // we might have been paused, so notify here
     }
 }
-/// Alias for the type used in FFI
+/// Alias for the FFI-safe beacon, boxed
 pub type BoxedQuiescenceBeacon = QuiescenceBeaconOpaque_TO<'static, RBox<()>>;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::errors::Result;
-    use async_std::prelude::*;
+    use async_std::prelude::FutureExt as AsyncFutureExt;
     use std::time::Duration;
 
     #[async_std::test]

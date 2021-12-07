@@ -13,6 +13,10 @@
 // limitations under the License.
 
 use crate::errors::{Error, Result};
+use std::default;
+use std::fmt;
+use url::Url;
+
 use abi_stable::{
     std_types::{
         ROption::{self, RNone, RSome},
@@ -20,9 +24,6 @@ use abi_stable::{
     },
     StableAbi,
 };
-use std::default;
-use std::fmt;
-use url::Url;
 
 /// Event origin URI
 #[repr(C)]

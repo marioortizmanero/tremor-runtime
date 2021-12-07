@@ -25,7 +25,6 @@ pub mod trickle;
 use self::prelude::OUT;
 use super::{Event, NodeConfig};
 use crate::errors::Result;
-use abi_stable::std_types::RString;
 use beef::Cow;
 use halfbrown::HashMap;
 use regex::Regex;
@@ -164,40 +163,5 @@ pub trait ConfigImpl {
         Self: serde::de::Deserialize<'static>,
     {
         Ok(tremor_value::structurize(config.clone_static())?)
-    }
-
-    /// The exact same as `new`, but works with a raw `&str` instead of an
-    /// already built value.
-    ///
-    /// # Errors
-    /// if the Configuration is invalid
-    fn from_str(config: RString) -> Result<Self>
-    where
-        for<'de> Self: serde::de::Deserialize<'de>,
-    {
-        let mut bytes = config.into_bytes();
-        let value = tremor_value::parse_to_value(bytes.as_mut_slice())?;
-        Self::new(&value)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn error() {
-        #[derive(serde::Deserialize)]
-        struct C {
-            _s: String,
-        }
-        impl ConfigImpl for C {}
-
-        let mut str = "5".as_bytes().to_vec();
-        let y: Value = tremor_value::parse_to_value(&mut str).unwrap();
-
-        let e = C::new(&y).err().unwrap().to_string();
-
-        assert_eq!(e, "invalid type: integer `5`, expected struct C")
     }
 }

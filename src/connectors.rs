@@ -31,7 +31,7 @@ use self::metrics::{SinkReporter, SourceReporter};
 use self::sink::{SinkAddr, SinkContext, SinkMsg};
 use self::source::{SourceAddr, SourceContext, SourceMsg};
 use self::utils::quiescence::QuiescenceBeacon;
-pub use crate::config::Connector as ConnectorConfig;
+use crate::config::Connector as ConnectorConfig;
 use crate::errors::{Error, Kind as ErrorKind, Result};
 use crate::instance::InstanceState;
 use crate::pipeline;
@@ -220,14 +220,14 @@ pub struct ConnectorResult<T: std::fmt::Debug> {
 impl ConnectorResult<()> {
     fn ok(ctx: &ConnectorContext) -> Self {
         Self {
-            alias: ctx.alias.to_string(),
+            alias: ctx.alias.clone().into(),
             res: Ok(()),
         }
     }
 
     fn err(ctx: &ConnectorContext, err_msg: &'static str) -> Self {
         Self {
-            alias: ctx.alias.to_string(),
+            alias: ctx.alias.clone().into(),
             res: Err(Error::from(err_msg)),
         }
     }
@@ -242,7 +242,7 @@ pub trait Context: Display + Clone {
     fn quiescence_beacon(&self) -> &BoxedQuiescenceBeacon;
 
     /// get the notifier to signal to the runtime that we are disconnected
-    fn notifier(&self) -> &reconnect::BoxedConnectionLostNotifier;
+    fn notifier(&self) -> &BoxedConnectionLostNotifier;
 
     /// get the connector type
     fn connector_type(&self) -> &ConnectorType;
@@ -304,7 +304,7 @@ impl Context for ConnectorContext {
         &self.quiescence_beacon
     }
 
-    fn notifier(&self) -> &reconnect::BoxedConnectionLostNotifier {
+    fn notifier(&self) -> &BoxedConnectionLostNotifier {
         &self.notifier
     }
 }
@@ -379,11 +379,8 @@ pub async fn spawn(
         .get(&config.connector_type)
         .ok_or_else(|| ErrorKind::UnknownConnectorType(config.connector_type.to_string()))?;
     let connector_config = config.config.clone().into();
-    let connector = Result::from(
-        builder.from_config()(alias.clone().into(), connector_config)
-            .await
-            .map_err(Error::from),
-    )?;
+    let connector = builder.from_config()(alias.clone().into(), connector_config).await;
+    let connector = Result::from(connector.map_err(Error::from))?;
     let connector = Connector(connector);
 
     Ok(connector_task(alias, connector, config, connector_id_gen.next_id()).await?)
@@ -393,7 +390,7 @@ pub async fn spawn(
 // instantiates the connector and starts listening for control plane messages
 async fn connector_task(
     alias: String,
-    mut connector: Box<dyn Connector>,
+    mut connector: Connector,
     config: ConnectorConfig,
     uid: u64,
 ) -> Result<Addr> {
@@ -405,6 +402,7 @@ async fn connector_task(
     let quiescence_beacon = QuiescenceBeacon::default();
     let mut quiescence_beacon = BoxedQuiescenceBeacon::from_value(quiescence_beacon, TD_Opaque);
     let notifier = ConnectionLostNotifier::new(msg_tx.clone());
+    let notifier = BoxedConnectionLostNotifier::from_value(notifier, TD_Opaque);
 
     let source_metrics_reporter = SourceReporter::new(
         alias.clone(),
@@ -428,7 +426,7 @@ async fn connector_task(
         alias: alias.clone().into(),
         uid,
         connector_type: config.connector_type.clone(),
-        quiescence_beacon: BoxedQuiescenceBeacon::from_value(quiescence_beacon.clone(), TD_Opaque),
+        quiescence_beacon: quiescence_beacon.clone(),
         notifier: notifier.clone(),
     };
 
@@ -980,38 +978,6 @@ impl Drainage {
     }
 }
 
-/// state of a connector
-#[repr(C)]
-#[derive(Debug, PartialEq, Serialize, Deserialize, Copy, Clone, StableAbi)]
-#[serde(rename_all = "lowercase")]
-pub enum ConnectorState {
-    /// connector has been initialized, but not yet started
-    Initialized,
-    /// connector is running
-    Running,
-    /// connector has been paused
-    Paused,
-    /// connector was stopped
-    Stopped,
-    /// Draining - getting rid of in-flight events and avoid emitting new ones
-    Draining,
-    /// connector failed to start
-    Failed,
-}
-
-impl Display for ConnectorState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::Initialized => "initialized",
-            Self::Running => "running",
-            Self::Paused => "paused",
-            Self::Stopped => "stopped",
-            Self::Draining => "draining",
-            Self::Failed => "failed",
-        })
-    }
-}
-
 /// describes connectivity state of the connector
 #[derive(Debug, Serialize, Copy, Clone, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -1022,10 +988,10 @@ pub enum Connectivity {
     Disconnected,
 }
 
-const IN_PORTS: [&str; 1] = [IN];
-const IN_PORTS_REF: &'static [&str; 1] = &IN_PORTS;
-const OUT_PORTS: [&str; 2] = [OUT, ERR];
-const OUT_PORTS_REF: &'static [&str; 2] = &OUT_PORTS;
+const IN_PORTS: [Cow<'static, str>; 1] = [IN];
+const IN_PORTS_REF: &'static [Cow<'static, str>; 1] = &IN_PORTS;
+const OUT_PORTS: [Cow<'static, str>; 2] = [OUT, ERR];
+const OUT_PORTS_REF: &'static [Cow<'static, str>; 2] = &OUT_PORTS;
 
 /// A Connector connects the tremor runtime to the outside world.
 ///
@@ -1046,13 +1012,17 @@ const OUT_PORTS_REF: &'static [&str; 2] = &OUT_PORTS;
 pub trait RawConnector: Send {
     /// Valid input ports for the connector, by default this is `in`
     fn input_ports(&self) -> RVec<RCow<'static, str>> {
-        // FIXME: make static? `RCow` can't be const, I think.
-        IN_PORTS_REF.into_iter().map(|s| RCow::from(*s)).collect()
+        IN_PORTS_REF
+            .into_iter()
+            .map(|port| conv_cow_str_inv(port.clone()))
+            .collect()
     }
     /// Valid output ports for the connector, by default this is `out` and `err`
     fn output_ports(&self) -> RVec<RCow<'static, str>> {
-        // FIXME: make static? `RCow` can't be const, I think.
-        OUT_PORTS_REF.into_iter().map(|s| RCow::from(*s)).collect()
+        OUT_PORTS_REF
+            .into_iter()
+            .map(|port| conv_cow_str_inv(port.clone()))
+            .collect()
     }
 
     /// Tests if a input port is valid, by default does a case insensitive search against
@@ -1081,7 +1051,6 @@ pub trait RawConnector: Send {
     ///
     /// This function is called exactly once upon connector creation.
     /// If this connector does not act as a source, return `Ok(None)`.
-    /* async */
     fn create_source(
         &mut self,
         _source_context: SourceContext,
@@ -1178,7 +1147,7 @@ pub type BoxedRawConnector = RawConnector_TO<'static, RBox<()>>;
 ///
 /// Note that it may hurt performance in some parts of the connector interface,
 /// so some of the functionality may not be fully wrapped.
-pub(crate) struct Connector(pub BoxedRawConnector);
+pub struct Connector(pub BoxedRawConnector);
 impl Connector {
     /// Wrapper for [`BoxedRawConnector::input_ports`]
     #[inline]
@@ -1205,12 +1174,6 @@ impl Connector {
     #[inline]
     pub fn is_valid_output_port(&self, port: &str) -> bool {
         self.0.is_valid_output_port(port.into())
-    }
-
-    /// Wrapper for [`BoxedRawConnector::is_structured`]
-    #[inline]
-    pub fn is_structured(&self) -> bool {
-        self.0.is_structured()
     }
 
     /// Wrapper for [`BoxedRawConnector::create_source`]
@@ -1320,14 +1283,14 @@ impl Connector {
 
     /// Wrapper for [`BoxedRawConnector::codec_requirements`]
     #[inline]
-    pub fn codec_requirements(&self) -> CodeqReq {
+    pub fn codec_requirements(&self) -> CodecReq {
         self.0.codec_requirements()
     }
 }
 
 /// the type of a connector
 #[repr(C)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, StableAbi)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default, StableAbi)]
 pub struct ConnectorType(RString);
 
 impl From<ConnectorType> for RString {
@@ -1375,6 +1338,7 @@ pub fn builtin_connector_types() -> Vec<ConnectorMod_Ref> {
     // FIXME: implement basic connectors
     vec![
         impls::file::instantiate_root_module(),
+        impls::metrics::instantiate_root_module(),
         impls::tcp::server::instantiate_root_module(),
     ]
 }
@@ -1384,7 +1348,7 @@ pub fn builtin_connector_types() -> Vec<ConnectorMod_Ref> {
 pub fn debug_connector_types() -> Vec<ConnectorMod_Ref> {
     vec![
         // Box::new(impls::cb::Builder::default()),
-        // Box::new(impls::bench::Builder::default()),
+        impls::bench::instantiate_root_module(),
     ]
 }
 
@@ -1403,13 +1367,11 @@ pub async fn register_builtin_connector_types(world: &World, debug: bool) -> Res
         }
     }
 
-    // Finally, we try to find all the available plugins and we load them
-    // dynamically. For now, plugins are loaded from the path defined by
-    // `TREMOR_PLUGIN_PATH`.
-    //
-    // FIXME: the `plugins` fallback is only for development, this should have a
-    // proper default value.
-    let plugin_path = env::var("TREMOR_PLUGIN_PATH").unwrap_or_else(|_| String::from("plugins"));
+    // After loading all the in-tree connectors, we try to find all the
+    // available plugins and we load them dynamically. For now, plugins are
+    // loaded from the path defined by `TREMOR_PLUGIN_PATH`.
+    let plugin_path =
+        env::var("TREMOR_PLUGIN_PATH").unwrap_or_else(|_| String::from(DEFAULT_PLUGIN_PATH));
     for path in plugin_path.split(':') {
         log::info!("Dynamically loading plugins in directory '{}'", path);
         for plugin in pdk::find_recursively(&path) {

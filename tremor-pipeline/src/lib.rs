@@ -31,8 +31,6 @@ extern crate log;
 
 use crate::errors::{ErrorKind, Result};
 use async_broadcast::{broadcast, Receiver, Sender};
-use crate::op::prelude::*;
-use abi_stable::{std_types::RVec, StableAbi};
 use beef::Cow;
 use executable_graph::NodeConfig;
 use halfbrown::HashMap;
@@ -46,8 +44,9 @@ use std::fmt::Display;
 use std::iter::Iterator;
 use std::str::FromStr;
 use std::{fmt, sync::Mutex};
-use tremor_script::ast::Helper;
-use tremor_script::prelude::*;
+use tremor_script::{ast::Helper, prelude::*};
+
+use abi_stable::{std_types::RVec, StableAbi};
 
 /// Pipeline Errors
 pub mod errors;
@@ -145,8 +144,8 @@ lazy_static! {
 /// Stringified numeric key
 /// from <https://github.com/serde-rs/json-benchmark/blob/master/src/prim_str.rs>
 // FIXME: this didn't use to derive `Hash` because it was used for a `BTreeMap`.
-// Since it's now necessary for a `HashMap` as well (see the pdk module), it's
-// required now.
+// Since it's now necessary for a `HashMap` as well (see the pdk module), `Hash`
+// must be implemented now.
 #[repr(C)]
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Debug, Hash, StableAbi)]
 pub struct PrimStr<T>(T)

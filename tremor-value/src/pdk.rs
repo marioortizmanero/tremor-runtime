@@ -29,11 +29,12 @@ pub type Object<'value> = RHashMap<RCow<'value, str>, PdkValue<'value>>;
 /// Bytes
 pub type Bytes<'value> = RCow<'value, [u8]>;
 
-/// There are no direct conversions between `beef::Cow` and `RCow`, so the type
-/// has to be converted to std as the intermediate. These conversions are cheap
-/// and they shouldn't be a performance issue.
-///
-/// FIXME: move to `tremor-pdk` once it's ready to avoid code duplication.
+// There are no direct conversions between `beef::Cow` and `RCow`, so the type
+// has to be converted to std as the intermediate. These conversions are cheap
+// and they shouldn't be a performance issue.
+//
+// FIXME: clean up after creation of `tremor-pdk`, this is repeated in other
+// crates.
 fn conv_str(cow: beef::Cow<str>) -> RCow<str> {
     let cow: std::borrow::Cow<str> = cow.into();
     cow.into()
@@ -91,7 +92,6 @@ impl<'value> From<Value<'value>> for PdkValue<'value> {
             // This unfortunately requires iterating the map and a new
             // allocation
             Value::Object(m) => {
-                let m: halfbrown::HashMap<_, _> = *m;
                 let m = m
                     .into_iter()
                     .map(|(k, v)| (conv_str(k), v.into()))
@@ -121,7 +121,13 @@ impl<'value> From<PdkValue<'value>> for Value<'value> {
             // This unfortunately requires iterating the map and a new
             // allocation
             PdkValue::Object(m) => {
-                let m = (*m).clone(); // FIXME: remove this super ugly clone
+                // Note that `into_inner` is only necessary for `RBox`'s case,
+                // because `Box` has magic that makes it possible to move
+                // instead of borrow when dereferencing. For more information,
+                // look for `DerefMove`.
+                // TODO: call properly after merge of:
+                // https://github.com/rodrimati1992/abi_stable_crates/pull/74/files
+                let m: RHashMap<_, _> = RBox::into_inner(m);
                 let m = m
                     .into_iter()
                     .map(|Tuple2(k, v)| (conv_str_inv(k), v.into()))

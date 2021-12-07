@@ -51,6 +51,8 @@ use crate::connectors::setup_for_tls;
 use connectors::ConnectorHarness;
 use tremor_runtime::errors::Result;
 
+use tremor_runtime::pdk::RError;
+
 /// A minimal websocket test client harness
 struct TestClient<S> {
     client: S,
@@ -108,10 +110,10 @@ impl TestClient<WebSocketStream<async_tls::client::TlsStream<async_std::net::Tcp
     async fn expect(&mut self) -> Result<ExpectMessage> {
         loop {
             match self.client.next().await {
-                Some(Ok(Message::Text(data))) => return Ok(ExpectMessage::Text(data)),
-                Some(Ok(Message::Binary(data))) => return Ok(ExpectMessage::Binary(data)),
-                Some(Ok(other)) => return Ok(ExpectMessage::Unexpected(other)),
-                Some(Err(e)) => return Err(e.into()),
+                Some(Ok(Message::Text(data))) => return Ok(ExpectMessage::Text(data).into()),
+                Some(Ok(Message::Binary(data))) => return Ok(ExpectMessage::Binary(data).into()),
+                Some(Ok(other)) => return Ok(ExpectMessage::Unexpected(other).into()),
+                Some(Err(e)) => return Err(RError::new(e).into()),
                 None => continue,
             }
         }
@@ -124,7 +126,8 @@ impl TestClient<WebSocketStream<async_tls::client::TlsStream<async_std::net::Tcp
                 code: CloseCode::Normal,
                 reason: "Test client closing.".into(),
             }))
-            .await?;
+            .await
+            .map_err(RError::new)?;
         info!("Test client closed.");
         Ok(())
     }
@@ -165,15 +168,17 @@ impl TestClient<WebSocket<MaybeTlsStream<std::net::TcpStream>>> {
             Ok(Message::Text(data)) => Ok(ExpectMessage::Text(data)),
             Ok(Message::Binary(data)) => Ok(ExpectMessage::Binary(data)),
             Ok(other) => Ok(ExpectMessage::Unexpected(other)),
-            Err(e) => Err(e.into()),
+            Err(e) => Err(RError::new(e).into()),
         }
     }
     async fn close(&mut self) -> Result<()> {
         info!("Closing TLS test client...");
-        self.client.close(Some(CloseFrame {
-            code: CloseCode::Normal,
-            reason: "TLS Test client closing.".into(),
-        }))?;
+        self.client
+            .close(Some(CloseFrame {
+                code: CloseCode::Normal,
+                reason: "TLS Test client closing.".into(),
+            }))
+            .map_err(RError::new)?;
         let _ = self.client.write_pending();
         info!("TLS test client closed.");
         Ok(())

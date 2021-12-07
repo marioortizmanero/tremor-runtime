@@ -1,6 +1,6 @@
 //! Implements the actual connector functionality.
 
-use tremor_common::{time::nanotime, url::TremorUrl};
+use tremor_common::time::nanotime;
 use tremor_pipeline::DEFAULT_STREAM_ID;
 use tremor_runtime::{connectors::prelude::*, pdk::RResult, ttry, utils::hostname};
 use tremor_script::{EventOriginUri, EventPayload};
@@ -12,11 +12,11 @@ use std::{
 };
 
 use abi_stable::{
-    rstr, rvec, sabi_extern_fn,
+    rvec, sabi_extern_fn,
     std_types::{
         ROption::{self, RNone, RSome},
         RResult::{RErr, ROk},
-        RStr, RString,
+        RString,
     },
     type_level::downcasting::TD_Opaque,
 };
@@ -62,19 +62,15 @@ impl RawConnector for Metronome {
         future::ready(ROk(RSome(source))).into_ffi()
     }
 
-    fn default_codec(&self) -> RStr {
-        rstr!("json")
-    }
-
-    fn is_structured(&self) -> bool {
-        true
+    fn codec_requirements(&self) -> CodecReq {
+        CodecReq::Structured
     }
 }
 
 impl RawSource for Metronome {
     fn pull_data<'a>(
         &'a mut self,
-        pull_id: u64,
+        pull_id: &'a mut u64,
         _ctx: &'a SourceContext,
     ) -> BorrowingFfiFuture<'a, RResult<SourceReply>> {
         let now = Instant::now();
@@ -83,7 +79,7 @@ impl RawSource for Metronome {
             let data = literal!({
                 "onramp": "metronome",
                 "ingest_ns": nanotime(),
-                "id": pull_id
+                "id": *pull_id
             });
             // We need the pdk event payload, so we convert twice
             let data: EventPayload = data.into();
@@ -110,7 +106,7 @@ impl RawSource for Metronome {
 /// Configures and exports the metronome as a connector trait object
 #[sabi_extern_fn]
 pub fn from_config(
-    _id: TremorUrl,
+    _id: RString,
     raw_config: ROption<PdkValue<'static>>,
 ) -> FfiFuture<RResult<BoxedRawConnector>> {
     async move {

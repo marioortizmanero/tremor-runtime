@@ -17,14 +17,15 @@ pub(crate) mod server;
 // pub(crate) mod simple_server;
 
 use crate::connectors::prelude::*;
-use abi_stable::std_types::{
-    ROption::{RNone, RSome},
-    RVec,
-};
 use async_std::net::TcpStream;
 use futures::{
     io::{ReadHalf, WriteHalf},
     AsyncReadExt, AsyncWriteExt,
+};
+
+use abi_stable::std_types::{
+    ROption::{RNone, RSome},
+    RVec,
 };
 
 struct TcpReader<S>
@@ -34,7 +35,7 @@ where
     wrapped_stream: S,
     underlying_stream: TcpStream,
     buffer: Vec<u8>,
-    url: TremorUrl,
+    alias: String,
     origin_uri: EventOriginUri,
     meta: Value<'static>,
 }
@@ -43,7 +44,7 @@ impl TcpReader<TcpStream> {
     fn new(
         stream: TcpStream,
         buffer: Vec<u8>,
-        url: TremorUrl,
+        alias: String,
         origin_uri: EventOriginUri,
         meta: Value<'static>,
     ) -> Self {
@@ -51,7 +52,7 @@ impl TcpReader<TcpStream> {
             wrapped_stream: stream.clone(),
             underlying_stream: stream,
             buffer,
-            url,
+            alias,
             origin_uri,
             meta,
         }
@@ -63,7 +64,7 @@ impl TcpReader<ReadHalf<async_tls::server::TlsStream<TcpStream>>> {
         stream: ReadHalf<async_tls::server::TlsStream<TcpStream>>,
         underlying_stream: TcpStream,
         buffer: Vec<u8>,
-        url: TremorUrl,
+        alias: String,
         origin_uri: EventOriginUri,
         meta: Value<'static>,
     ) -> Self {
@@ -71,7 +72,7 @@ impl TcpReader<ReadHalf<async_tls::server::TlsStream<TcpStream>>> {
             wrapped_stream: stream,
             underlying_stream,
             buffer,
-            url,
+            alias,
             origin_uri,
             meta,
         }
@@ -133,7 +134,7 @@ where
         if let Err(e) = self.underlying_stream.shutdown(std::net::Shutdown::Read) {
             warn!(
                 "[Connector::{}] Error shutting down reading half of stream {}: {}",
-                &self.url, stream, e
+                &self.alias, stream, e
             );
         }
         StreamDone::StreamClosed

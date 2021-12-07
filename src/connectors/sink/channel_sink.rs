@@ -15,31 +15,34 @@
 //! Sink implementation that keeps track of multiple streams and keeps channels to send to each stream
 
 use crate::connectors::prelude::*;
-use crate::connectors::StreamDone;
-use crate::errors::{ErrorKind, Result};
-use crate::pdk::RResult;
-use crate::ttry;
+use crate::connectors::{Context, StreamDone};
 use crate::QSIZE;
-use abi_stable::std_types::{
-    ROption::{RNone, RSome},
-    RResult::ROk,
-    RStr,
-};
-use async_ffi::{BorrowingFfiFuture, FutureExt};
 use async_std::channel::{bounded, Receiver, Sender};
 use async_std::task;
-use beef::Cow;
 use bimap::BiMap;
 use either::Either;
 use hashbrown::HashMap;
-use std::future;
 use std::hash::Hash;
 use std::marker::PhantomData;
 use std::sync::atomic::Ordering;
 use tremor_common::time::nanotime;
-use tremor_pipeline::{pdk::PdkEvent, CbAction, Event, SignalKind};
+use tremor_pipeline::{CbAction, Event, SignalKind};
 use tremor_value::Value;
 use value_trait::ValueAccess;
+
+use crate::errors::{Kind as ErrorKind, Result};
+use crate::pdk::RResult;
+use abi_stable::{
+    rtry,
+    std_types::{
+        ROption::{RNone, RSome},
+        RResult::ROk,
+        RStr,
+    },
+};
+use async_ffi::{BorrowingFfiFuture, FutureExt};
+use std::future;
+use tremor_pipeline::pdk::PdkEvent;
 
 /// Behavioral trait for defining if a Channel Sink needs metadata or not
 pub trait SinkMetaBehaviour: Send + Sync {
@@ -114,7 +117,8 @@ where
     T: Hash + Eq + Send + 'static,
     F: Fn(&Value<'_>) -> Option<T>,
 {
-    /// constructor
+    /// constructor of a ChannelSink that is not sending the event metadata to the StreamWriter
+    /// and by that saves an expensive clone()
     pub fn new_no_meta(qsize: usize, resolver: F, reply_tx: BoxedContraflowSender) -> Self {
         let (tx, rx) = bounded(qsize);
         ChannelSink::new(resolver, reply_tx, tx, rx)
@@ -137,7 +141,7 @@ where
     F: Fn(&Value<'_>) -> Option<T>,
 {
     /// Construct a new instance of a channel sink with metadata support
-    pub fn new_with_meta(qsize: usize, resolver: F, reply_tx: Sender<AsyncSinkReply>) -> Self {
+    pub fn new_with_meta(qsize: usize, resolver: F, reply_tx: BoxedContraflowSender) -> Self {
         let (tx, rx) = bounded(qsize);
         ChannelSink::new(resolver, reply_tx, tx, rx)
     }
@@ -161,8 +165,12 @@ where
     B: SinkMetaBehaviour,
 {
     /// constructor
-    pub fn new(qsize: usize, resolver: F, reply_tx: BoxedContraflowSender) -> Self {
-        let (tx, rx) = bounded(qsize);
+    pub fn new(
+        resolver: F,
+        reply_tx: BoxedContraflowSender,
+        tx: Sender<ChannelSinkMsg<T>>,
+        rx: Receiver<ChannelSinkMsg<T>>,
+    ) -> Self {
         let streams = HashMap::with_capacity(8);
         let streams_meta = BiMap::with_capacity(8);
         Self {
@@ -291,7 +299,7 @@ where
                     start,
                 }),
             ) = (
-                ctx.quiescence_beacon.continue_writing().await,
+                ctx.quiescence_beacon().continue_writing().await,
                 stream_rx.recv().await,
             ) {
                 let failed = writer.write(data, meta).await.is_err();
@@ -343,14 +351,7 @@ fn get_sink_meta<'lt, 'value>(
     meta: &'lt Value<'value>,
     ctx: &SinkContext,
 ) -> Option<&'lt Value<'value>> {
-    ctx.url
-        .resource_type()
-        .and_then(|rt| meta.get(&Cow::owned(rt.to_string())))
-        .and_then(|rt_meta| {
-            ctx.url
-                .artefact()
-                .and_then(|artefact| rt_meta.get(artefact))
-        })
+    meta.get(ctx.connector_type().to_string().as_str())
 }
 
 impl<T, F, B> RawSink for ChannelSink<T, F, B>
@@ -386,7 +387,7 @@ where
 
             let ingest_ns = event.ingest_ns;
             let stream_ids = event.id.get_streams(ctx.uid);
-            trace!("[Sink::{}] on_event stream_ids: {:?}", &ctx.url, stream_ids);
+            trace!("{} on_event stream_ids: {:?}", &ctx, stream_ids);
 
             let contraflow_utils = if event.transactional {
                 let reply_tx = self
@@ -419,10 +420,12 @@ where
                     );
 
                 for (stream_id, sender) in streams {
-                    trace!("[Sink::{}] Send to stream {}.", &ctx.url, stream_id);
-                    let data = ttry!(serializer
-                        .serialize_for_stream(&value.clone().into(), ingest_ns, *stream_id)
-                        .into());
+                    trace!("{} Send to stream {}.", &ctx, stream_id);
+                    let data = rtry!(serializer.serialize_for_stream(
+                        &value.clone().into(),
+                        ingest_ns,
+                        *stream_id
+                    ));
                     let meta = if B::NEEDS_META {
                         Some(meta.clone_static())
                     } else {
@@ -436,10 +439,7 @@ where
                     };
                     found = true;
                     if sender.send(sink_data).await.is_err() {
-                        error!(
-                            "[Sink::{}] Error sending to closed stream {}.",
-                            &ctx.url, stream_id
-                        );
+                        error!("{} Error sending to closed stream {}.", &ctx, stream_id);
                         remove_streams.push(*stream_id);
                         errored = true;
                     }
@@ -450,7 +450,7 @@ where
                 }
             }
             for stream_id in remove_streams {
-                trace!("[Sink::{}] Removing stream {}", &ctx.url, stream_id);
+                trace!("{} Removing stream {}", &ctx, stream_id);
                 self.remove_stream(stream_id);
                 serializer.drop_stream(stream_id);
                 // TODO: stream based CB

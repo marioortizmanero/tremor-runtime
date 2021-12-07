@@ -79,6 +79,7 @@ impl<P> From<std::sync::PoisonError<P>> for Error {
 }
 
 /// For more ergonomic error-handling in PDK contexts
+/// TODO: use `tremor_pdk::RError` when it exists
 impl From<Error> for abi_stable::std_types::SendRBoxError {
     fn from(e: Error) -> Self {
         Self::new(e)
@@ -86,6 +87,7 @@ impl From<Error> for abi_stable::std_types::SendRBoxError {
 }
 
 /// For more ergonomic error-handling in PDK contexts
+/// TODO: use `tremor_pdk::RError` when it exists
 impl From<ErrorKind> for abi_stable::std_types::SendRBoxError {
     fn from(e: ErrorKind) -> Self {
         let e: Error = e.into();
@@ -126,7 +128,7 @@ error_chain! {
         MsgPackEncoderError(rmp_serde::encode::Error);
         ParseIntError(std::num::ParseIntError);
         ParseFloatError(std::num::ParseFloatError);
-        PluginError(abi_stable::std_types::SendRBoxError);
+        PluginError(crate::pdk::RError);
         RegexError(regex::Error);
         RustlsError(rustls::TLSError);
         SnappyError(snap::Error);

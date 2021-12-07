@@ -17,7 +17,7 @@
 //! With some shenanigans removed, compared to `ChannelSink`.
 
 use crate::connectors::{ConnectorContext, StreamDone};
-use crate::errors::{ErrorKind, Result};
+use crate::errors::Result;
 use async_std::{
     channel::{bounded, Receiver, Sender},
     task,
@@ -29,12 +29,15 @@ use super::channel_sink::{NoMeta, SinkMeta, SinkMetaBehaviour, WithMeta};
 use super::{AsyncSinkReply, ContraflowData, StreamWriter};
 
 use crate::connectors::prelude::*;
+use crate::errors::Kind as ErrorKind;
 use crate::pdk::RResult;
-use crate::ttry;
-use abi_stable::std_types::{
-    ROption::{RNone, RSome},
-    RResult::ROk,
-    RStr,
+use abi_stable::{
+    rtry,
+    std_types::{
+        ROption::{RNone, RSome},
+        RResult::ROk,
+        RStr,
+    },
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
 use tremor_pipeline::{pdk::PdkEvent, Event};
@@ -102,12 +105,8 @@ pub struct SingleStreamSinkRuntime {
 }
 
 impl SingleStreamSinkRuntime {
-    pub(crate) fn register_stream_writer<W>(
-        &self,
-        stream: u64,
-        ctx: &ConnectorContext,
-        mut writer: W,
-    ) where
+    pub fn register_stream_writer<W>(&self, stream: u64, ctx: &ConnectorContext, mut writer: W)
+    where
         W: StreamWriter + 'static,
     {
         let ctx = ctx.clone();
@@ -189,9 +188,7 @@ where
             {
                 // handle first couple of items (if batched)
                 for (value, meta) in value_meta_iter {
-                    let data = ttry!(serializer
-                        .serialize(&value.clone().into(), ingest_ns)
-                        .into());
+                    let data = rtry!(serializer.serialize(&value.clone().into(), ingest_ns));
                     let meta = if B::NEEDS_META {
                         Some(meta.clone_static())
                     } else {
@@ -204,14 +201,12 @@ where
                         start,
                     };
                     if self.tx.send(sink_data).await.is_err() {
-                        error!("[Sink::{}] Error sending to closed stream: 0", &ctx.url);
+                        error!("{} Error sending to closed stream: 0", &ctx);
                         return ROk(SinkReply::FAIL);
                     }
                 }
                 // handle last item
-                let data = ttry!(serializer
-                    .serialize(&last_value.clone().into(), ingest_ns)
-                    .into());
+                let data = rtry!(serializer.serialize(&last_value.clone().into(), ingest_ns));
                 let meta = if B::NEEDS_META {
                     Some(last_meta.clone_static())
                 } else {
@@ -224,7 +219,7 @@ where
                     start,
                 };
                 if self.tx.send(sink_data).await.is_err() {
-                    error!("[Sink::{}] Error sending to closed stream: 0", &ctx.url);
+                    error!("{} Error sending to closed stream: 0", &ctx);
                     ROk(SinkReply::FAIL)
                 } else {
                     ROk(SinkReply::NONE)

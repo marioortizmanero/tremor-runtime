@@ -10,7 +10,6 @@ dependencies = [
  "abi_stable_derive",
  "abi_stable_shared",
  "core_extensions",
- "crossbeam-channel",
  "generational-arena",
  "libloading",
  "lock_api",
@@ -20,7 +19,6 @@ dependencies = [
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
- "serde_json",
 ]
 
 [[package]]
@@ -329,8 +327,9 @@ dependencies = [
 
 [[package]]
 name = "async-ffi"
-version = "0.3.1"
-source = "git+https://github.com/marioortizmanero/async-ffi.git?branch=sabi#f066b51241ebdf6e95dbf59cf13ec187476dc3a3"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7e73758d044aab514155e8888ed142d408498712c6f82f24e3ee0650d5943b0"
 dependencies = [
  "abi_stable",
 ]
@@ -6697,6 +6696,7 @@ dependencies = [
 name = "tremor-value"
 version = "0.3.2"
 dependencies = [
+ "abi_stable",
  "base64 0.13.0",
  "beef",
  "float-cmp",

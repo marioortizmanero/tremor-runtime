@@ -14,8 +14,8 @@
 
 // TODO: support all these connectors
 
-// /// benchmarking connector
-// pub(crate) mod bench;
+/// benchmarking connector
+pub(crate) mod bench;
 // /// connector for checking guaranteed delivery and circuit breaker logic
 // pub(crate) mod cb;
 // /// Crononome
@@ -37,8 +37,8 @@ pub(crate) mod file;
 // pub(crate) mod kafka;
 // /// KV
 // pub(crate) mod kv;
-// /// Home of the famous metrics collector
-// pub(crate) mod metrics;
+/// Home of the famous metrics collector
+pub(crate) mod metrics;
 // /// Metronome
 // pub(crate) mod metronome;
 // /// OpenTelemetry

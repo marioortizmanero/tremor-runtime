@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use crate::{CbAction, EventId, OpMeta, SignalKind};
-
 use std::mem::swap;
 use tremor_common::time::nanotime;
 use tremor_script::prelude::*;

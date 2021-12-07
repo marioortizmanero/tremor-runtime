@@ -15,7 +15,6 @@ mod manager;
 
 use crate::connectors;
 use crate::errors::{Error, Kind as ErrorKind, Result};
-use crate::pdk::connectors::ConnectorMod_Ref;
 use crate::QSIZE;
 use async_std::channel::bounded;
 use async_std::prelude::*;
@@ -24,9 +23,9 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tremor_script::{highlighter::Highlighter, srs::DeployFlow};
 
-use self::flow::{Flow, Flo
+use self::flow::{Flow, FlowId};
 
-use crate::pdk::connectors::ConnectorMod_Ref;wId};
+use crate::pdk::connectors::ConnectorMod_Ref;
 
 /// Configuration for the runtime
 pub struct WorldConfig {
@@ -107,10 +106,7 @@ impl World {
     ///
     /// # Errors
     ///  * If the system is unavailable
-    pub(crate) async fn register_builtin_connector_type(
-        &self,
-        builder: Box<dyn connectors::ConnectorBuilder>,
-    ) -> Result<()> {
+    pub(crate) async fn register_builtin_connector_type(&self, builder: ConnectorMod_Ref) -> Result<()> {
         self.system
             .send(manager::Msg::RegisterConnectorType {
                 connector_type: builder.connector_type(),
@@ -186,3 +182,4 @@ impl World {
         }
         Ok(self.system.send(manager::Msg::Stop).await?)
     }
+}
