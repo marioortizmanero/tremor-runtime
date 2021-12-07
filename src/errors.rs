@@ -126,7 +126,7 @@ error_chain! {
         MsgPackEncoderError(rmp_serde::encode::Error);
         ParseIntError(std::num::ParseIntError);
         ParseFloatError(std::num::ParseFloatError);
-        PluginError(abi_stable::std_types::SendRBoxError);
+        PluginError(crate::pdk::RError);
         RegexError(regex::Error);
         RustlsError(rustls::TLSError);
         SnappyError(snap::Error);

@@ -30,9 +30,7 @@ extern crate serde_derive;
 extern crate log;
 
 use crate::errors::{ErrorKind, Result};
-use async_broadcast::{broadcast, Receiver, Sender};
 use crate::op::prelude::*;
-use abi_stable::{std_types::RVec, StableAbi};
 use beef::Cow;
 use executable_graph::NodeConfig;
 use halfbrown::HashMap;
@@ -41,13 +39,14 @@ use op::trickle::window;
 use petgraph::graph::{self, NodeIndex};
 use simd_json::OwnedValue;
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::iter::Iterator;
 use std::str::FromStr;
 use std::{fmt, sync::Mutex};
-use tremor_script::ast::Helper;
 use tremor_script::prelude::*;
+
+use abi_stable::{std_types::RVec, StableAbi};
 
 /// Pipeline Errors
 pub mod errors;

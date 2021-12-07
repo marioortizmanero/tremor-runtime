@@ -14,52 +14,14 @@
 
 use std::sync::atomic::Ordering;
 
-use crate::connectors::prelude::*;
-use async_broadcast::{broadcast, Receiver, Sender};
+use crate::connectors::impls::metrics::{MetricsChannel, Msg};
+use async_broadcast::Sender;
 use beef::Cow;
 use halfbrown::HashMap;
 use tremor_common::url::ports::{ERR, IN, OUT};
 use tremor_pipeline::MetricsSender;
 use tremor_script::EventPayload;
-
-#[derive(Clone, Debug)]
-pub(crate) struct MetricsChannel {
-    tx: Sender<Msg>,
-    rx: Receiver<Msg>,
-}
-
-impl MetricsChannel {
-    pub(crate) fn new(qsize: usize) -> Self {
-        let (mut tx, rx) = broadcast(qsize);
-        // We user overflow so that non collected messages can be removed
-        // FIXME: is this what we want? for Metrics it should be good enough
-        // we consume them quickly and if not we got bigger problems
-        tx.set_overflow(true);
-        Self { tx, rx }
-    }
-
-    pub(crate) fn tx(&self) -> Sender<Msg> {
-        self.tx.clone()
-    }
-    pub(crate) fn rx(&self) -> Receiver<Msg> {
-        self.rx.clone()
-    }
-}
-#[derive(Debug, Clone)]
-pub struct Msg {
-    payload: EventPayload,
-    origin_uri: Option<EventOriginUri>,
-}
-
-impl Msg {
-    /// creates a new message
-    pub fn new(payload: EventPayload, origin_uri: Option<EventOriginUri>) -> Self {
-        Self {
-            payload,
-            origin_uri,
-        }
-    }
-}
+use tremor_value::prelude::*;
 
 /// metrics reporter for connector sources
 pub struct SourceReporter {

@@ -21,57 +21,56 @@ use abi_stable::std_types::RString;
 pub use channel_source::{ChannelSource, ChannelSourceRuntime};
 
 use async_std::task;
-use simd_json::Mutable;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::fmt::Display;
-use std::future;
 use std::time::{Duration, Instant};
 use tremor_common::time::nanotime;
 use tremor_script::ast::DeployEndpoint;
 use tremor_script::{pdk::PdkEventPayload, EventPayload, ValueAndMeta};
+use tremor_value::pdk::PdkValue;
 
 use crate::config::{
     self, Codec as CodecConfig, Connector as ConnectorConfig, Preprocessor as PreprocessorConfig,
-};
-use crate::connectors::utils::{
-    quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier,
 };
 use crate::connectors::{
     metrics::SourceReporter, utils::reconnect::Attempt, ConnectorType, Context, Msg, StreamDone,
 };
 use crate::errors::{Error, Result};
-use crate::pdk::{RError, RResult};
 use crate::pipeline;
 use crate::preprocessor::{finish, make_preprocessors, preprocess, Preprocessors};
 use crate::{
     codec::{self, Codec},
     pipeline::InputTarget,
 };
-use abi_stable::{
-    rvec,
-    std_types::{
-        RBox, RCow, ROption,
-        RResult::{RErr, ROk},
-        RVec, Tuple2,
-    },
-    StableAbi,
-};
-use async_ffi::{BorrowingFfiFuture, FutureExt};
-use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
+use async_std::channel::{unbounded, Receiver, Sender};
 use beef::Cow;
 use tremor_common::url::ports::{ERR, OUT};
 use tremor_pipeline::{
     CbAction, Event, EventId, EventIdGenerator, EventOriginUri, DEFAULT_STREAM_ID,
 };
-use tremor_value::{literal, pdk::PdkValue, Value};
+use tremor_value::{literal, Value};
 use value_trait::Builder;
 
+<<<<<<< HEAD
 use super::CodecReq;
 use super::metrics::SourceReporter;
 use super::prelude::Attempt;
 use super::quiescence::BoxedQuiescenceBeacon;
 use super::{ConnectorContext, StreamDone};
+=======
+use crate::connectors::utils::{
+    quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier,
+};
+use crate::pdk::RResult;
+use abi_stable::{
+    rvec,
+    std_types::{RBox, RCow, ROption, RResult::ROk, RVec, Tuple2},
+    StableAbi,
+};
+use async_ffi::{BorrowingFfiFuture, FutureExt};
+use std::future;
+>>>>>>> aff5fedb (Multiple improvements and cleaning up)
 
 /// The default poll interval for `try_recv` on channels in connectors
 pub const DEFAULT_POLL_INTERVAL: u64 = 10;
@@ -292,8 +291,7 @@ pub trait RawSource: Send {
 /// Source part of a connector.
 ///
 /// Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
-/// types so that it's easier to use with `std`. This may be removed in the
-/// future for performance reasons.
+/// types so that it's easier to use with `std`.
 pub struct Source(pub BoxedRawSource);
 impl Source {
     #[inline]
@@ -467,7 +465,7 @@ impl SourceAddr {
 
 /// Builder for the SourceManager
 #[allow(clippy::module_name_repetitions)]
-pub(crate) struct SourceManagerBuilder {
+pub struct SourceManagerBuilder {
     qsize: usize,
     streams: Streams,
     source_metrics_reporter: SourceReporter,
@@ -495,7 +493,7 @@ impl SourceManagerBuilder {
 /// create a builder for a `SourceManager`.
 /// with the generic information available in the connector
 /// the builder then in a second step takes the source specific information to assemble and spawn the actual `SourceManager`.
-pub(crate) fn builder(
+pub fn builder(
     connector_uid: u64,
     config: &ConnectorConfig,
     connector_default_codec: CodecReq,
@@ -732,9 +730,9 @@ impl SourceManager {
                 port,
                 mut pipelines,
             } => {
-                let pipes = if port.eq_ignore_ascii_case(OUT) {
+                let pipes = if port.eq_ignore_ascii_case(OUT.as_ref()) {
                     &mut self.pipelines_out
-                } else if port.eq_ignore_ascii_case(ERR) {
+                } else if port.eq_ignore_ascii_case(ERR.as_ref()) {
                     &mut self.pipelines_err
                 } else {
                     error!("{} Tried to connect to invalid port: {}", &self.ctx, &port);
@@ -755,9 +753,9 @@ impl SourceManager {
                 Ok(Control::Continue)
             }
             SourceMsg::Unlink { id, port } => {
-                let pipelines = if port.eq_ignore_ascii_case(OUT) {
+                let pipelines = if port.eq_ignore_ascii_case(OUT.as_ref()) {
                     &mut self.pipelines_out
-                } else if port.eq_ignore_ascii_case(ERR) {
+                } else if port.eq_ignore_ascii_case(ERR.as_ref()) {
                     &mut self.pipelines_err
                 } else {
                     error!(
@@ -982,10 +980,10 @@ impl SourceManager {
         let mut send_error = false;
 
         for (port, event) in events {
-            let pipelines = if port.eq_ignore_ascii_case(OUT) {
+            let pipelines = if port.eq_ignore_ascii_case(OUT.as_ref()) {
                 self.metrics_reporter.increment_out();
                 &mut self.pipelines_out
-            } else if port.eq_ignore_ascii_case(ERR) {
+            } else if port.eq_ignore_ascii_case(ERR.as_ref()) {
                 self.metrics_reporter.increment_err();
                 &mut self.pipelines_err
             } else {
@@ -1183,7 +1181,7 @@ impl SourceManager {
                     self.is_transactional,
                 );
 
-                let port: Cow<'static, str> = port.map(conv_cow_str).unwrap_or(Cow::from(OUT));
+                let port: Cow<'static, str> = port.map(conv_cow_str).unwrap_or(OUT);
 
                 let error = self.route_events(vec![(port, event)]).await;
                 if error {
@@ -1359,10 +1357,24 @@ fn build_events(
                 let (port, payload) = match line_value {
                     Ok(decoded) => (port.unwrap_or(&OUT).clone(), decoded),
                     Err(None) => continue,
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+                    Err(Some(e)) => (ERR, make_error(alias, &e, stream_state.stream_id, pull_id, meta.clone())),
+=======
+>>>>>>> aff5fedb (Multiple improvements and cleaning up)
                     Err(Some(e)) => (
                         ERR,
                         make_error(alias, &e, stream_state.stream_id, pull_id, meta.clone()),
                     ),
+<<<<<<< HEAD
+=======
+>>>>>>> 0dae03db (PDK file connector)
+=======
+                    Err(Some(e)) => (ERR, make_error(url, &e, stream_state.stream_id, pull_id)),
+>>>>>>> 5b479247 (Multiple improvements and cleaning up)
+>>>>>>> aff5fedb (Multiple improvements and cleaning up)
                 };
                 let event = build_event(
                     stream_state,
@@ -1387,7 +1399,7 @@ fn build_events(
                 origin_uri,
                 is_transactional,
             );
-            vec![(Cow::from(ERR), event)]
+            vec![(ERR, event)]
         }
     }
 }
@@ -1450,7 +1462,7 @@ fn build_last_events(
                 origin_uri,
                 is_transactional,
             );
-            vec![(Cow::from(ERR), event)]
+            vec![(ERR, event)]
         }
     }
 }

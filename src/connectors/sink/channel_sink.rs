@@ -15,31 +15,33 @@
 //! Sink implementation that keeps track of multiple streams and keeps channels to send to each stream
 
 use crate::connectors::prelude::*;
-use crate::connectors::StreamDone;
-use crate::errors::{ErrorKind, Result};
-use crate::pdk::RResult;
-use crate::ttry;
+use crate::connectors::{Context, StreamDone};
 use crate::QSIZE;
-use abi_stable::std_types::{
-    ROption::{RNone, RSome},
-    RResult::ROk,
-    RStr,
-};
-use async_ffi::{BorrowingFfiFuture, FutureExt};
 use async_std::channel::{bounded, Receiver, Sender};
 use async_std::task;
 use beef::Cow;
 use bimap::BiMap;
 use either::Either;
 use hashbrown::HashMap;
-use std::future;
 use std::hash::Hash;
 use std::marker::PhantomData;
 use std::sync::atomic::Ordering;
 use tremor_common::time::nanotime;
-use tremor_pipeline::{pdk::PdkEvent, CbAction, Event, SignalKind};
+use tremor_pipeline::{CbAction, Event, SignalKind};
 use tremor_value::Value;
 use value_trait::ValueAccess;
+
+use crate::errors::{Kind as ErrorKind, Result};
+use crate::pdk::RResult;
+use crate::ttry;
+use abi_stable::std_types::{
+    ROption::{RNone, RSome},
+    RResult::ROk,
+    RStr,
+};
+use async_ffi::{BorrowingFfiFuture, FutureExt};
+use std::future;
+use tremor_pipeline::pdk::PdkEvent;
 
 /// Behavioral trait for defining if a Channel Sink needs metadata or not
 pub trait SinkMetaBehaviour: Send + Sync {

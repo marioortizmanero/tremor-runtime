@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use abi_stable::std_types::RBox;
-use async_ffi::{BorrowingFfiFuture, FutureExt};
 use event_listener::Event;
-
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+
+use abi_stable::std_types::RBox;
+use async_ffi::{BorrowingFfiFuture, FutureExt};
 
 #[derive(Debug)]
 struct Inner {
