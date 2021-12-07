@@ -32,8 +32,8 @@
 pub(crate) mod file;
 // /// KV
 // pub(crate) mod kv;
-// /// Home of the famous metrics collector
-// pub(crate) mod metrics;
+/// Home of the famous metrics collector
+pub(crate) mod metrics;
 // /// Metronome
 // pub(crate) mod metronome;
 // /// std streams connector (stdout, stderr, stdin)

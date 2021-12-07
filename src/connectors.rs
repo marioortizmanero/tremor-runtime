@@ -1345,7 +1345,7 @@ pub trait ConnectorBuilder: Sync + Send + std::fmt::Debug {
 pub fn builtin_connector_types() -> Vec<ConnectorMod_Ref> {
     vec![
         impls::file::instantiate_root_module(),
-        // Box::new(impls::metrics::Builder::default()),
+        impls::metrics::instantiate_root_module(),
         // Box::new(impls::stdio::Builder::default()),
         // Box::new(impls::tcp::client::Builder::default()),
         impls::tcp::server::instantiate_root_module(),
