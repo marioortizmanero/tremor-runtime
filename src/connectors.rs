@@ -1388,7 +1388,7 @@ pub fn builtin_connector_types() -> Vec<ConnectorMod_Ref> {
 pub fn debug_connector_types() -> Vec<ConnectorMod_Ref> {
     vec![
         // Box::new(impls::cb::Builder::default()),
-        // Box::new(impls::bench::Builder::default()),
+        impls::bench::instantiate_root_module(),
     ]
 }
 

@@ -14,8 +14,8 @@
 
 // TODO: support all these connectors
 
-// /// benchmarking connector
-// pub(crate) mod bench;
+/// benchmarking connector
+pub(crate) mod bench;
 // /// connector for checking guaranteed delivery and circuit breaker logic
 // pub(crate) mod cb;
 // /// Crononome
