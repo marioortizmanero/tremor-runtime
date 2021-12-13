@@ -1,6 +1,6 @@
 //! Implements the actual connector functionality.
 
-use tremor_common::{time::nanotime, url::TremorUrl};
+use tremor_common::time::nanotime;
 use tremor_pipeline::DEFAULT_STREAM_ID;
 use tremor_runtime::{connectors::prelude::*, pdk::RResult, ttry, utils::hostname};
 use tremor_script::{EventOriginUri, EventPayload};
@@ -110,7 +110,7 @@ impl RawSource for Metronome {
 /// Configures and exports the metronome as a connector trait object
 #[sabi_extern_fn]
 pub fn from_config(
-    _id: TremorUrl,
+    _id: RString,
     raw_config: ROption<PdkValue<'static>>,
 ) -> FfiFuture<RResult<BoxedRawConnector>> {
     async move {
