@@ -10,4 +10,4 @@ if [ $# -ne 1 ]; then
     exit 1
 fi
 
-../target/debug/tremor server run -f "$1"
+../target/debug/tremor server run -f "$1" --debug-connectors
