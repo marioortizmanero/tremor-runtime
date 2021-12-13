@@ -623,7 +623,7 @@ impl FlowDecl {
                     connector_decls.push(ConnectorDecl::new_from_deploy(
                         origin,
                         stmt.node_id.id.clone(),
-                        &instance,
+                        instance,
                     )?);
                 }
                 ast::CreateTargetDecl::Pipeline(instance) => {
@@ -631,7 +631,7 @@ impl FlowDecl {
                     pipeline_decls.push(Query::new_from_deploy(
                         origin,
                         stmt.node_id.id.clone(),
-                        &instance,
+                        instance,
                     )?);
                 }
             }

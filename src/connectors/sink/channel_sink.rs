@@ -368,10 +368,10 @@ where
         serializer: &'a mut MutEventSerializer,
         start: u64,
     ) -> BorrowingFfiFuture<'a, RResult<SinkReply>> {
-        async move {
-            // Conversion to use the full functionality of `Event`
-            let event = Event::from(event);
+        // Conversion to use the full functionality of `Event`
+        let event = Event::from(event);
 
+        async move {
             // clean up
             // make sure channels for the given event are added to avoid stupid errors
             // due to channels not yet handled
@@ -386,7 +386,11 @@ where
 
             let ingest_ns = event.ingest_ns;
             let stream_ids = event.id.get_streams(ctx.uid);
-            trace!("[Sink::{}] on_event stream_ids: {:?}", &ctx.url, stream_ids);
+            trace!(
+                "[Sink::{}] on_event stream_ids: {:?}",
+                &ctx.alias,
+                stream_ids
+            );
 
             let contraflow_utils = if event.transactional {
                 let reply_tx = self
@@ -419,7 +423,7 @@ where
                     );
 
                 for (stream_id, sender) in streams {
-                    trace!("[Sink::{}] Send to stream {}.", &ctx.url, stream_id);
+                    trace!("[Sink::{}] Send to stream {}.", &ctx.alias, stream_id);
                     let data = ttry!(serializer
                         .serialize_for_stream(&value.clone().into(), ingest_ns, *stream_id)
                         .into());
@@ -438,7 +442,7 @@ where
                     if sender.send(sink_data).await.is_err() {
                         error!(
                             "[Sink::{}] Error sending to closed stream {}.",
-                            &ctx.url, stream_id
+                            &ctx.alias, stream_id
                         );
                         remove_streams.push(*stream_id);
                         errored = true;
@@ -450,7 +454,7 @@ where
                 }
             }
             for stream_id in remove_streams {
-                trace!("[Sink::{}] Removing stream {}", &ctx.url, stream_id);
+                trace!("[Sink::{}] Removing stream {}", &ctx.alias, stream_id);
                 self.remove_stream(stream_id);
                 serializer.drop_stream(stream_id);
                 // TODO: stream based CB

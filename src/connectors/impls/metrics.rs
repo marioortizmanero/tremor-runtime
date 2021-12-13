@@ -56,7 +56,7 @@ fn connector_type() -> ConnectorType {
 }
 #[sabi_extern_fn]
 pub fn from_config(
-    _id: TremorUrl,
+    _id: RString,
     _raw_config: ROption<PdkValue<'static>>,
 ) -> FfiFuture<RResult<BoxedRawConnector>> {
     let connector = BoxedRawConnector::from_value(MetricsConnector::new(), TD_Opaque);

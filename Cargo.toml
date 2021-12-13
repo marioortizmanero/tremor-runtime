@@ -179,6 +179,11 @@ tonic = { version = "0.5.2", default-features = false, features = [
 ] }
 tremor-otelapis = { version = "0.2.2" }
 
+# aws-s3
+aws-sdk-s3 = "0.2.0" 
+aws-types = "0.2.0" 
+
+
 # gcp
 googapis = { version = "0.5", default-features = false, features = [
   "google-pubsub-v1",
@@ -229,6 +234,9 @@ abi_stable = { git = "https://github.com/marioortizmanero/abi_stable_crates.git"
 # FIXME: update to crates.io when this is added to a new version:
 # https://github.com/simd-lite/simd-json-derive/pull/9
 simd-json-derive = { git = "https://github.com/marioortizmanero/simd-json-derive.git", branch = "abi-stable" }
+# FIXME: remove when unexpected breakage in `AlignedBuf` is fixed either
+# upstream or in the connectors branch.
+simd-json = { git = "https://github.com/simd-lite/simd-json.git", tag = "v0.4.8" }
 
 # for use during debian packaging, via cargo-deb
 # https://github.com/mmstick/cargo-deb#packagemetadatadeb-options
