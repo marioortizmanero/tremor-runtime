@@ -56,7 +56,7 @@ fn connector_type() -> ConnectorType {
 }
 #[sabi_extern_fn]
 pub fn from_config(
-    _id: TremorUrl,
+    _alias: RString,
     _raw_config: ROption<PdkValue<'static>>,
 ) -> FfiFuture<RResult<BoxedRawConnector>> {
     let connector = BoxedRawConnector::from_value(MetricsConnector::new(), TD_Opaque);
@@ -190,7 +190,7 @@ impl MetricsSource {
 impl RawSource for MetricsSource {
     fn pull_data<'a>(
         &'a mut self,
-        _pull_id: u64,
+        _pull_id: &'a mut u64,
         _ctx: &'a SourceContext,
     ) -> BorrowingFfiFuture<'a, RResult<SourceReply>> {
         let reply = match self.rx.try_recv() {

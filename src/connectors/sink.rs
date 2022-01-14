@@ -31,7 +31,6 @@ use crate::permge::PriorityMerge;
 use crate::pipeline;
 use crate::postprocessor::{make_postprocessors, postprocess, Postprocessors};
 use abi_stable::std_types::RString;
-use async_ffi::{BorrowingFfiFuture, FutureExt};
 use async_std::channel::{bounded, unbounded, Receiver, Sender};
 use async_std::stream::StreamExt; // for .next() on PriorityMerge
 use async_std::task;
@@ -43,14 +42,9 @@ use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Display;
 use tremor_common::time::nanotime;
-use tremor_common::url::{ports::IN, TremorUrl};
-use tremor_pipeline::{
-    pdk::PdkEvent, pdk::PdkOpMeta, CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID,
-};
 use tremor_pipeline::{CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STREAM_ID};
 use tremor_script::ast::DeployEndpoint;
 use tremor_script::EventPayload;
-use tremor_script::{pdk::PdkEventPayload, EventPayload};
 
 use tremor_value::Value;
 
@@ -75,7 +69,6 @@ use tremor_value::pdk::PdkValue;
 
 pub use self::channel_sink::SinkMeta;
 
-use super::prelude::ConnectionLostNotifier;
 use super::utils::metrics::SinkReporter;
 
 /// Result for a sink function that may provide insights or response.
@@ -289,12 +282,13 @@ impl Sink {
     #[inline]
     pub async fn on_event(
         &mut self,
-        input: RStr<'_>,
+        input: &str,
         event: Event,
         ctx: &SinkContext,
-        serializer: MutEventSerializer<'_>,
+        serializer: &mut EventSerializer,
         start: u64,
     ) -> Result<SinkReply> {
+        let mut serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
         self.0
             .on_event(input.into(), event.into(), ctx, &mut serializer, start)
             .await
@@ -306,8 +300,9 @@ impl Sink {
         &mut self,
         signal: Event,
         ctx: &SinkContext,
-        serializer: MutEventSerializer<'_>,
+        serializer: &mut EventSerializer,
     ) -> Result<SinkReply> {
+        let mut serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
         self.0
             .on_signal(signal.into(), ctx, &mut serializer)
             .await
@@ -645,7 +640,7 @@ impl EventSerializer {
                 }
                 Entry::Vacant(entry) => {
                     let codec = codec::resolve(&self.codec_config)?;
-                    let pps = make_postprocessors(self.postprocessor_names.as_slice())?;
+                    let pps = make_postprocessors(self.postprocessor_configs.as_slice())?;
                     // insert data for a new stream
                     let (c, pps2) = entry.insert((codec, pps));
                     postprocess(pps2, ingest_ns, c.encode(value)?)

@@ -17,6 +17,8 @@ use crate::connectors::sink::channel_sink::ChannelSinkMsg;
 use crate::connectors::utils::tls::{load_server_config, TLSServerConfig};
 use crate::errors::{Error, Kind as ErrorKind};
 use crate::ttry;
+use abi_stable::rvec;
+use abi_stable::std_types::{RString, RVec};
 use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
 use async_std::net::TcpListener;
 use async_std::task::{self, JoinHandle};
@@ -29,11 +31,11 @@ use std::sync::Arc;
 
 use abi_stable::{
     prefix_type::PrefixTypeTrait,
-    rstr, rvec, sabi_extern_fn,
+    rstr, sabi_extern_fn,
     std_types::{
         ROption::{self, RSome},
         RResult::{RErr, ROk},
-        RStr, RString,
+        RStr,
     },
     type_level::downcasting::TD_Opaque,
 };
@@ -60,9 +62,10 @@ fn connector_type() -> ConnectorType {
 
 #[sabi_extern_fn]
 pub fn from_config(
-    id: TremorUrl,
+    alias: RString,
     raw_config: ROption<PdkValue<'static>>,
 ) -> FfiFuture<RResult<BoxedRawConnector>> {
+    let qsize = crate::QSIZE::load(Ordering::Relaxed);
     async move {
         if let RSome(raw_config) = raw_config {
             let config = ttry!(Config::new(&raw_config.into()));
@@ -72,7 +75,7 @@ pub fn from_config(
             } else {
                 None
             };
-            let (sink_tx, sink_rx) = bounded(crate::QSIZE::load(Ordering::Relaxed));
+            let (sink_tx, sink_rx) = bounded(qsize);
             let server = TcpServer {
                 config,
                 tls_server_config,
@@ -81,7 +84,7 @@ pub fn from_config(
             };
             ROk(BoxedRawConnector::from_value(server, TD_Opaque))
         } else {
-            RErr(ErrorKind::MissingConfiguration(id.to_string()).into())
+            RErr(ErrorKind::MissingConfiguration(alias.to_string()).into())
         }
     }
     .into_ffi()
@@ -160,8 +163,12 @@ impl RawConnector for TcpServer {
         qsize: usize,
         reply_tx: BoxedContraflowSender,
     ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSink>>> {
-        let sink = ChannelSink::new_no_meta(qsize, resolve_connection_meta, reply_tx);
-        self.sink_runtime = Some(sink.runtime());
+        let sink = ChannelSink::from_channel_no_meta(
+            resolve_connection_meta,
+            reply_tx,
+            self.sink_tx.clone(),
+            self.sink_rx.clone(),
+        );
         // We don't need to be able to downcast the connector back to the original
         // type, so we just pass it as an opaque type.
         let sink = BoxedRawSink::from_value(sink, TD_Opaque);
@@ -209,19 +216,22 @@ impl RawSource for TcpServerSource {
         ctx: &SourceContext,
         _attempt: &Attempt,
     ) -> BorrowingFfiFuture<'_, RResult<bool>> {
+        let path: RVec<RString> = rvec![self.config.port.to_string().into()];
+        let ctx = ctx.clone();
+        let accept_ctx = ctx.clone();
+        let buf_size = self.config.buf_size;
         async move {
-            let path = vec![self.config.port.to_string()];
-            let accept_ctx = ctx.clone();
-            let buf_size = self.config.buf_size;
-
             // cancel last accept task if necessary, this will drop the previous listener
             if let Some(previous_handle) = self.accept_task.take() {
                 previous_handle.cancel().await;
             }
 
-            let listener = TcpListener::bind((self.config.host.as_str(), self.config.port)).await?;
+            let listener =
+                match TcpListener::bind((self.config.host.as_str(), self.config.port)).await {
+                    Ok(listener) => listener,
+                    Err(e) => return RErr(Error::from(e).into()),
+                };
 
-            let ctx = ctx.clone();
             let tls_server_config = self.tls_server_config.clone();
 
             let runtime = self.runtime.clone();
@@ -229,7 +239,7 @@ impl RawSource for TcpServerSource {
             // accept task
             // FIXME: using `?` in the acceptor tasks causes the server quietly failing
             //        when the acceptor task errors
-            self.accept_task = Some(task::spawn(async move {
+            self.accept_task = Some(task::spawn::<_, Result<()>>(async move {
                 let mut stream_id_gen = StreamIdGen::default();
                 while let (true, Ok((stream, peer_addr))) = (
                     ctx.quiescence_beacon().continue_reading().await,
@@ -241,10 +251,10 @@ impl RawSource for TcpServerSource {
                     // Async<T> allows us to read in one thread and write in another concurrently - see its documentation
                     // So we don't need no BiLock like we would when using `.split()`
                     let origin_uri = EventOriginUri {
-                        scheme: URL_SCHEME.to_string(),
-                        host: peer_addr.ip().to_string(),
-                        port: Some(peer_addr.port()),
-                        path: path.clone(), // captures server port
+                        scheme: URL_SCHEME.into(),
+                        host: peer_addr.ip().to_string().into(),
+                        port: RSome(peer_addr.port()),
+                        path: path.clone().into(), // captures server port
                     };
 
                     let tls_acceptor: Option<TlsAcceptor> = tls_server_config
@@ -264,7 +274,7 @@ impl RawSource for TcpServerSource {
                             tls_read_stream,
                             stream.clone(),
                             vec![0; buf_size],
-                            ctx.alias.clone(),
+                            ctx.alias.to_string(),
                             origin_uri.clone(),
                             meta,
                         );
@@ -287,7 +297,7 @@ impl RawSource for TcpServerSource {
                         let tcp_reader = TcpReader::new(
                             stream.clone(),
                             vec![0; buf_size],
-                            ctx.alias.clone(),
+                            ctx.alias.to_string(),
                             origin_uri.clone(),
                             meta,
                         );
@@ -304,8 +314,8 @@ impl RawSource for TcpServerSource {
 
                 // notify connector task about disconnect
                 // of the listening socket
-                ctx.notifier().notify().await?;
-                Ok(())
+                ctx.notifier().notify().await;
+                Ok::<(), Error>(())
             }));
 
             ROk(true)
@@ -318,14 +328,15 @@ impl RawSource for TcpServerSource {
         _pull_id: &'a mut u64,
         _ctx: &'a SourceContext,
     ) -> BorrowingFfiFuture<'a, RResult<SourceReply>> {
-        match self.connection_rx.try_recv() {
+        let res = match self.connection_rx.try_recv() {
             Ok(reply) => ROk(reply),
             Err(TryRecvError::Empty) => {
                 // TODO: configure pull interval in connector config?
                 ROk(SourceReply::Empty(DEFAULT_POLL_INTERVAL))
             }
-            Err(e) => RErr(e.into()),
-        }
+            Err(e) => RErr(Error::from(e).into()),
+        };
+        future::ready(res).into_ffi()
     }
 
     fn on_stop(&mut self, _ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<()>> {

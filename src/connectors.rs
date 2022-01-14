@@ -31,9 +31,9 @@ use tremor_script::ast::DeployEndpoint;
 /// quiescence stuff
 pub(crate) use utils::{metrics, quiescence, reconnect};
 
-use async_std::task::{self, JoinHandle};
+use async_std::task;
 
-use self::metrics::{MetricsSender, SinkReporter, SourceReporter};
+use self::metrics::{SinkReporter, SourceReporter};
 use self::prelude::ConnectionLostNotifier;
 use self::sink::{BoxedContraflowSender, BoxedRawSink, Sink, SinkAddr, SinkContext, SinkMsg};
 use self::source::{BoxedRawSource, Source, SourceAddr, SourceContext, SourceMsg};

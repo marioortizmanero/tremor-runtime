@@ -37,7 +37,6 @@ use abi_stable::{
     StableAbi,
 };
 use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt};
-use async_std::channel::Sender;
 use std::future;
 use tremor_value::pdk::PdkValue;
 
@@ -270,6 +269,7 @@ impl RawSource for FileSource {
     }
 
     fn on_stop(&mut self, ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<()>> {
+        let ctx = ctx.clone();
         async move {
             if let Some(mut file) = self.underlying_file.take() {
                 if let Err(e) = file.close().await {
@@ -322,7 +322,7 @@ impl RawSink for FileSink {
                 // e.g. if a simple write failed temporarily
                 &Mode::Append
             };
-            let file = file::open_with(&self.config.path, &mut mode.as_open_options()).await?;
+            let file = ttry!(file::open_with(&self.config.path, &mut mode.as_open_options()).await);
             self.file = Some(file);
             ROk(true)
         }
@@ -336,32 +336,30 @@ impl RawSink for FileSink {
         serializer: &'a mut MutEventSerializer,
         start: u64,
     ) -> BorrowingFfiFuture<'a, RResult<SinkReply>> {
-        async move {
-            let file = self
-                .file
-                .as_mut()
-                .ok_or_else(|| Error::from("No file available."))?;
-            let ingest_ns = event.ingest_ns;
-            for value in event.value_iter() {
-                let data = serializer.serialize(value, ingest_ns)?;
-                for chunk in data {
-                    if let Err(e) = file.write_all(&chunk).await {
-                        error!("{} Error writing to file: {}", &ctx, &e);
-                        self.file = None;
-                        ctx.notifier().notify().await?;
-                        return RErr(e.into());
-                    }
-                }
-                if let Err(e) = file.flush().await {
-                    error!("{} Error flushing file: {}", &ctx, &e);
+        let event: Event = event.into();
+        let file = ttry!(self
+            .file
+            .as_mut()
+            .ok_or_else(|| Error::from("No file available.")));
+        let ingest_ns = event.ingest_ns;
+        for value in event.value_iter() {
+            let data = serializer.serialize(value, ingest_ns)?;
+            for chunk in data {
+                if let Err(e) = file.write_all(&chunk).await {
+                    error!("{} Error writing to file: {}", &ctx, &e);
                     self.file = None;
                     ctx.notifier().notify().await?;
                     return RErr(e.into());
                 }
             }
-            ROk(SinkReply::NONE)
+            if let Err(e) = file.flush().await {
+                error!("{} Error flushing file: {}", &ctx, &e);
+                self.file = None;
+                ctx.notifier().notify().await?;
+                return RErr(Error::from(e).into());
+            }
         }
-        .into_ffi()
+        ROk(SinkReply::NONE)
     }
 
     fn auto_ack(&self) -> bool {
@@ -373,6 +371,7 @@ impl RawSink for FileSink {
     }
 
     fn on_stop(&mut self, ctx: &SinkContext) -> BorrowingFfiFuture<'_, RResult<()>> {
+        let ctx = ctx.clone();
         async move {
             if let Some(file) = self.file.take() {
                 if let Err(e) = file.sync_all().await {
