@@ -17,6 +17,7 @@ use tremor_common::file;
 use tremor_pipeline::{EventOriginUri, FN_REGISTRY};
 
 use tremor_runtime::errors::*;
+use abi_stable::std_types::{RVec, RSome};
 use tremor_script::errors::CompilerError;
 use tremor_script::path::ModulePath;
 use tremor_script::prelude::*;
@@ -55,8 +56,8 @@ macro_rules! test_cases {
                 for (id, mut json) in in_json.into_iter().enumerate() {
                     let uri = EventOriginUri{
                         host: "test".into(),
-                        path: vec!["snot".into()],
-                        port: Some(23),
+                        path: RVec::from(vec!["snot".into()]),
+                        port: RSome(23),
                         scheme: "snot".into(),
                     };
                     let context = EventContext::new(id as u64, Some(&uri));
