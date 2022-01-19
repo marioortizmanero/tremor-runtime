@@ -103,7 +103,7 @@ pub struct SingleStreamSinkRuntime {
 }
 
 impl SingleStreamSinkRuntime {
-    pub(crate) fn register_stream_writer<W>(
+    pub fn register_stream_writer<W>(
         &self,
         stream: u64,
         ctx: &ConnectorContext,

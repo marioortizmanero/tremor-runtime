@@ -112,8 +112,8 @@ impl ChannelSourceRuntime {
 impl RawSource for ChannelSource {
     fn pull_data<'a>(
         &'a mut self,
-        pull_id: &'a mut u64,
-        ctx: &'a SourceContext,
+        _pull_id: &'a mut u64,
+        _ctx: &'a SourceContext,
     ) -> BorrowingFfiFuture<'a, RResult<SourceReply>> {
         future::ready(match self.rx.try_recv() {
             Ok(reply) => ROk(reply),

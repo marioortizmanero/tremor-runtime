@@ -65,7 +65,8 @@ pub fn from_config(
     alias: RString,
     raw_config: ROption<PdkValue<'static>>,
 ) -> FfiFuture<RResult<BoxedRawConnector>> {
-    let qsize = crate::QSIZE::load(Ordering::Relaxed);
+    // TODO: find a way to pass in or reach the configured QSIZE
+    let qsize = 128;
     async move {
         if let RSome(raw_config) = raw_config {
             let config = ttry!(Config::new(&raw_config.into()));
@@ -142,7 +143,7 @@ fn resolve_connection_meta(meta: &Value) -> Option<ConnectionMeta> {
 impl RawConnector for TcpServer {
     fn create_source(
         &mut self,
-        ctx: SourceContext,
+        _ctx: SourceContext,
         _qsize: usize,
     ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSource>>> {
         let sink_runtime = ChannelSinkRuntime::new(self.sink_tx.clone());
@@ -160,7 +161,7 @@ impl RawConnector for TcpServer {
     fn create_sink(
         &mut self,
         _ctx: SinkContext,
-        qsize: usize,
+        _qsize: usize,
         reply_tx: BoxedContraflowSender,
     ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSink>>> {
         let sink = ChannelSink::from_channel_no_meta(

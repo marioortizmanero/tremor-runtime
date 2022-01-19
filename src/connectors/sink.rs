@@ -225,11 +225,11 @@ pub trait RawSink: Send {
     /// The intended result of this function is to re-establish a connection. It might reuse a working connection.
     ///
     /// Return `ROk(true)` if the connection could be successfully established.
-    fn connect(
-        &mut self,
-        _ctx: &SinkContext,
-        _attempt: &Attempt,
-    ) -> BorrowingFfiFuture<'_, RResult<bool>> {
+    fn connect<'a>(
+        &'a mut self,
+        _ctx: &'a SinkContext,
+        _attempt: &'a Attempt,
+    ) -> BorrowingFfiFuture<'a, RResult<bool>> {
         future::ready(ROk(true)).into_ffi()
     }
 

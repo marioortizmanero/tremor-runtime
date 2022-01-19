@@ -206,11 +206,11 @@ pub trait RawSource: Send {
     /// The intended result of this function is to re-establish a connection. It might reuse a working connection.
     ///
     /// Return `Ok(true)` if the connection could be successfully established.
-    fn connect(
-        &mut self,
-        _ctx: &SourceContext,
-        _attempt: &Attempt,
-    ) -> BorrowingFfiFuture<'_, RResult<bool>> {
+    fn connect<'a>(
+        &'a mut self,
+        _ctx: &'a SourceContext,
+        _attempt: &'a Attempt,
+    ) -> BorrowingFfiFuture<'a, RResult<bool>> {
         future::ready(ROk(true)).into_ffi()
     }
 
@@ -653,12 +653,6 @@ enum SourceState {
     Stopped,
 }
 
-impl SourceState {
-    fn should_pull_data(&self) -> bool {
-        *self == SourceState::Running || *self == SourceState::Draining
-    }
-}
-
 // FIXME: make prettier or avoid duplication in pdk mod? It's a bit out of place
 // for now.
 fn conv_cow_str(cow: RCow<str>) -> beef::Cow<str> {
@@ -919,9 +913,9 @@ impl SourceManager {
                 Ok(Control::Continue)
             }
             SourceMsg::Cb(CbAction::Fail, id) => {
-                if let Some((stream_id, id)) = id.get_min_by_source(self.ctx.uid) {
+                if let Some((stream_id, pull_id)) = id.get_min_by_source(self.ctx.uid) {
                     self.ctx.log_err(
-                        self.source.fail(stream_id, stream_id, &self.ctx).await,
+                        self.source.fail(stream_id, pull_id, &self.ctx).await,
                         "fail failed",
                     );
                 }
