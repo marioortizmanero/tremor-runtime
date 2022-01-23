@@ -36,6 +36,7 @@ impl From<sled::transaction::TransactionError<()>> for Error {
 }
 
 /// For more ergonomic error-handling in PDK contexts
+/// TODO: use `tremor_pdk::RError` when it exists
 impl From<Error> for abi_stable::std_types::SendRBoxError {
     fn from(e: Error) -> Self {
         Self::new(e)

@@ -14,7 +14,7 @@
 
 use std::{ffi::OsStr, path::PathBuf};
 
-use crate::{connectors::prelude::*, pdk::utils::conv_cow_str_inv};
+use crate::connectors::prelude::*;
 use async_compression::futures::bufread::XzDecoder;
 use async_std::{
     fs::{File as FSFile, OpenOptions},
@@ -22,21 +22,21 @@ use async_std::{
 };
 use futures::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tremor_common::asy::file;
-use tremor_pipeline::pdk::PdkEvent;
 
-use crate::ttry;
+use crate::{pdk::utils::conv_cow_str_inv, ttry};
 use abi_stable::{
     prefix_type::PrefixTypeTrait,
-    rstr, rvec, sabi_extern_fn,
+    rstr, rtry, rvec, sabi_extern_fn,
     std_types::{
         ROption::{self, RNone, RSome},
         RResult::{RErr, ROk},
         RStr, RString, RVec,
     },
-    type_level::downcasting::TD_Opaque, rtry,
+    type_level::downcasting::TD_Opaque,
 };
 use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt};
 use std::future;
+use tremor_pipeline::pdk::PdkEvent;
 use tremor_value::pdk::PdkValue;
 
 const URL_SCHEME: &str = "tremor-file";
@@ -156,14 +156,16 @@ impl RawConnector for File {
         _qsize: usize,
     ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSource>>> {
         let source = if self.config.mode == Mode::Read {
-            RSome(BoxedRawSource::from_value(FileSource::new(self.config.clone()), TD_Opaque))
+            RSome(BoxedRawSource::from_value(
+                FileSource::new(self.config.clone()),
+                TD_Opaque,
+            ))
         } else {
             RNone
         };
         future::ready(ROk(source)).into_ffi()
     }
 
-<<<<<<< HEAD
     /*
     async fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> Result<bool> {
         // SINK PART: open write file
@@ -212,19 +214,13 @@ impl RawConnector for File {
                 source_runtime.register_stream_reader(DEFAULT_STREAM_ID, ctx, reader);
             };
         }
-
         Ok(true)
     }*/
 
     fn codec_requirements(&self) -> CodecReq {
         CodecReq::Required
-=======
-    fn default_codec(&self) -> RStr<'_> {
-        rstr!("json")
->>>>>>> 0dae03db (PDK file connector)
     }
 }
-
 
 struct FileSource {
     config: Config,
@@ -268,10 +264,12 @@ impl RawSource for FileSource {
             self.meta = ctx.meta(literal!({
                 "path": self.config.path.display().to_string()
             }));
-            let read_file =
-                ttry!(file::open_with(&self.config.path, &mut self.config.mode.as_open_options())
-                    .await
-                    .into());
+            let read_file = ttry!(file::open_with(
+                &self.config.path,
+                &mut self.config.mode.as_open_options()
+            )
+            .await
+            .into());
             // TODO: instead of looking for an extension
             // check the magic bytes at the beginning of the file to determine the compression applied
             if let Some("xz") = self.config.path.extension().and_then(OsStr::to_str) {
@@ -316,7 +314,6 @@ impl RawSource for FileSource {
                         // ALLOW: with the read above we ensure that this access is valid, unless async_std is broken
                         data: RVec::from(&self.buf[0..bytes_read]),
                         port: RSome(conv_cow_str_inv(OUT)),
-                        
                     }
                 }
             };
@@ -419,7 +416,8 @@ impl RawSink for FileSink {
                 }
             }
             ROk(SinkReply::NONE)
-        }.into_ffi()
+        }
+        .into_ffi()
     }
 
     fn auto_ack(&self) -> bool {

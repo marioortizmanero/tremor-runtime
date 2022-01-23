@@ -24,14 +24,9 @@ pub use crate::connectors::source::{
 };
 pub use crate::connectors::utils::reconnect::{Attempt, ConnectionLostNotifier};
 pub use crate::connectors::{
-    CodecReq, BoxedRawConnector, ConnectorContext, ConnectorType, Context, RawConnector, StreamDone,
-    StreamIdGen,
+    CodecReq, ConnectorContext, ConnectorType, Context, StreamDone, StreamIdGen,
 };
 pub use crate::errors::{Error, Kind as ErrorKind, Result};
-pub use crate::pdk::{
-    connectors::{ConnectorMod, ConnectorMod_Ref},
-    RResult,
-};
 pub use crate::utils::hostname;
 pub use crate::{Event, OpConfig, QSIZE};
 pub use std::sync::atomic::Ordering;

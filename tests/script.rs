@@ -17,12 +17,13 @@ use tremor_common::file;
 use tremor_pipeline::{EventOriginUri, FN_REGISTRY};
 
 use tremor_runtime::errors::*;
-use abi_stable::std_types::{RVec, RSome};
 use tremor_script::errors::CompilerError;
 use tremor_script::path::ModulePath;
 use tremor_script::prelude::*;
 use tremor_script::utils::*;
 use tremor_script::{AggrType, EventContext, Return, Script};
+
+use abi_stable::std_types::{RSome, RVec};
 
 macro_rules! test_cases {
     ($($file:ident),* ,) => {

@@ -52,11 +52,15 @@ pub struct QuiescenceBeacon(Arc<Inner>);
 #[abi_stable::sabi_trait]
 pub trait QuiescenceBeaconOpaque: fmt::Debug + Clone + Send + Sync {
     /// returns `true` if consumers should continue reading
-    /// doesn't return until the beacon is unpaused
+    /// If the connector is paused, it awaits until it is resumed.
+    ///
+    /// Use this function in asynchronous tasks consuming from external resources to check
+    /// whether it should still read from the external resource. This will also pause external consumption if the
+    /// connector is paused.
     fn continue_reading(&self) -> BorrowingFfiFuture<'_, bool>;
 
-    /// returns `true` if consumers should continue writing.
-    ///
+    /// Returns `true` if consumers should continue writing.
+    /// If the connector is paused, it awaits until it is resumed.
     fn continue_writing(&self) -> BorrowingFfiFuture<'_, bool>;
 
     /// notify consumers of this beacon that reading should be stopped

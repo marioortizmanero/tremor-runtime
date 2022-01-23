@@ -53,16 +53,14 @@ pub use self::channel_sink::SinkMeta;
 
 use super::{utils::metrics::SinkReporter, CodecReq};
 
-use crate::connectors::utils::reconnect::Attempt;
 use crate::connectors::utils::{
     quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier,
 };
-use crate::connectors::{ConnectorType, Context, Msg, StreamDone};
-use crate::errors::{Error, Result};
+use crate::errors::Error;
 use crate::pdk::{RError, RResult};
 use abi_stable::{
     rvec,
-    std_types::{RBox, RResult::ROk, RStr, RVec, SendRBoxError},
+    std_types::{RBox, RResult::ROk, RStr, RString, RVec, SendRBoxError},
     type_level::downcasting::TD_Opaque,
     RMut, StableAbi,
 };
@@ -619,7 +617,9 @@ impl EventSerializer {
             }
             CodecReq::Required => codec_config
                 .ok_or_else(|| format!("Missing codec for connector {}", "FIXME: identify sink"))?,
-            CodecReq::Optional(opt) => codec_config.unwrap_or_else(|| CodecConfig::from(opt)),
+            CodecReq::Optional(opt) => {
+                codec_config.unwrap_or_else(|| CodecConfig::from(opt.as_str()))
+            }
         };
 
         let codec = codec::resolve(&codec_config)?;

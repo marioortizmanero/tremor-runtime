@@ -19,11 +19,8 @@
 
 use std::fmt::Display;
 
-use abi_stable::StableAbi;
-
 /// Possible lifecycle states of an instance
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize, StableAbi)]
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum InstanceState {
     /// initialized - first state after coming to life

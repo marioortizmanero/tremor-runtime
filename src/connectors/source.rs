@@ -65,11 +65,13 @@ use crate::connectors::utils::{
 use crate::pdk::RResult;
 use abi_stable::{
     rvec,
-    std_types::{RBox, RCow, ROption, RResult::ROk, RVec, Tuple2},
+    std_types::{RBox, RCow, ROption, RResult::ROk, RString, RVec, Tuple2},
     StableAbi,
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
 use std::future;
+use tremor_script::pdk::PdkEventPayload;
+use tremor_value::pdk::PdkValue;
 
 /// The default poll interval for `try_recv` on channels in connectors
 pub const DEFAULT_POLL_INTERVAL: u64 = 10;
@@ -570,7 +572,7 @@ pub fn builder(
         CodecReq::Optional(opt) => config
             .codec
             .clone()
-            .unwrap_or_else(|| CodecConfig::from(opt)),
+            .unwrap_or_else(|| CodecConfig::from(opt.as_str())),
     };
     let streams = Streams::new(connector_uid, codec_config, preprocessor_configs)?;
 

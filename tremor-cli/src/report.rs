@@ -15,7 +15,6 @@
 use crate::test::stats;
 use std::collections::HashMap;
 
-
 /// A test run is a collection of test reports that
 /// have executed in the context of a test run
 ///

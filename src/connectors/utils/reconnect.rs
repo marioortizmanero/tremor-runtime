@@ -18,19 +18,16 @@ use crate::connectors::sink::SinkMsg;
 use crate::connectors::source::SourceMsg;
 use crate::connectors::{Addr, Connectivity, Connector, ConnectorContext, Context, Msg};
 use crate::errors::{Error, Result};
-use crate::pdk::RResult;
-use abi_stable::{
-    std_types::{RBox, SendRBoxError},
-    type_level::downcasting::TD_Opaque,
-    StableAbi,
-};
-use async_ffi::{BorrowingFfiFuture, FutureExt as AsyncFfiFutureExt};
 use async_std::channel::{bounded, Sender};
-use async_std::task;
+use async_std::task::{self, JoinHandle};
 use futures::future::{join3, ready, FutureExt};
 use std::convert::identity;
 use std::fmt::Display;
 use std::time::Duration;
+
+use crate::pdk::{RError, RResult};
+use abi_stable::{std_types::RBox, type_level::downcasting::TD_Opaque, StableAbi};
+use async_ffi::{BorrowingFfiFuture, FutureExt as AsyncFfiFutureExt};
 
 #[derive(Debug, PartialEq, Clone)]
 enum ShouldRetry {
@@ -162,7 +159,7 @@ pub(crate) struct ReconnectRuntime {
     interval_ms: Option<u64>,
     strategy: Box<dyn ReconnectStrategy>,
     addr: Addr,
-    notifier: ConnectionLostNotifier,
+    notifier: BoxedConnectionLostNotifier,
     retry_task: Option<JoinHandle<()>>,
     alias: String,
 }
@@ -175,8 +172,9 @@ pub(crate) struct ReconnectRuntime {
 pub struct ConnectionLostNotifier(Sender<Msg>);
 
 impl ConnectionLostNotifier {
-    pub(crate) fn new(sender: Sender<Msg>) -> Self {
-        Self(sender)
+    /// constructor
+    pub fn new(tx: Sender<Msg>) -> Self {
+        Self(tx)
     }
 }
 
@@ -198,7 +196,7 @@ impl ConnectionLostNotifierOpaque for ConnectionLostNotifier {
                 .map_err(|e| {
                     // First converting to our own error type, and then to abi_stable's
                     let e: crate::errors::Error = e.into();
-                    SendRBoxError::new(e)
+                    RError::new(e)
                 })
                 .into()
         }
@@ -374,10 +372,13 @@ mod tests {
 
     use super::*;
 
-    use crate::pdk::{RError, RResult};
-    use crate::errors::Error;
-    use abi_stable::{rstr, std_types::{RStr, RString}};
     use crate::connectors::{quiescence::BoxedQuiescenceBeacon, RawConnector};
+    use crate::errors::Error;
+    use crate::pdk::{RError, RResult};
+    use abi_stable::{
+        rstr,
+        std_types::{RStr, RString},
+    };
     use async_std::future;
 
     /// does not connect

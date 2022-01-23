@@ -103,12 +103,8 @@ pub struct SingleStreamSinkRuntime {
 }
 
 impl SingleStreamSinkRuntime {
-    pub fn register_stream_writer<W>(
-        &self,
-        stream: u64,
-        ctx: &ConnectorContext,
-        mut writer: W,
-    ) where
+    pub fn register_stream_writer<W>(&self, stream: u64, ctx: &ConnectorContext, mut writer: W)
+    where
         W: StreamWriter + 'static,
     {
         let ctx = ctx.clone();

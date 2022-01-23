@@ -256,7 +256,6 @@ impl World {
     /// # Errors
     ///  * If the system is unavailable
     pub async fn register_connector_type(&self, builder: ConnectorMod_Ref) -> Result<()> {
-        // TODO: actually make a difference
         self.system
             .send(ManagerMsg::RegisterConnectorType {
                 connector_type: builder.connector_type()(),

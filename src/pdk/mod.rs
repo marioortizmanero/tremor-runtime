@@ -21,11 +21,12 @@ pub type RResult<T> = abi_stable::std_types::RResult<T, RError>;
 /// * `/usr/local/share/tremor/plugins`: place for custom plugins
 pub const DEFAULT_PLUGIN_PATH: &str = "/usr/local/share/tremor/plugins:/usr/share/tremor/plugins";
 
-/// This is a workaround until `?` can be used with functions that return
-/// `RResult`: https://github.com/rust-lang/rust/issues/84277
+/// This can be used alongside [`abi_stable::rtry`] for error handling. Its
+/// difference is that it does an implicit conversion to `RResult`, which is
+/// useful sometimes to reduce boilerplate.
 ///
-/// NOTE: this might be less 'magic' by matching to `RResult` instead of
-/// `Result`, but it also saves us a very common `.into()`.
+/// These macros are a workaround until `?` can be used with functions that
+/// return `RResult`: https://github.com/rust-lang/rust/issues/84277.
 #[macro_export]
 macro_rules! ttry {
     ($e:expr) => {

@@ -219,10 +219,6 @@ impl RawSink for MetricsSink {
         _serializer: &'a mut MutEventSerializer,
         _start: u64,
     ) -> BorrowingFfiFuture<'a, RResult<SinkReply>> {
-        let Event {
-            origin_uri, data, ..
-        } = event;
-
         // Conversion to use the full functionality of `Event`
         let event = Event::from(event);
 
@@ -232,6 +228,10 @@ impl RawSink for MetricsSink {
                 // if it fails here an error event is sent to the ERR port of this connector
                 ttry!(verify_metrics_value(value));
             }
+
+            let Event {
+                origin_uri, data, ..
+            } = event;
 
             let metrics_msg = MetricsMsg::new(data, origin_uri);
             let ack_or_fail = match self.tx.try_broadcast(metrics_msg) {
