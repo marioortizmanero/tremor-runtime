@@ -26,7 +26,7 @@ use std::fmt::Display;
 use std::time::Duration;
 
 use crate::pdk::{RError, RResult};
-use abi_stable::{std_types::RBox, type_level::downcasting::TD_Opaque, StableAbi};
+use abi_stable::{std_types::RBox, StableAbi};
 use async_ffi::{BorrowingFfiFuture, FutureExt as AsyncFfiFutureExt};
 
 #[derive(Debug, PartialEq, Clone)]
@@ -453,7 +453,7 @@ mod tests {
         let (tx, rx) = async_std::channel::bounded(1);
         let notifier = ConnectionLostNotifier::new(tx.clone());
         let notifier = BoxedConnectionLostNotifier::from_value(notifier, TD_Opaque);
-        let alias = RString::from("test");
+        let alias = String::from("test");
         let addr = Addr {
             alias: alias.clone(),
             source: None,
@@ -491,7 +491,7 @@ mod tests {
         let (tx, rx) = async_std::channel::bounded(1);
         let notifier = ConnectionLostNotifier::new(tx.clone());
         let notifier = BoxedConnectionLostNotifier::from_value(notifier, TD_Opaque);
-        let alias = RString::from("test");
+        let alias = String::from("test");
         let addr = Addr {
             alias: alias.clone(),
             source: None,

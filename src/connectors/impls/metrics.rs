@@ -22,7 +22,7 @@ use crate::pdk::RError;
 use crate::ttry;
 use abi_stable::{
     prefix_type::PrefixTypeTrait,
-    rstr, rvec, sabi_extern_fn,
+    rvec, sabi_extern_fn,
     std_types::{
         ROption::{self, RNone, RSome},
         RResult::{RErr, ROk},

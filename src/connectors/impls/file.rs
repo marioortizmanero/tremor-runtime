@@ -26,7 +26,7 @@ use tremor_common::asy::file;
 use crate::{pdk::utils::conv_cow_str_inv, ttry};
 use abi_stable::{
     prefix_type::PrefixTypeTrait,
-    rstr, rtry, rvec, sabi_extern_fn,
+    rtry, rvec, sabi_extern_fn,
     std_types::{
         ROption::{self, RNone, RSome},
         RResult::{RErr, ROk},

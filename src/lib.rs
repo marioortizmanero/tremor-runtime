@@ -17,7 +17,7 @@
 // TODO: turn back on
 // #![deny(warnings)]
 // #![deny(missing_docs)]
-// TODO: remove allows
+// TODO: remove allow
 #![allow(unused)]
 #![recursion_limit = "1024"]
 #![deny(

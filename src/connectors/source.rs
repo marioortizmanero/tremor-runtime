@@ -33,9 +33,7 @@ use crate::config::{
     self, Codec as CodecConfig, Connector as ConnectorConfig, Preprocessor as PreprocessorConfig,
 };
 use crate::connectors::{
-    metrics::SourceReporter,
-    utils::reconnect::{Attempt, ConnectionLostNotifier},
-    ConnectorType, Context, Msg, QuiescenceBeacon, StreamDone,
+    metrics::SourceReporter, utils::reconnect::Attempt, ConnectorType, Context, Msg, StreamDone,
 };
 use crate::errors::{Error, Result};
 use crate::pipeline;

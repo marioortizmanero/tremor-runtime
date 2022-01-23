@@ -27,8 +27,8 @@ use crate::codec::{self, Codec};
 use crate::config::{
     Codec as CodecConfig, Connector as ConnectorConfig, Postprocessor as PostprocessorConfig,
 };
-use crate::connectors::utils::reconnect::{Attempt, ConnectionLostNotifier};
-use crate::connectors::{ConnectorType, Context, Msg, QuiescenceBeacon, StreamDone};
+use crate::connectors::utils::reconnect::Attempt;
+use crate::connectors::{ConnectorType, Context, Msg, StreamDone};
 use crate::errors::Result;
 use crate::permge::PriorityMerge;
 use crate::pipeline;

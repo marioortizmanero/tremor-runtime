@@ -36,7 +36,7 @@ use crate::errors::{Error, Kind as ErrorKind, Result};
 use crate::instance::InstanceState;
 use crate::pipeline;
 use crate::system::World;
-use crate::OpConfig;
+
 use async_std::channel::{bounded, Sender};
 use async_std::task::{self};
 use beef::Cow;

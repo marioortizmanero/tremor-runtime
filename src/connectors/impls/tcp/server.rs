@@ -18,7 +18,7 @@ use crate::connectors::utils::tls::{load_server_config, TLSServerConfig};
 use crate::errors::{Error, Kind as ErrorKind};
 use crate::ttry;
 use abi_stable::rvec;
-use abi_stable::std_types::{RString, RVec};
+use abi_stable::std_types::RString;
 use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
 use async_std::net::TcpListener;
 use async_std::task::{self, JoinHandle};
@@ -31,11 +31,10 @@ use std::sync::Arc;
 
 use abi_stable::{
     prefix_type::PrefixTypeTrait,
-    rstr, sabi_extern_fn,
+    sabi_extern_fn,
     std_types::{
         ROption::{self, RSome},
         RResult::{RErr, ROk},
-        RStr,
     },
     type_level::downcasting::TD_Opaque,
 };
@@ -326,7 +325,7 @@ impl RawSource for TcpServerSource {
     fn pull_data<'a>(
         &'a mut self,
         _pull_id: &'a mut u64,
-        ctx: &'a SourceContext,
+        _ctx: &'a SourceContext,
     ) -> BorrowingFfiFuture<'a, RResult<SourceReply>> {
         let res = match self.connection_rx.try_recv() {
             Ok(reply) => ROk(reply),
@@ -340,7 +339,7 @@ impl RawSource for TcpServerSource {
         future::ready(res).into_ffi()
     }
 
-    fn on_stop(&mut self, ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<()>> {
+    fn on_stop(&mut self, _ctx: &SourceContext) -> BorrowingFfiFuture<'_, RResult<()>> {
         async move {
             if let Some(accept_task) = self.accept_task.take() {
                 // stop acceptin' new connections
