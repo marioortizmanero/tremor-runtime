@@ -264,12 +264,9 @@ impl RawSource for FileSource {
             self.meta = ctx.meta(literal!({
                 "path": self.config.path.display().to_string()
             }));
-            let read_file = ttry!(file::open_with(
-                &self.config.path,
-                &mut self.config.mode.as_open_options()
-            )
-            .await
-            .into());
+            let read_file = ttry!(
+                file::open_with(&self.config.path, &mut self.config.mode.as_open_options()).await
+            );
             // TODO: instead of looking for an extension
             // check the magic bytes at the beginning of the file to determine the compression applied
             if let Some("xz") = self.config.path.extension().and_then(OsStr::to_str) {

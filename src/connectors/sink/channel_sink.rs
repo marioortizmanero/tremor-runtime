@@ -32,11 +32,13 @@ use value_trait::ValueAccess;
 
 use crate::errors::{Kind as ErrorKind, Result};
 use crate::pdk::RResult;
-use crate::ttry;
-use abi_stable::std_types::{
-    ROption::{RNone, RSome},
-    RResult::ROk,
-    RStr,
+use abi_stable::{
+    rtry,
+    std_types::{
+        ROption::{RNone, RSome},
+        RResult::ROk,
+        RStr,
+    },
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
 use std::future;
@@ -419,9 +421,11 @@ where
 
                 for (stream_id, sender) in streams {
                     trace!("{} Send to stream {}.", &ctx, stream_id);
-                    let data = ttry!(serializer
-                        .serialize_for_stream(&value.clone().into(), ingest_ns, *stream_id)
-                        .into());
+                    let data = rtry!(serializer.serialize_for_stream(
+                        &value.clone().into(),
+                        ingest_ns,
+                        *stream_id
+                    ));
                     let meta = if B::NEEDS_META {
                         Some(meta.clone_static())
                     } else {

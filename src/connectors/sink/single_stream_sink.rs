@@ -31,11 +31,13 @@ use super::{AsyncSinkReply, ContraflowData, StreamWriter};
 use crate::connectors::prelude::*;
 use crate::errors::Kind as ErrorKind;
 use crate::pdk::RResult;
-use crate::ttry;
-use abi_stable::std_types::{
-    ROption::{RNone, RSome},
-    RResult::ROk,
-    RStr,
+use abi_stable::{
+    rtry,
+    std_types::{
+        ROption::{RNone, RSome},
+        RResult::ROk,
+        RStr,
+    },
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
 use tremor_pipeline::{pdk::PdkEvent, Event};
@@ -186,9 +188,7 @@ where
             {
                 // handle first couple of items (if batched)
                 for (value, meta) in value_meta_iter {
-                    let data = ttry!(serializer
-                        .serialize(&value.clone().into(), ingest_ns)
-                        .into());
+                    let data = rtry!(serializer.serialize(&value.clone().into(), ingest_ns));
                     let meta = if B::NEEDS_META {
                         Some(meta.clone_static())
                     } else {
@@ -206,9 +206,7 @@ where
                     }
                 }
                 // handle last item
-                let data = ttry!(serializer
-                    .serialize(&last_value.clone().into(), ingest_ns)
-                    .into());
+                let data = rtry!(serializer.serialize(&last_value.clone().into(), ingest_ns));
                 let meta = if B::NEEDS_META {
                     Some(last_meta.clone_static())
                 } else {
