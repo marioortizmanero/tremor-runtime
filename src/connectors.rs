@@ -36,7 +36,6 @@ use crate::errors::{Error, Kind as ErrorKind, Result};
 use crate::instance::InstanceState;
 use crate::pipeline;
 use crate::system::World;
-
 use async_std::channel::{bounded, Sender};
 use async_std::task::{self};
 use beef::Cow;
@@ -76,8 +75,7 @@ use abi_stable::{
         RResult::{RErr, ROk},
         RStr, RString, RVec,
     },
-    type_level::downcasting::TD_CanDowncast,
-    type_level::downcasting::TD_Opaque,
+    type_level::downcasting::{TD_CanDowncast, TD_Opaque},
     StableAbi,
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};

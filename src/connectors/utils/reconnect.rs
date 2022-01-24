@@ -368,16 +368,19 @@ impl ReconnectRuntime {
 mod tests {
     // use crate::connectors::quiescence::QuiescenceBeacon;
 
-    use crate::connectors::{quiescence::QuiescenceBeacon, CodeReq};
+    use crate::connectors::{quiescence::QuiescenceBeacon, CodecReq};
 
     use super::*;
 
-    use crate::connectors::{quiescence::BoxedQuiescenceBeacon, RawConnector};
-    use crate::errors::Error;
-    use crate::pdk::{RError, RResult};
+    use crate::{
+        connectors::{prelude::*, quiescence::BoxedQuiescenceBeacon},
+        errors::Error,
+        pdk::{RError, RResult},
+    };
     use abi_stable::{
         rstr,
         std_types::{RStr, RString},
+        type_level::downcasting::TD_Opaque,
     };
     use async_std::future;
 
@@ -471,7 +474,7 @@ mod tests {
         let qb = BoxedQuiescenceBeacon::from_value(QuiescenceBeacon::default(), TD_Opaque);
         let ctx = ConnectorContext {
             uid: 1,
-            alias,
+            alias: alias.into(),
             connector_type: "fake".into(),
             quiescence_beacon: qb,
             notifier: runtime.notifier(),
@@ -513,7 +516,7 @@ mod tests {
         let qb = BoxedQuiescenceBeacon::from_value(QuiescenceBeacon::default(), TD_Opaque);
         let ctx = ConnectorContext {
             uid: 1,
-            alias,
+            alias: alias.into(),
             connector_type: "fake".into(),
             quiescence_beacon: qb,
             notifier: runtime.notifier(),

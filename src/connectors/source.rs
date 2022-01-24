@@ -33,7 +33,9 @@ use crate::config::{
     self, Codec as CodecConfig, Connector as ConnectorConfig, Preprocessor as PreprocessorConfig,
 };
 use crate::connectors::{
-    metrics::SourceReporter, utils::reconnect::Attempt, ConnectorType, Context, Msg, StreamDone,
+    metrics::SourceReporter,
+    utils::reconnect::{Attempt, ConnectionLostNotifier},
+    ConnectorType, Context, Msg, QuiescenceBeacon, StreamDone,
 };
 use crate::errors::{Error, Result};
 use crate::pipeline;
@@ -52,10 +54,6 @@ use tremor_value::{literal, Value};
 use value_trait::Builder;
 
 use super::CodecReq;
-use super::metrics::SourceReporter;
-use super::prelude::Attempt;
-use super::quiescence::BoxedQuiescenceBeacon;
-use super::{ConnectorContext, StreamDone};
 
 use crate::connectors::utils::{
     quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier,
