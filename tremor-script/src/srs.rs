@@ -24,6 +24,7 @@ use abi_stable::{
     rvec,
     std_types::{RArc, RVec},
 };
+use tremor_value::value::from::cow_beef_to_sabi;
 
 ///! This file includes our self referential structs
 
@@ -695,7 +696,7 @@ impl ScriptDecl {
                 .script
                 .consts
                 .args
-                .try_insert(name.id.clone(), value.clone());
+                .try_insert(cow_beef_to_sabi(name.id.clone()), value.clone());
         }
 
         Ok(Self { raw, script })
@@ -719,7 +720,7 @@ impl ScriptDecl {
                     .script
                     .consts
                     .args
-                    .try_insert(name.id.clone(), value.clone());
+                    .try_insert(cow_beef_to_sabi(name.id.clone()), value.clone());
             }
 
             Ok(())
@@ -840,7 +841,7 @@ impl EventPayload {
     /// ```
 
     #[must_use]
-    pub fn suffix(&self) -> &ValueAndMeta {
+    pub fn suffix(&self) -> &ValueAndMeta<'static> {
         &self.data
     }
 

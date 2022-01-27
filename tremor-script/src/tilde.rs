@@ -680,19 +680,33 @@ impl std::ops::Deref for Cidr {
     }
 }
 
-impl<'cidr> From<Cidr>
-    for HashMap<Cow<'cidr, str>, Value<'cidr>, BuildHasherDefault<fxhash::FxHasher>>
-{
+impl<'cidr> From<Cidr> for tremor_value::value::Object<'cidr> {
     fn from(x: Cidr) -> Self {
         match x.0 {
-            IpCidr::V4(y) => hashmap!(
-                       "prefix".into() => Value::from(y.get_prefix_as_u8_array().to_vec()),
-                       "mask".into() => Value::from(y.get_mask_as_u8_array().to_vec()),
-            ),
-            IpCidr::V6(y) => hashmap!(
-                       "prefix".into() => Value::from(y.get_prefix_as_u16_array().to_vec()),
-                       "mask".into() => Value::from(y.get_mask_as_u16_array().to_vec()),
-            ),
+            IpCidr::V4(y) => {
+                let mut h = Object::with_capacity(2);
+                h.insert(
+                    "prefix".into(),
+                    Value::from(y.get_prefix_as_u8_array().to_vec()),
+                );
+                h.insert(
+                    "mask".into(),
+                    Value::from(y.get_mask_as_u8_array().to_vec()),
+                );
+                h
+            }
+            IpCidr::V6(y) => {
+                let mut h = Object::with_capacity(2);
+                h.insert(
+                    "prefix".into(),
+                    Value::from(y.get_prefix_as_u16_array().to_vec()),
+                );
+                h.insert(
+                    "mask".into(),
+                    Value::from(y.get_mask_as_u16_array().to_vec()),
+                );
+                h
+            }
         }
     }
 }

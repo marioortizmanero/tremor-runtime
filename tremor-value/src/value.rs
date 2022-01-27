@@ -285,7 +285,7 @@ impl<'value> Value<'value> {
             // https://github.com/rodrimati1992/abi_stable_crates/pull/74
             Self::Object(obj) => RBox::into_inner(obj)
                 .into_iter()
-                .map(|Tuple2(k, v)| (RCow::Owned(k.to_string().into()), v.into_static()))
+                .map(|Tuple2(k, v)| Tuple2(RCow::Owned(k.to_string().into()), v.into_static()))
                 .collect(),
             Self::Static(s) => Value::Static(s),
             Self::Bytes(b) => Value::Bytes(RCow::Owned(RVec::from(b.borrow()))),
@@ -302,7 +302,7 @@ impl<'value> Value<'value> {
             Self::Array(arr) => arr.iter().map(Value::clone_static).collect(),
             Self::Object(obj) => obj
                 .iter()
-                .map(|Tuple2(k, v)| (RCow::Owned(k.to_string().into()), v.clone_static()))
+                .map(|Tuple2(k, v)| Tuple2(RCow::Owned(k.to_string().into()), v.clone_static()))
                 .collect(),
             Self::Static(s) => Value::Static(*s),
             Self::Bytes(b) => Value::Bytes(RCow::Owned(RVec::from(b.borrow()))),

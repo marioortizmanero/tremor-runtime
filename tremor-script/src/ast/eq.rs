@@ -422,46 +422,60 @@ impl<'script> AstEq for PredicatePattern<'script> {
                 Self::TildeEq {
                     assign: a1,
                     lhs: l1,
-                    key: k1,
+                    // FIXME: temporarily disabled to enable PDK support
+                    // key: k1,
                     test: t1,
                 },
                 Self::TildeEq {
                     assign: a2,
                     lhs: l2,
-                    key: k2,
+                    // FIXME: temporarily disabled to enable PDK support
+                    // key: k2,
                     test: t2,
                 },
-            ) => a1 == a2 && l1 == l2 && k1 == k2 && t1.ast_eq(t2.as_ref()),
+            ) => a1 == a2 && l1 == l2 /*&& k1 == k2*/ && t1.ast_eq(t2.as_ref()),
             (
                 Self::Bin {
                     lhs: l1,
-                    key: k1,
+                    // FIXME: temporarily disabled to enable PDK support
+                    // key: k1,
                     rhs: r1,
                     kind: kind1,
                 },
                 Self::Bin {
                     lhs: l2,
-                    key: k2,
+                    // FIXME: temporarily disabled to enable PDK support
+                    // key: k2,
                     rhs: r2,
                     kind: kind2,
                 },
-            ) => l1 == l2 && k1 == k2 && kind1 == kind2 && r1.ast_eq(r2),
+            ) => l1 == l2 /*&& k1 == k2*/ && kind1 == kind2 && r1.ast_eq(r2),
             (
-                Self::RecordPatternEq { lhs, key, pattern },
+                // FIXME: temporarily disabled to enable PDK support
+                Self::RecordPatternEq {
+                    lhs,
+                    /*key,*/ pattern,
+                },
                 Self::RecordPatternEq {
                     lhs: l2,
-                    key: k2,
+                    // FIXME: temporarily disabled to enable PDK support
+                    // key: k2,
                     pattern: p2,
                 },
-            ) => lhs == l2 && key == k2 && pattern.ast_eq(p2),
+            ) => lhs == l2 /*&& key == k2*/ && pattern.ast_eq(p2),
             (
-                Self::ArrayPatternEq { lhs, key, pattern },
+                // FIXME: temporarily disabled to enable PDK support
+                Self::ArrayPatternEq {
+                    lhs,
+                    /*key,*/ pattern,
+                },
                 Self::ArrayPatternEq {
                     lhs: l2,
-                    key: k2,
+                    // FIXME: temporarily disabled to enable PDK support
+                    // key: k2,
                     pattern: p2,
                 },
-            ) => lhs == l2 && key == k2 && pattern.ast_eq(p2),
+            ) => lhs == l2 /*&& key == k2*/ && pattern.ast_eq(p2),
             _ => self == other,
         }
     }

@@ -2338,10 +2338,10 @@ impl<'script> Path<'script> {
 pub enum Segment<'script> {
     /// An identifier
     Id {
-        // FIXME: temporarily disabled to enable PDK support
-        // /// Key
-        // #[serde(skip)]
-        // key: KnownKey<'script>,
+        // FIXME: temporarily changed from KnownKey to Cow to enable PDK support
+        /// Key
+        #[serde(skip)]
+        key: Cow<'script, str>,
         /// Id
         mid: usize,
     },

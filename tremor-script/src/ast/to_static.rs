@@ -735,8 +735,9 @@ impl<'script> ReservedPath<'script> {
 impl<'script> Segment<'script> {
     pub(crate) fn into_static(self) -> Segment<'static> {
         match self {
-            Segment::Id { key, mid } => Segment::Id {
-                key: key.into_static(),
+            Segment::Id { /*key,*/ mid } => Segment::Id {
+                // FIXME: temporarily disabled to enable PDK support
+                // key: key.into_static(),
                 mid,
             },
             Segment::Idx { idx, mid } => Segment::Idx { idx, mid },
@@ -909,53 +910,71 @@ impl<'script> PredicatePattern<'script> {
             PredicatePattern::TildeEq {
                 assign,
                 lhs,
-                key,
+                // FIXME: temporarily disabled to enable PDK support
+                // key,
                 test,
             } => PredicatePattern::TildeEq {
                 assign: Cow::owned(assign.to_string()),
                 lhs: Cow::owned(lhs.to_string()),
-                key: key.into_static(),
+                // FIXME: temporarily disabled to enable PDK support
+                // key: key.into_static(),
                 test,
             },
             PredicatePattern::Bin {
                 lhs,
-                key,
+                // FIXME: temporarily disabled to enable PDK support
+                // key,
                 rhs,
                 kind,
             } => PredicatePattern::Bin {
                 lhs: Cow::owned(lhs.to_string()),
-                key: key.into_static(),
+                // FIXME: temporarily disabled to enable PDK support
+                // key: key.into_static(),
                 rhs: rhs.into_static(),
                 kind,
             },
-            PredicatePattern::RecordPatternEq { lhs, key, pattern } => {
+            PredicatePattern::RecordPatternEq {
+                lhs,
+                /*key,*/ pattern,
+            } => {
                 PredicatePattern::RecordPatternEq {
                     lhs: Cow::owned(lhs.to_string()),
-                    key: key.into_static(),
+                    // FIXME: temporarily disabled to enable PDK support
+                    // key: key.into_static(),
                     pattern: pattern.into_static(),
                 }
             }
-            PredicatePattern::ArrayPatternEq { lhs, key, pattern } => {
+            PredicatePattern::ArrayPatternEq {
+                lhs,
+                /*key,*/ pattern,
+            } => {
                 PredicatePattern::ArrayPatternEq {
                     lhs: Cow::owned(lhs.to_string()),
-                    key: key.into_static(),
+                    // FIXME: temporarily disabled to enable PDK support
+                    // key: key.into_static(),
                     pattern: pattern.into_static(),
                 }
             }
-            PredicatePattern::TuplePatternEq { lhs, key, pattern } => {
+            PredicatePattern::TuplePatternEq {
+                lhs,
+                /*key,*/ pattern,
+            } => {
                 PredicatePattern::TuplePatternEq {
                     lhs: Cow::owned(lhs.to_string()),
-                    key: key.into_static(),
+                    // FIXME: temporarily disabled to enable PDK support
+                    // key: key.into_static(),
                     pattern: pattern.into_static(),
                 }
             }
             PredicatePattern::FieldPresent { lhs, key } => PredicatePattern::FieldPresent {
                 lhs: Cow::owned(lhs.to_string()),
-                key: key.into_static(),
+                // FIXME: temporarily disabled to enable PDK support
+                // key: key.into_static(),
             },
             PredicatePattern::FieldAbsent { lhs, key } => PredicatePattern::FieldAbsent {
                 lhs: Cow::owned(lhs.to_string()),
-                key: key.into_static(),
+                // FIXME: temporarily disabled to enable PDK support
+                // key: key.into_static(),
             },
         }
     }

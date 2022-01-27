@@ -36,6 +36,9 @@ use std::{
     iter,
 };
 
+use abi_stable::std_types::Tuple2;
+use tremor_value::value::from::cow_beef_to_sabi;
+
 #[derive(Debug)]
 /// Continuation context to control program flow
 pub enum Cont<'run, 'event>
@@ -231,7 +234,7 @@ impl<'script> Expr<'script> {
         expr: &'run Comprehension<'event, Expr>,
     ) -> Result<Cont<'run, 'event>> {
         type Bi<'v, 'r> = (usize, Box<dyn Iterator<Item = (Value<'v>, Value<'v>)> + 'r>);
-        fn kv<'k, K>((k, v): (K, Value)) -> (Value<'k>, Value)
+        fn kv<'k, K>(Tuple2(k, v): Tuple2<K, Value<'k>>) -> (Value<'k>, Value)
         where
             K: 'k,
             Value<'k>: From<K>,
@@ -386,7 +389,7 @@ impl<'script> Expr<'script> {
                     current = match map.get_mut(&id) {
                         Some(v) => v,
                         None => map
-                            .entry(id)
+                            .entry(cow_beef_to_sabi(id))
                             .or_insert_with(|| Value::object_with_capacity(32)),
                     };
                 }
