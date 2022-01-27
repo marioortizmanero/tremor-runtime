@@ -64,8 +64,6 @@ use abi_stable::{
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
 use std::future;
-use tremor_script::pdk::PdkEventPayload;
-use tremor_value::pdk::PdkValue;
 
 /// The default poll interval for `try_recv` on channels in connectors
 pub const DEFAULT_POLL_INTERVAL: u64 = 10;
@@ -120,7 +118,7 @@ pub enum SourceReply {
         /// the data
         data: RVec<u8>,
         /// metadata associated with this data
-        meta: ROption<PdkValue<'static>>,
+        meta: ROption<Value<'static>>,
         /// stream id of the data
         stream: u64,
         /// Port to send to, defaults to `out`
@@ -129,7 +127,7 @@ pub enum SourceReply {
     /// an already structured event payload
     Structured {
         origin_uri: EventOriginUri,
-        payload: PdkEventPayload,
+        payload: EventPayload,
         stream: u64,
         /// Port to send to, defaults to `out`
         port: ROption<RCow<'static, str>>,
@@ -138,7 +136,7 @@ pub enum SourceReply {
     /// for when the source knows where boundaries are, maybe because it receives chunks already
     BatchData {
         origin_uri: EventOriginUri,
-        batch_data: RVec<Tuple2<RVec<u8>, ROption<PdkValue<'static>>>>,
+        batch_data: RVec<Tuple2<RVec<u8>, ROption<Value<'static>>>>,
         /// Port to send to, defaults to `out`
         port: ROption<RCow<'static, str>>,
         stream: u64,
@@ -151,7 +149,7 @@ pub enum SourceReply {
     EndStream {
         origin_uri: EventOriginUri,
         stream: u64,
-        meta: ROption<PdkValue<'static>>,
+        meta: ROption<Value<'static>>,
     },
     /// Stream Failed, resources related to that stream should be cleaned up
     StreamFail(u64),
@@ -189,7 +187,7 @@ pub trait RawSource: Send {
     }
 
     /// Pulls custom metrics from the source
-    fn metrics(&mut self, _timestamp: u64) -> RVec<PdkEventPayload> {
+    fn metrics(&mut self, _timestamp: u64) -> RVec<EventPayload> {
         rvec![]
     }
 

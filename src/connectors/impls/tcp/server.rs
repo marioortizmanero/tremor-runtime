@@ -40,7 +40,6 @@ use abi_stable::{
 };
 use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt};
 use std::future;
-use tremor_value::pdk::PdkValue;
 
 const URL_SCHEME: &str = "tremor-tcp-server";
 
@@ -62,7 +61,7 @@ fn connector_type() -> ConnectorType {
 #[sabi_extern_fn]
 pub fn from_config(
     alias: RString,
-    raw_config: ROption<PdkValue<'static>>,
+    raw_config: ROption<Value<'static>>,
 ) -> FfiFuture<RResult<BoxedRawConnector>> {
     // TODO: find a way to pass in or reach the configured QSIZE
     let qsize = 128;

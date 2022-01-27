@@ -22,6 +22,8 @@ use serde_ext::forward_to_deserialize_any;
 use simd_json::StaticNode;
 use std::fmt;
 
+use abi_stable::std_types::{RCow, RVec, Tuple2};
+
 impl<'de> de::Deserializer<'de> for Value<'de> {
     type Error = Error;
 
@@ -42,13 +44,10 @@ impl<'de> de::Deserializer<'de> for Value<'de> {
             #[cfg(feature = "128bit")]
             Self::Static(StaticNode::U128(n)) => visitor.visit_u128(n),
             Value::Static(StaticNode::F64(n)) => visitor.visit_f64(n),
-            Value::String(s) => {
-                if s.is_borrowed() {
-                    visitor.visit_borrowed_str(s.unwrap_borrowed())
-                } else {
-                    visitor.visit_string(s.into_owned())
-                }
-            }
+            Value::String(s) => match s {
+                RCow::Borrowed(s) => visitor.visit_borrowed_str(s.into()),
+                RCow::Owned(s) => visitor.visit_string(s.into()),
+            },
             Value::Array(a) => visitor.visit_seq(Array(a.iter())),
             Value::Object(o) => visitor.visit_map(ObjectAccess {
                 i: o.iter(),
@@ -104,7 +103,7 @@ impl<'de> de::Deserializer<'de> for Value<'de> {
         let (variant, value) = match self {
             Value::Object(value) => {
                 let mut iter = value.into_iter();
-                let (variant, value) = match iter.next() {
+                let Tuple2(variant, value) = match iter.next() {
                     Some(v) => v,
                     None => {
                         // FIXME: better error
@@ -261,7 +260,7 @@ impl<'de, 'value> SeqAccess<'de> for Array<'value, 'de> {
 }
 
 struct ObjectAccess<'de, 'value: 'de> {
-    i: halfbrown::Iter<'de, Cow<'value, str>, Value<'value>>,
+    i: std::slice::Iter<'de, (RCow<'value, str>, Value<'value>)>,
     v: &'de Value<'value>,
 }
 
@@ -531,7 +530,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
     {
         let size = seq.size_hint().unwrap_or_default();
 
-        let mut v = Vec::with_capacity(size);
+        let mut v = RVec::with_capacity(size);
         while let Some(e) = seq.next_element()? {
             v.push(e);
         }

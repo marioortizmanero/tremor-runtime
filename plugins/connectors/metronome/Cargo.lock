@@ -10,7 +10,6 @@ dependencies = [
  "abi_stable_derive",
  "abi_stable_shared",
  "core_extensions",
- "crossbeam-channel",
  "generational-arena",
  "libloading",
  "lock_api",
@@ -20,7 +19,6 @@ dependencies = [
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
- "serde_json",
 ]
 
 [[package]]

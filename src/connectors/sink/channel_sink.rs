@@ -42,7 +42,7 @@ use abi_stable::{
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
 use std::future;
-use tremor_pipeline::pdk::PdkEvent;
+use tremor_pipeline::pdk::Event;
 
 /// Behavioral trait for defining if a Channel Sink needs metadata or not
 pub trait SinkMetaBehaviour: Send + Sync {
@@ -364,15 +364,12 @@ where
     fn on_event<'a>(
         &'a mut self,
         _input: RStr<'a>,
-        event: PdkEvent,
+        event: Event,
         ctx: &'a SinkContext,
         serializer: &'a mut MutEventSerializer,
         start: u64,
     ) -> BorrowingFfiFuture<'a, RResult<SinkReply>> {
         async move {
-            // Conversion to use the full functionality of `Event`
-            let event = Event::from(event);
-
             // clean up
             // make sure channels for the given event are added to avoid stupid errors
             // due to channels not yet handled
@@ -421,11 +418,7 @@ where
 
                 for (stream_id, sender) in streams {
                     trace!("{} Send to stream {}.", &ctx, stream_id);
-                    let data = rtry!(serializer.serialize_for_stream(
-                        &value.clone().into(),
-                        ingest_ns,
-                        *stream_id
-                    ));
+                    let data = rtry!(serializer.serialize_for_stream(value, ingest_ns, *stream_id));
                     let meta = if B::NEEDS_META {
                         Some(meta.clone_static())
                     } else {
@@ -462,7 +455,7 @@ where
 
     fn on_signal<'a>(
         &'a mut self,
-        signal: PdkEvent,
+        signal: Event,
         _ctx: &'a SinkContext,
         serializer: &'a mut MutEventSerializer,
     ) -> BorrowingFfiFuture<'a, RResult<SinkReply>> {

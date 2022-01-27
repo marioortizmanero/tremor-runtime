@@ -40,7 +40,7 @@ use abi_stable::{
     },
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
-use tremor_pipeline::{pdk::PdkEvent, Event};
+use tremor_pipeline::Event;
 
 /// simple Sink implementation that is handling only a single stream
 pub struct SingleStreamSink<B>
@@ -168,7 +168,7 @@ where
     fn on_event<'a>(
         &'a mut self,
         _input: RStr<'a>,
-        event: PdkEvent,
+        event: Event,
         ctx: &'a SinkContext,
         serializer: &'a mut MutEventSerializer,
         start: u64,

@@ -2,7 +2,6 @@ use crate::{
     connectors::{BoxedRawConnector, ConnectorType},
     pdk::RResult,
 };
-use tremor_value::pdk::PdkValue;
 
 use std::fmt;
 
@@ -37,7 +36,7 @@ pub struct ConnectorMod {
     #[sabi(last_prefix_field)]
     pub from_config: extern "C" fn(
         alias: RString,
-        config: ROption<PdkValue<'static>>,
+        config: ROption<Value<'static>>,
     ) -> FfiFuture<RResult<BoxedRawConnector>>,
 }
 

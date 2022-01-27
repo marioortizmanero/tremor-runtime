@@ -32,8 +32,7 @@ use abi_stable::{
 };
 use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt};
 use std::future;
-use tremor_pipeline::pdk::PdkEvent;
-use tremor_value::pdk::PdkValue;
+use tremor_value::pdk::Value;
 
 const MEASUREMENT: Cow<'static, str> = Cow::const_str("measurement");
 const TAGS: Cow<'static, str> = Cow::const_str("tags");
@@ -57,7 +56,7 @@ fn connector_type() -> ConnectorType {
 #[sabi_extern_fn]
 pub fn from_config(
     _alias: RString,
-    _raw_config: ROption<PdkValue<'static>>,
+    _raw_config: ROption<Value<'static>>,
 ) -> FfiFuture<RResult<BoxedRawConnector>> {
     let connector = BoxedRawConnector::from_value(MetricsConnector::new(), TD_Opaque);
     future::ready(ROk(connector)).into_ffi()
@@ -214,7 +213,7 @@ impl RawSink for MetricsSink {
     fn on_event<'a>(
         &'a mut self,
         _input: RStr<'a>,
-        event: PdkEvent,
+        event: Event,
         _ctx: &'a SinkContext,
         _serializer: &'a mut MutEventSerializer,
         _start: u64,

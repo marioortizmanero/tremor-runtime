@@ -50,8 +50,6 @@ pub mod lexer;
 pub(crate) mod parser;
 /// Support for module paths
 pub mod path;
-/// Types for the Plugin Development Kit
-pub mod pdk;
 /// Tremor Script Position
 pub mod pos;
 /// Prelude module with important exports
@@ -89,7 +87,7 @@ pub use interpreter::{AggrType, FALSE, NULL, TRUE};
 use lazy_static::lazy_static;
 use std::sync::atomic::{AtomicU32, Ordering};
 pub use tremor_common::stry;
-pub use tremor_value::{literal, KnownKey, Object, Value};
+pub use tremor_value::{literal, /*KnownKey,*/ Object, Value};
 
 /// Default recursion limit
 pub static RECURSION_LIMIT: AtomicU32 = AtomicU32::new(1024);

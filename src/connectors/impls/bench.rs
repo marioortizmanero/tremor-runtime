@@ -39,8 +39,6 @@ use abi_stable::{
 };
 use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt};
 use std::future;
-use tremor_pipeline::pdk::PdkEvent;
-use tremor_value::pdk::PdkValue;
 
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
@@ -100,7 +98,7 @@ fn connector_type() -> ConnectorType {
 #[sabi_extern_fn]
 pub fn from_config(
     alias: RString,
-    config: ROption<PdkValue<'static>>,
+    config: ROption<Value<'static>>,
 ) -> FfiFuture<RResult<BoxedRawConnector>> {
     async move {
         if let RSome(config) = config {
@@ -339,7 +337,7 @@ impl RawSink for Blackhole {
     fn on_event<'a>(
         &'a mut self,
         _input: RStr<'a>,
-        event: PdkEvent,
+        event: Event,
         ctx: &'a SinkContext,
         event_serializer: &'a mut MutEventSerializer,
         _start: u64,
@@ -356,17 +354,11 @@ impl RawSink for Blackhole {
                 // ALLOW: This is on purpose, we use blackhole for benchmarking, so we want it to terminate the process when done
                 process::exit(0);
             };
-            // Restoring the event back to a non-pdk one for access to its full
-            // functionality
-            let event = Event::from(event);
             for value in event.value_iter() {
                 if now_ns > self.warmup {
                     let delta_ns = now_ns - event.ingest_ns;
                     // FIXME: use the buffer
-                    // TODO: try to find a way around cloning the value reference to turn it into a PdkValue
-                    if let ROk(bufs) =
-                        event_serializer.serialize(&value.clone().into(), event.ingest_ns)
-                    {
+                    if let ROk(bufs) = event_serializer.serialize(value, event.ingest_ns) {
                         self.bytes += bufs.iter().map(RVec::len).sum::<usize>();
                     } else {
                         error!("failed to encode");

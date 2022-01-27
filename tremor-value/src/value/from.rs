@@ -13,9 +13,10 @@
 // limitations under the License.
 
 use super::{Object, Value};
-use beef::Cow;
 use simd_json::{BorrowedValue, OwnedValue, StaticNode};
 use std::iter::FromIterator;
+
+use abi_stable::std_types::{RBox, RCow, Tuple2};
 
 impl<'value> From<OwnedValue> for Value<'value> {
     #[inline]
@@ -66,7 +67,7 @@ impl<'value> From<&'value str> for Value<'value> {
     #[inline]
     #[must_use]
     fn from(s: &'value str) -> Self {
-        Self::String(Cow::from(s))
+        Self::String(RCow::from(s))
     }
 }
 
@@ -78,10 +79,10 @@ impl<'value> From<std::borrow::Cow<'value, str>> for Value<'value> {
     }
 }
 
-impl<'value> From<beef::Cow<'value, str>> for Value<'value> {
+impl<'value> From<RCow<'value, str>> for Value<'value> {
     #[inline]
     #[must_use]
-    fn from(c: beef::Cow<'value, str>) -> Self {
+    fn from(c: RCow<'value, str>) -> Self {
         Self::String(c)
     }
 }
@@ -239,15 +240,29 @@ impl<'value, V: Into<Value<'value>>> FromIterator<V> for Value<'value> {
     }
 }
 
-impl<'value, K: Into<Cow<'value, str>>, V: Into<Value<'value>>> FromIterator<(K, V)>
+impl<'value, K: Into<RCow<'value, str>>, V: Into<Value<'value>>> FromIterator<(K, V)>
     for Value<'value>
 {
     #[inline]
     #[must_use]
     fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
-        Value::Object(Box::new(
+        Value::Object(RBox::new(
             iter.into_iter()
                 .map(|(k, v)| (Into::into(k), Into::into(v)))
+                .collect(),
+        ))
+    }
+}
+
+impl<'value, K: Into<RCow<'value, str>>, V: Into<Value<'value>>> FromIterator<Tuple2<K, V>>
+    for Value<'value>
+{
+    #[inline]
+    #[must_use]
+    fn from_iter<I: IntoIterator<Item = Tuple2<K, V>>>(iter: I) -> Self {
+        Value::Object(RBox::new(
+            iter.into_iter()
+                .map(|Tuple2(k, v)| (Into::into(k), Into::into(v)))
                 .collect(),
         ))
     }
@@ -257,7 +272,7 @@ impl<'value> From<Object<'value>> for Value<'value> {
     #[inline]
     #[must_use]
     fn from(v: Object<'value>) -> Self {
-        Self::Object(Box::new(v))
+        Self::Object(RBox::new(v))
     }
 }
 

@@ -36,8 +36,6 @@ use abi_stable::{
 };
 use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt};
 use std::future;
-use tremor_pipeline::pdk::PdkEvent;
-use tremor_value::pdk::PdkValue;
 
 const URL_SCHEME: &str = "tremor-file";
 
@@ -59,7 +57,7 @@ fn connector_type() -> ConnectorType {
 #[sabi_extern_fn]
 pub fn from_config(
     alias: RString,
-    config: ROption<PdkValue<'static>>,
+    config: ROption<Value<'static>>,
 ) -> FfiFuture<RResult<BoxedRawConnector>> {
     async move {
         if let RSome(raw_config) = config {
@@ -382,7 +380,7 @@ impl RawSink for FileSink {
     fn on_event<'a>(
         &'a mut self,
         _input: RStr<'a>,
-        event: PdkEvent,
+        event: Event,
         ctx: &'a SinkContext,
         serializer: &'a mut MutEventSerializer,
         _start: u64,
@@ -395,8 +393,7 @@ impl RawSink for FileSink {
                 .ok_or_else(|| Error::from("No file available.")));
             let ingest_ns = event.ingest_ns;
             for value in event.value_iter() {
-                // TODO: try to find a way around cloning the value reference to turn it into a PdkValue
-                let data = rtry!(serializer.serialize(&value.clone().into(), ingest_ns));
+                let data = rtry!(serializer.serialize(value, ingest_ns));
                 for chunk in data {
                     if let Err(e) = file.write_all(chunk.as_slice()).await {
                         error!("{} Error writing to file: {}", &ctx, &e);

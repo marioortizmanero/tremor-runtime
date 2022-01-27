@@ -4,7 +4,7 @@ use tremor_common::time::nanotime;
 use tremor_pipeline::DEFAULT_STREAM_ID;
 use tremor_runtime::{connectors::prelude::*, pdk::RResult, ttry, utils::hostname};
 use tremor_script::{EventOriginUri, EventPayload};
-use tremor_value::{literal, pdk::PdkValue};
+use tremor_value::literal;
 
 use std::{
     future,
@@ -107,7 +107,7 @@ impl RawSource for Metronome {
 #[sabi_extern_fn]
 pub fn from_config(
     _id: RString,
-    raw_config: ROption<PdkValue<'static>>,
+    raw_config: ROption<Value<'static>>,
 ) -> FfiFuture<RResult<BoxedRawConnector>> {
     async move {
         if let RSome(raw_config) = raw_config {

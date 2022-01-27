@@ -813,12 +813,6 @@ impl Select {
 #[derive(Clone, Default)]
 pub struct EventPayload {
     /// The vector of raw input values.
-    ///
-    /// Note that this is a self-referential struct, and thus the data it points
-    /// to cannot be modified. This makes it impossible to convert
-    /// `EventPayload` to `PdkEventPayload`. The only solution is to make `raw`
-    /// use types from `abi_stable` even if it's not really `StableAbi` nor
-    /// `repr(C)` (the `ValueAndMeta` type can't be `repr(C)` for now).
     pub(crate) raw: RVec<RArc<Pin<RVec<u8>>>>,
     pub(crate) data: ValueAndMeta<'static>,
 }

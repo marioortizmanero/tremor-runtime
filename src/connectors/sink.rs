@@ -64,9 +64,6 @@ use abi_stable::{
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
 use std::future;
-use tremor_pipeline::{pdk::PdkEvent, pdk::PdkOpMeta};
-use tremor_script::pdk::PdkEventPayload;
-use tremor_value::pdk::PdkValue;
 
 /// Result for a sink function that may provide insights or response.
 ///
@@ -189,7 +186,7 @@ pub trait RawSink: Send {
     fn on_event<'a>(
         &'a mut self,
         input: RStr<'a>,
-        event: PdkEvent,
+        event: Event,
         ctx: &'a SinkContext,
         serializer: &'a mut MutEventSerializer,
         start: u64,
@@ -197,7 +194,7 @@ pub trait RawSink: Send {
     /// called when receiving a signal
     fn on_signal<'a>(
         &'a mut self,
-        _signal: PdkEvent,
+        _signal: Event,
         _ctx: &'a SinkContext,
         _serializer: &'a mut MutEventSerializer,
     ) -> BorrowingFfiFuture<'a, RResult<SinkReply>> {
@@ -205,7 +202,7 @@ pub trait RawSink: Send {
     }
 
     /// Pull metrics from the sink
-    fn metrics(&mut self, _timestamp: u64) -> RVec<PdkEventPayload> {
+    fn metrics(&mut self, _timestamp: u64) -> RVec<EventPayload> {
         rvec![]
     }
 
@@ -635,7 +632,7 @@ impl EventSerializer {
     // FIXME: use a `try` block when they are stabilized
     fn serialize_for_stream_inner(
         &mut self,
-        value: &PdkValue,
+        value: &Value,
         ingest_ns: u64,
         stream_id: u64,
     ) -> Result<Vec<Vec<u8>>> {
@@ -682,7 +679,7 @@ pub trait EventSerializerOpaque: Send {
     ///
     /// # Errors
     ///   * if serialization failed (codec or postprocessors)
-    fn serialize(&mut self, value: &PdkValue, ingest_ns: u64) -> RResult<RVec<RVec<u8>>>;
+    fn serialize(&mut self, value: &Value, ingest_ns: u64) -> RResult<RVec<RVec<u8>>>;
 
     /// serialize event for a certain stream
     ///
@@ -690,7 +687,7 @@ pub trait EventSerializerOpaque: Send {
     ///   * if serialization failed (codec or postprocessors)
     fn serialize_for_stream(
         &mut self,
-        value: &PdkValue,
+        value: &Value,
         ingest_ns: u64,
         stream_id: u64,
     ) -> RResult<RVec<RVec<u8>>>;
@@ -704,13 +701,13 @@ impl EventSerializerOpaque for EventSerializer {
         self.streams.clear();
     }
 
-    fn serialize(&mut self, value: &PdkValue, ingest_ns: u64) -> RResult<RVec<RVec<u8>>> {
-        self.serialize_for_stream(value.into(), ingest_ns, DEFAULT_STREAM_ID)
+    fn serialize(&mut self, value: &Value, ingest_ns: u64) -> RResult<RVec<RVec<u8>>> {
+        self.serialize_for_stream(value, ingest_ns, DEFAULT_STREAM_ID)
     }
 
     fn serialize_for_stream(
         &mut self,
-        value: &PdkValue,
+        value: &Value,
         ingest_ns: u64,
         stream_id: u64,
     ) -> RResult<RVec<RVec<u8>>> {
@@ -1082,7 +1079,7 @@ impl SinkManager {
 pub struct ContraflowData {
     event_id: EventId,
     ingest_ns: u64,
-    op_meta: PdkOpMeta,
+    op_meta: OpMeta,
 }
 
 impl ContraflowData {
@@ -1111,16 +1108,6 @@ impl From<&Event> for ContraflowData {
             event_id: event.id.clone(),
             ingest_ns: event.ingest_ns,
             op_meta: event.op_meta.clone().into(), // TODO: mem::swap here?
-        }
-    }
-}
-
-impl From<&PdkEvent> for ContraflowData {
-    fn from(event: &PdkEvent) -> Self {
-        ContraflowData {
-            event_id: event.id.clone(),
-            ingest_ns: event.ingest_ns,
-            op_meta: event.op_meta.clone(), // TODO: mem::swap here?
         }
     }
 }
