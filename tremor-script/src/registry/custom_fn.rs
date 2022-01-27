@@ -17,11 +17,12 @@ use crate::ast::{visitors::IsConstFn, Expr, Exprs, FnDecl, ImutExpr, ImutExprs, 
 use crate::interpreter::{AggrType, Cont, Env, ExecOpts, LocalStack};
 use crate::prelude::*;
 use crate::Value;
+use abi_stable::std_types::{RCow, RStr};
 use beef::Cow;
 //use std::mem;
 const RECUR_STR: &str = "recur";
 pub(crate) const RECUR_PTR: Option<*const u8> = Some(RECUR_STR.as_ptr());
-pub(crate) const RECUR: Value<'static> = Value::String(Cow::const_str(RECUR_STR));
+pub(crate) const RECUR: Value<'static> = Value::String(RCow::Borrowed(RStr::from(RECUR_STR)));
 pub(crate) const RECUR_REF: &Value<'static> = &RECUR;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

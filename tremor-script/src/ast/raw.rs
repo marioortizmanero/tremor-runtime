@@ -1841,7 +1841,8 @@ impl<'script> Upable<'script> for SegmentElementRaw<'script> {
                 Value::String(id) => {
                     let mid = helper.add_meta_w_name(start, end, &id);
                     Ok(Segment::Id {
-                        key: KnownKey::from(id.clone()),
+                        // FIXME: temporarily disabled to enable PDK support
+                        // key: KnownKey::from(id.clone()),
                         mid,
                     })
                 }

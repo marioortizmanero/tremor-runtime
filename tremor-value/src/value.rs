@@ -33,10 +33,7 @@ use std::{
 pub use crate::serde::to_value;
 pub use r#static::StaticValue;
 
-use abi_stable::{
-    rvec,
-    std_types::{RBox, RCow, RHashMap, RVec, Tuple2},
-};
+use abi_stable::std_types::{RBox, RCow, RHashMap, RVec, Tuple2};
 
 /// Representation of a JSON object
 pub type Object<'value> = RHashMap<RCow<'value, str>, Value<'value>>;
@@ -99,7 +96,7 @@ impl<'value> Value<'value> {
     /// Creates an empty array value
     #[must_use]
     pub const fn array() -> Self {
-        Value::Array(rvec![])
+        Value::Array(RVec::new())
     }
 
     /// Creates an empty array value
@@ -233,7 +230,7 @@ impl<'value> Ord for Value<'value> {
         }
     }
 }
-fn cmp_map(left: &Object, right: &Object) -> Ordering {
+fn cmp_map<'a>(left: &Object<'a>, right: &Object<'a>) -> Ordering {
     // Compare length first
 
     match left.len().cmp(&right.len()) {
@@ -284,7 +281,9 @@ impl<'value> Value<'value> {
         match self {
             Self::String(s) => Value::String(RCow::Owned(s.to_string().into())),
             Self::Array(arr) => arr.into_iter().map(Value::into_static).collect(),
-            Self::Object(obj) => obj
+            // FIXME: call into_inner properly once this is merged:
+            // https://github.com/rodrimati1992/abi_stable_crates/pull/74
+            Self::Object(obj) => RBox::into_inner(obj)
                 .into_iter()
                 .map(|Tuple2(k, v)| (RCow::Owned(k.to_string().into()), v.into_static()))
                 .collect(),

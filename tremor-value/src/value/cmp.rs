@@ -17,6 +17,8 @@ use simd_json::prelude::*;
 use simd_json::BorrowedValue;
 use simd_json::OwnedValue;
 
+use abi_stable::std_types::{RBox, Tuple2};
+
 #[allow(clippy::cast_sign_loss, clippy::default_trait_access)]
 impl<'value> PartialEq for Value<'value> {
     #[inline]
@@ -67,7 +69,7 @@ impl<'value> PartialEq<OwnedValue> for Value<'value> {
 impl<'value> PartialEq<BorrowedValue<'value>> for Value<'value> {
     #[inline]
     #[must_use]
-    fn eq(&self, other: &BorrowedValue) -> bool {
+    fn eq(&self, other: &BorrowedValue<'value>) -> bool {
         match (self, other) {
             (Self::Static(s1), BorrowedValue::Static(s2)) => s1 == s2,
             (Self::String(v1), BorrowedValue::String(v2)) => v1.as_ref().eq(v2.as_ref()),
@@ -92,7 +94,14 @@ impl<'value> From<Value<'value>> for OwnedValue {
             Value::Static(s) => OwnedValue::from(s),
             Value::String(s) => OwnedValue::from(s.to_string()),
             Value::Array(a) => a.into_iter().collect(),
-            Value::Object(m) => m.into_iter().collect(),
+            // FIXME: simd_json::OwnedValue doesn't have abi_stable support, so
+            // we have to convert the tuples.
+            // FIXME: call into_inner properly once this is merged:
+            // https://github.com/rodrimati1992/abi_stable_crates/pull/74
+            Value::Object(m) => RBox::into_inner(m)
+                .into_iter()
+                .map(|Tuple2(key, value)| (key, value))
+                .collect(),
             Value::Bytes(b) => OwnedValue::from(base64::encode(b)),
         }
     }
@@ -106,7 +115,14 @@ impl<'value> From<Value<'value>> for BorrowedValue<'value> {
             Value::Static(s) => BorrowedValue::from(s),
             Value::String(s) => BorrowedValue::from(s.to_string()),
             Value::Array(a) => a.into_iter().collect(),
-            Value::Object(m) => m.into_iter().collect(),
+            // FIXME: simd_json::BorrowedValue doesn't have abi_stable support, so
+            // we have to convert the tuples.
+            // FIXME: call into_inner properly once this is merged:
+            // https://github.com/rodrimati1992/abi_stable_crates/pull/74
+            Value::Object(m) => RBox::into_inner(m)
+                .into_iter()
+                .map(|Tuple2(key, value)| (key, value))
+                .collect(),
             Value::Bytes(b) => BorrowedValue::from(base64::encode(b)),
         }
     }

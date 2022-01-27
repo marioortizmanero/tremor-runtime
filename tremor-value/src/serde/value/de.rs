@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use crate::{Error, Object, Value};
-use beef::Cow;
 use serde::de::{EnumAccess, IntoDeserializer, VariantAccess};
 use serde_ext::de::{
     self, Deserialize, DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visitor,
@@ -22,7 +21,7 @@ use serde_ext::forward_to_deserialize_any;
 use simd_json::StaticNode;
 use std::fmt;
 
-use abi_stable::std_types::{RCow, RVec, Tuple2};
+use abi_stable::std_types::{map::Iter, RBox, RCow, RVec, Tuple2};
 
 impl<'de> de::Deserializer<'de> for Value<'de> {
     type Error = Error;
@@ -102,7 +101,9 @@ impl<'de> de::Deserializer<'de> for Value<'de> {
     {
         let (variant, value) = match self {
             Value::Object(value) => {
-                let mut iter = value.into_iter();
+                // FIXME: call properly once this is merged:
+                // https://github.com/rodrimati1992/abi_stable_crates/pull/74
+                let mut iter = RBox::into_inner(value).into_iter();
                 let Tuple2(variant, value) = match iter.next() {
                     Some(v) => v,
                     None => {
@@ -134,7 +135,7 @@ impl<'de> de::Deserializer<'de> for Value<'de> {
 }
 
 struct EnumDeserializer<'de> {
-    variant: Cow<'de, str>,
+    variant: RCow<'de, str>,
     value: Option<Value<'de>>,
 }
 
@@ -260,7 +261,7 @@ impl<'de, 'value> SeqAccess<'de> for Array<'value, 'de> {
 }
 
 struct ObjectAccess<'de, 'value: 'de> {
-    i: std::slice::Iter<'de, (RCow<'value, str>, Value<'value>)>,
+    i: Iter<'de, RCow<'value, str>, Value<'value>>,
     v: &'de Value<'value>,
 }
 
@@ -273,7 +274,7 @@ impl<'de, 'value> MapAccess<'de> for ObjectAccess<'value, 'de> {
     where
         K: DeserializeSeed<'de>,
     {
-        if let Some((k, v)) = self.i.next() {
+        if let Some(Tuple2(k, v)) = self.i.next() {
             self.v = v;
             seed.deserialize(Value::String(k.clone())).map(Some)
         } else {

@@ -181,14 +181,14 @@ impl ErrorKind {
             InvalidHexLiteral, InvalidIntLiteral, InvalidMod, InvalidPP, InvalidRecur,
             InvalidToken, InvalidUnary, InvalidUtf8Sequence, Io, JsonError, MergeTypeConflict,
             MissingEffectors, MissingFunction, MissingModule, ModuleNotFound, Msg, NoClauseHit,
-            NoConstsAllowed, NoEventReferencesAllowed, NoLocalsAllowed, NoObjectError, NotConstant,
-            NotFound, Oops, ParseIntError, ParserError, PatchKeyExists, PipelineUnknownPort,
-            PreprocessorError, QueryNodeDuplicateName, QueryNodeReservedName,
-            QueryStreamNotDefined, RecursionLimit, RuntimeError, TailingHereDoc, TypeConflict,
-            UnexpectedCharacter, UnexpectedEndOfStream, UnexpectedEscapeCode, UnrecognizedToken,
-            UnterminatedExtractor, UnterminatedHereDoc, UnterminatedIdentLiteral,
-            UnterminatedInterpolation, UnterminatedStringLiteral, UpdateKeyMissing, Utf8Error,
-            ValueError,
+            NoConstsAllowed, NoEventReferencesAllowed, NoLocalsAllowed,
+            /*NoObjectError,*/ NotConstant, NotFound, Oops, ParseIntError, ParserError,
+            PatchKeyExists, PipelineUnknownPort, PreprocessorError, QueryNodeDuplicateName,
+            QueryNodeReservedName, QueryStreamNotDefined, RecursionLimit, RuntimeError,
+            TailingHereDoc, TypeConflict, UnexpectedCharacter, UnexpectedEndOfStream,
+            UnexpectedEscapeCode, UnrecognizedToken, UnterminatedExtractor, UnterminatedHereDoc,
+            UnterminatedIdentLiteral, UnterminatedInterpolation, UnterminatedStringLiteral,
+            UpdateKeyMissing, Utf8Error, ValueError,
         };
         match self {
             NoClauseHit(outer)
@@ -271,7 +271,8 @@ impl ErrorKind {
             | Io(_)
             | JsonError(_)
             | Msg(_)
-            | NoObjectError(_)
+            // FIXME: temporarily disabled to enable PDK support
+            // | NoObjectError(_)
             | NotFound
             | ParseIntError(_)
             | ParserError(_)
@@ -463,7 +464,8 @@ error_chain! {
         ValueError(tremor_value::Error);
         ParseIntError(num::ParseIntError);
         Utf8Error(std::str::Utf8Error);
-        NoObjectError(tremor_value::KnownKeyError);
+        // FIXME: temporarily disabled to enable PDK support
+        // NoObjectError(tremor_value::KnownKeyError);
         AccessError(value_trait::AccessError);
         Common(tremor_common::Error);
     }

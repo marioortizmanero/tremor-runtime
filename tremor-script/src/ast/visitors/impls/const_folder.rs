@@ -25,7 +25,7 @@ use crate::{
 };
 use simd_json::prelude::*;
 use simd_json_derive::Serialize;
-use tremor_value::KnownKey;
+// use tremor_value::KnownKey;
 
 /// Walks a AST and performs constant folding on arguments
 pub struct ConstFolder<'run, 'script>
@@ -332,8 +332,9 @@ where
                 if expr.as_lit().map(Value::is_str).unwrap_or_default() =>
             {
                 if let Some(Value::String(key)) = expr.into_lit() {
-                    let key = KnownKey::from(key);
-                    Segment::Id { key, mid }
+                    // FIXME: temporarily disabled to enable PDK support
+                    // let key = KnownKey::from(key);
+                    Segment::Id { /*key,*/ mid }
                 } else {
                     return Err("unreachable error is str and not str".into());
                 }

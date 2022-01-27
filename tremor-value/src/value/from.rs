@@ -16,7 +16,7 @@ use super::{Object, Value};
 use simd_json::{BorrowedValue, OwnedValue, StaticNode};
 use std::iter::FromIterator;
 
-use abi_stable::std_types::{RBox, RCow, Tuple2};
+use abi_stable::std_types::{RBox, RCow, ROption, RStr, Tuple2};
 
 impl<'value> From<OwnedValue> for Value<'value> {
     #[inline]
@@ -62,12 +62,29 @@ where
         s.map_or(Value::Static(StaticNode::Null), Value::from)
     }
 }
+impl<'value, T> From<ROption<T>> for Value<'value>
+where
+    Value<'value>: From<T>,
+{
+    #[inline]
+    #[must_use]
+    fn from(s: ROption<T>) -> Self {
+        s.map_or(Value::Static(StaticNode::Null), Value::from)
+    }
+}
 /********* str_ **********/
 impl<'value> From<&'value str> for Value<'value> {
     #[inline]
     #[must_use]
     fn from(s: &'value str) -> Self {
         Self::String(RCow::from(s))
+    }
+}
+impl<'value> From<RStr<'value>> for Value<'value> {
+    #[inline]
+    #[must_use]
+    fn from(s: RStr<'value>) -> Self {
+        Self::String(RCow::Borrowed(s))
     }
 }
 
@@ -92,6 +109,13 @@ impl<'value> From<String> for Value<'value> {
     #[must_use]
     fn from(s: String) -> Self {
         Self::String(s.into())
+    }
+}
+impl<'value> From<RString> for Value<'value> {
+    #[inline]
+    #[must_use]
+    fn from(s: RString) -> Self {
+        Self::String(s)
     }
 }
 
@@ -228,6 +252,16 @@ where
     #[inline]
     #[must_use]
     fn from(v: Vec<S>) -> Self {
+        v.into_iter().collect()
+    }
+}
+impl<'value, S> From<RVec<S>> for Value<'value>
+where
+    Value<'value>: From<S>,
+{
+    #[inline]
+    #[must_use]
+    fn from(v: RVec<S>) -> Self {
         v.into_iter().collect()
     }
 }
