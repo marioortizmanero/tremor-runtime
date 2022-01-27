@@ -30,8 +30,6 @@ use halfbrown::HashMap;
 use regex::Regex;
 use tremor_script::Value;
 
-use abi_stable::std_types::RString;
-
 lazy_static::lazy_static! {
     static ref LINE_REGEXP: Regex = {
         #[allow(clippy::unwrap_used)]
@@ -165,19 +163,5 @@ pub trait ConfigImpl {
         Self: serde::de::Deserialize<'static>,
     {
         Ok(tremor_value::structurize(config.clone_static())?)
-    }
-
-    /// The exact same as `new`, but works with a raw `&str` instead of an
-    /// already built value.
-    ///
-    /// # Errors
-    /// if the Configuration is invalid
-    fn from_str(config: RString) -> Result<Self>
-    where
-        for<'de> Self: serde::de::Deserialize<'de>,
-    {
-        let mut bytes = config.into_bytes();
-        let value = tremor_value::parse_to_value(bytes.as_mut_slice())?;
-        Self::new(&value)
     }
 }
