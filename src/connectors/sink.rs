@@ -53,9 +53,7 @@ pub use self::channel_sink::SinkMeta;
 
 use super::{utils::metrics::SinkReporter, CodecReq};
 
-use crate::connectors::utils::{
-    quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier,
-};
+use crate::connectors::prelude::*;
 use crate::errors::Error;
 use crate::pdk::{RError, RResult};
 use abi_stable::{
@@ -551,7 +549,7 @@ impl ContraflowSenderOpaque for Sender<AsyncSinkReply> {
         .into_ffi()
     }
 }
-/// Alias for the FFI-safe dynamic connector type
+/// Alias for the FFI-safe contraflow sender, boxed
 pub type BoxedContraflowSender = ContraflowSenderOpaque_TO<'static, RBox<()>>;
 
 /// create a builder for a `SinkManager`.

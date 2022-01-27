@@ -50,13 +50,19 @@ pub(crate) fn default_buf_size() -> usize {
 }
 
 // For the PDK
-pub use crate::connectors::sink::{
-    BoxedContraflowSender, BoxedEventSerializer, BoxedRawSink, ContraflowSenderOpaque,
-    EventSerializerOpaque, MutEventSerializer, RawSink,
-};
-pub use crate::connectors::source::{BoxedRawSource, RawSource};
-pub use crate::connectors::{BoxedRawConnector, RawConnector};
-pub use crate::pdk::{
-    connectors::{ConnectorMod, ConnectorMod_Ref},
-    RResult,
+pub use crate::{
+    connectors::{
+        quiescence::BoxedQuiescenceBeacon,
+        sink::{
+            BoxedContraflowSender, BoxedEventSerializer, BoxedRawSink, ContraflowSenderOpaque,
+            EventSerializerOpaque, MutEventSerializer, RawSink,
+        },
+        source::{BoxedRawSource, RawSource},
+        utils::reconnect::BoxedConnectionLostNotifier,
+        BoxedRawConnector, RawConnector,
+    },
+    pdk::{
+        connectors::{ConnectorMod, ConnectorMod_Ref},
+        RResult,
+    },
 };

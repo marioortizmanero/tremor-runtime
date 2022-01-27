@@ -56,14 +56,9 @@ use value_trait::{Builder, Mutable};
 pub(crate) use utils::{metrics, quiescence, reconnect};
 
 use crate::{
-    connectors::{
-        sink::{BoxedContraflowSender, BoxedRawSink, Sink},
-        source::{BoxedRawSource, Source},
-        utils::{quiescence::BoxedQuiescenceBeacon, reconnect::BoxedConnectionLostNotifier},
-    },
+    connectors::prelude::*,
     pdk::{
         self,
-        connectors::ConnectorMod_Ref,
         utils::{conv_cow_str, conv_cow_str_inv},
         RResult, DEFAULT_PLUGIN_PATH,
     },
@@ -240,7 +235,7 @@ pub trait Context: Display + Clone {
     fn quiescence_beacon(&self) -> &BoxedQuiescenceBeacon;
 
     /// get the notifier to signal to the runtime that we are disconnected
-    fn notifier(&self) -> &reconnect::BoxedConnectionLostNotifier;
+    fn notifier(&self) -> &BoxedConnectionLostNotifier;
 
     /// get the connector type
     fn connector_type(&self) -> &ConnectorType;
@@ -302,7 +297,7 @@ impl Context for ConnectorContext {
         &self.quiescence_beacon
     }
 
-    fn notifier(&self) -> &reconnect::BoxedConnectionLostNotifier {
+    fn notifier(&self) -> &BoxedConnectionLostNotifier {
         &self.notifier
     }
 }

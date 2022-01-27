@@ -203,7 +203,7 @@ impl ConnectionLostNotifierOpaque for ConnectionLostNotifier {
         .into_ffi()
     }
 }
-/// Alias for the type used in FFI
+/// Alias for the FFI-safe notifier, boxed
 pub type BoxedConnectionLostNotifier = ConnectionLostNotifierOpaque_TO<'static, RBox<()>>;
 
 impl ReconnectRuntime {

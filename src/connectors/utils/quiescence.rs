@@ -144,7 +144,7 @@ impl QuiescenceBeaconOpaque for QuiescenceBeacon {
         self.0.resume_event.notify(Self::MAX_LISTENERS); // we might have been paused, so notify here
     }
 }
-/// Alias for the type used in FFI
+/// Alias for the FFI-safe beacon, boxed
 pub type BoxedQuiescenceBeacon = QuiescenceBeaconOpaque_TO<'static, RBox<()>>;
 
 #[cfg(test)]
