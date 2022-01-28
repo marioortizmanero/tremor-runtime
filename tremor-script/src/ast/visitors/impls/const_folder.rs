@@ -25,7 +25,7 @@ use crate::{
 };
 use simd_json::prelude::*;
 use simd_json_derive::Serialize;
-// use tremor_value::KnownKey;
+use tremor_value::KnownKey;
 
 use tremor_value::value::from::{cow_beef_to_sabi, cow_sabi_to_beef};
 
@@ -334,9 +334,8 @@ where
                 if expr.as_lit().map(Value::is_str).unwrap_or_default() =>
             {
                 if let Some(Value::String(key)) = expr.into_lit() {
-                    // FIXME: temporarily disabled to enable PDK support
-                    // let key = KnownKey::from(key);
-                    Segment::Id { /*key,*/ mid }
+                    let key = KnownKey::from(key);
+                    Segment::Id { key, mid }
                 } else {
                     return Err("unreachable error is str and not str".into());
                 }

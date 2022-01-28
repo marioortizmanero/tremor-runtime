@@ -23,11 +23,10 @@
 //  '{}' -> json|| => Ok({})
 //  Predicate for json||: "is valid json"
 //  '{blarg' -> json|| =>
-use halfbrown::{hashmap, HashMap};
+use halfbrown::HashMap;
 
 use crate::prelude::*;
 use crate::{datetime, grok::Pattern as GrokPattern, EventContext, Object, Value};
-use beef::Cow;
 use cidr_utils::{
     cidr::{IpCidr, Ipv4Cidr},
     utils::IpCidrCombiner,
@@ -35,7 +34,6 @@ use cidr_utils::{
 use dissect::Pattern;
 use regex::Regex;
 use std::fmt;
-use std::hash::BuildHasherDefault;
 use std::iter::{Iterator, Peekable};
 use std::net::{IpAddr, Ipv4Addr};
 use std::slice::Iter;

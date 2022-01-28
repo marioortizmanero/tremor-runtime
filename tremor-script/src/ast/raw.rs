@@ -39,7 +39,7 @@ use crate::{
     prelude::*,
     registry::CustomFn,
     tilde::Extractor,
-    /*KnownKey,*/ Value,
+    KnownKey, Value,
 };
 pub use base_expr::BaseExpr;
 use beef::Cow;
@@ -1538,44 +1538,37 @@ impl<'script> Upable<'script> for PredicatePatternRaw<'script> {
         Ok(match self {
             TildeEq { assign, lhs, test } => PredicatePattern::TildeEq {
                 assign,
-                // FIXME: temporarily disabled to enable PDK support
-                // key: KnownKey::from(lhs.clone()),
+                key: KnownKey::from(lhs.clone()),
                 lhs,
                 test: Box::new(test.up(helper)?),
             },
             Bin { lhs, rhs, kind } => PredicatePattern::Bin {
-                // FIXME: temporarily disabled to enable PDK support
-                // key: KnownKey::from(lhs.clone()),
+                key: KnownKey::from(lhs.clone()),
                 lhs,
                 rhs: rhs.up(helper)?,
                 kind,
             },
             RecordPatternEq { lhs, pattern } => PredicatePattern::RecordPatternEq {
-                // FIXME: temporarily disabled to enable PDK support
-                // key: KnownKey::from(lhs.clone()),
+                key: KnownKey::from(lhs.clone()),
                 lhs,
                 pattern: pattern.up(helper)?,
             },
             ArrayPatternEq { lhs, pattern } => PredicatePattern::ArrayPatternEq {
-                // FIXME: temporarily disabled to enable PDK support
-                // key: KnownKey::from(lhs.clone()),
+                key: KnownKey::from(lhs.clone()),
                 lhs,
                 pattern: pattern.up(helper)?,
             },
             TuplePatternEq { lhs, pattern } => PredicatePattern::TuplePatternEq {
-                // FIXME: temporarily disabled to enable PDK support
-                // key: KnownKey::from(lhs.clone()),
+                key: KnownKey::from(lhs.clone()),
                 lhs,
                 pattern: pattern.up(helper)?,
             },
             FieldPresent { lhs } => PredicatePattern::FieldPresent {
-                // FIXME: temporarily disabled to enable PDK support
-                // key: KnownKey::from(lhs.clone()),
+                key: KnownKey::from(lhs.clone()),
                 lhs,
             },
             FieldAbsent { lhs } => PredicatePattern::FieldAbsent {
-                // FIXME: temporarily disabled to enable PDK support
-                // key: KnownKey::from(lhs.clone()),
+                key: KnownKey::from(lhs.clone()),
                 lhs,
             },
         })
@@ -1841,8 +1834,7 @@ impl<'script> Upable<'script> for SegmentElementRaw<'script> {
                 Value::String(id) => {
                     let mid = helper.add_meta_w_name(start, end, &id);
                     Ok(Segment::Id {
-                        // FIXME: temporarily disabled to enable PDK support
-                        // key: KnownKey::from(id.clone()),
+                        key: KnownKey::from(id.clone()),
                         mid,
                     })
                 }

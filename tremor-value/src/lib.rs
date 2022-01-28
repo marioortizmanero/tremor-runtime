@@ -32,8 +32,7 @@
 extern crate serde as serde_ext;
 
 mod error;
-// FIXME: temporarily disabled to enable PDK support
-// mod known_key;
+mod known_key;
 mod macros;
 /// Prelude module
 pub mod prelude;
@@ -42,8 +41,7 @@ mod serde;
 pub mod value;
 pub use crate::serde::structurize;
 pub use error::*;
-// FIXME: temporarily disabled to enable PDK support
-// pub use known_key::{Error as KnownKeyError, KnownKey};
+pub use known_key::{Error as KnownKeyError, KnownKey};
 pub use simd_json::{json, json_typed, AlignedBuf, StaticNode};
 pub use value::from::*;
 pub use value::{parse_to_value, parse_to_value_with_buffers, to_value, Object, Value};

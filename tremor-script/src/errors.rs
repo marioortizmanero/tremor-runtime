@@ -182,7 +182,7 @@ impl ErrorKind {
             InvalidToken, InvalidUnary, InvalidUtf8Sequence, Io, JsonError, MergeTypeConflict,
             MissingEffectors, MissingFunction, MissingModule, ModuleNotFound, Msg, NoClauseHit,
             NoConstsAllowed, NoEventReferencesAllowed, NoLocalsAllowed,
-            /*NoObjectError,*/ NotConstant, NotFound, Oops, ParseIntError, ParserError,
+            NoObjectError, NotConstant, NotFound, Oops, ParseIntError, ParserError,
             PatchKeyExists, PipelineUnknownPort, PreprocessorError, QueryNodeDuplicateName,
             QueryNodeReservedName, QueryStreamNotDefined, RecursionLimit, RuntimeError,
             TailingHereDoc, TypeConflict, UnexpectedCharacter, UnexpectedEndOfStream,
@@ -271,8 +271,7 @@ impl ErrorKind {
             | Io(_)
             | JsonError(_)
             | Msg(_)
-            // FIXME: temporarily disabled to enable PDK support
-            // | NoObjectError(_)
+            | NoObjectError(_)
             | NotFound
             | ParseIntError(_)
             | ParserError(_)
@@ -464,8 +463,7 @@ error_chain! {
         ValueError(tremor_value::Error);
         ParseIntError(num::ParseIntError);
         Utf8Error(std::str::Utf8Error);
-        // FIXME: temporarily disabled to enable PDK support
-        // NoObjectError(tremor_value::KnownKeyError);
+        NoObjectError(tremor_value::KnownKeyError);
         AccessError(value_trait::AccessError);
         Common(tremor_common::Error);
     }

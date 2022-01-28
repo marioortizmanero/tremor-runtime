@@ -54,7 +54,7 @@ use crate::{
     script::Return,
     stry,
     tilde::Extractor,
-    /*KnownKey,*/ Value,
+    KnownKey, Value,
 };
 pub(crate) use analyzer::*;
 pub use base_expr::BaseExpr;
@@ -2002,10 +2002,9 @@ pub enum PredicatePattern<'script> {
         assign: Cow<'script, str>,
         /// Lhs
         lhs: Cow<'script, str>,
-        // FIXME: temporarily disabled to enable PDK support
-        // /// Key
-        // #[serde(skip)]
-        // key: KnownKey<'script>,
+        /// Key
+        #[serde(skip)]
+        key: KnownKey<'script>,
         /// Predicate
         test: Box<TestExpr>,
     },
@@ -2013,10 +2012,9 @@ pub enum PredicatePattern<'script> {
     Bin {
         /// Lhs
         lhs: Cow<'script, str>,
-        // FIXME: temporarily disabled to enable PDK support
-        // /// Key
-        // #[serde(skip)]
-        // key: KnownKey<'script>,
+        /// Key
+        #[serde(skip)]
+        key: KnownKey<'script>,
         /// Rhs
         rhs: ImutExpr<'script>,
         /// Binary operation kind
@@ -2026,10 +2024,9 @@ pub enum PredicatePattern<'script> {
     RecordPatternEq {
         /// Lhs
         lhs: Cow<'script, str>,
-        // FIXME: temporarily disabled to enable PDK support
-        // /// Key
-        // #[serde(skip)]
-        // key: KnownKey<'script>,
+        /// Key
+        #[serde(skip)]
+        key: KnownKey<'script>,
         /// Predicate
         pattern: RecordPattern<'script>,
     },
@@ -2037,10 +2034,9 @@ pub enum PredicatePattern<'script> {
     ArrayPatternEq {
         /// Lhs
         lhs: Cow<'script, str>,
-        // FIXME: temporarily disabled to enable PDK support
-        // /// Key
-        // #[serde(skip)]
-        // key: KnownKey<'script>,
+        /// Key
+        #[serde(skip)]
+        key: KnownKey<'script>,
         /// Predicate
         pattern: ArrayPattern<'script>,
     },
@@ -2048,10 +2044,9 @@ pub enum PredicatePattern<'script> {
     TuplePatternEq {
         /// Lhs
         lhs: Cow<'script, str>,
-        // FIXME: temporarily disabled to enable PDK support
-        // /// Key
-        // #[serde(skip)]
-        // key: KnownKey<'script>,
+        /// Key
+        #[serde(skip)]
+        key: KnownKey<'script>,
         /// Predicate
         pattern: TuplePattern<'script>,
     },
@@ -2059,19 +2054,17 @@ pub enum PredicatePattern<'script> {
     FieldPresent {
         /// Lhs
         lhs: Cow<'script, str>,
-        // FIXME: temporarily disabled to enable PDK support
-        // /// Key
-        // #[serde(skip)]
-        // key: KnownKey<'script>,
+        /// Key
+        #[serde(skip)]
+        key: KnownKey<'script>,
     },
     /// Field absence
     FieldAbsent {
         /// Lhs
         lhs: Cow<'script, str>,
-        // FIXME: temporarily disabled to enable PDK support
-        // /// Key
-        // #[serde(skip)]
-        // key: KnownKey<'script>,
+        /// Key
+        #[serde(skip)]
+        key: KnownKey<'script>,
     },
 }
 
@@ -2164,8 +2157,6 @@ impl<'script> PredicatePattern<'script> {
         }
     }
 
-    // FIXME: temporarily disabled to enable PDK support
-    /*
     /// Get key
     #[must_use]
     #[cfg(not(tarpaulin_include))] // this is a simple asccessor
@@ -2184,7 +2175,6 @@ impl<'script> PredicatePattern<'script> {
             | FieldAbsent { key, .. } => key,
         }
     }
-    */
 
     #[cfg(not(tarpaulin_include))] // this is a simple asccessor
     fn lhs(&self) -> &Cow<'script, str> {
@@ -2338,10 +2328,9 @@ impl<'script> Path<'script> {
 pub enum Segment<'script> {
     /// An identifier
     Id {
-        // FIXME: temporarily changed from KnownKey to Cow to enable PDK support
         /// Key
         #[serde(skip)]
-        key: Cow<'script, str>,
+        key: KnownKey<'script>,
         /// Id
         mid: usize,
     },
