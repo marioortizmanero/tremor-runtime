@@ -102,7 +102,7 @@ tonic = { version = "0.5.2", default-features = false, features = [
 tremor-otelapis = { version = "0.2.2" }
 
 # plugin system
-abi_stable = "0.10"
+abi_stable = "0.10.3"
 
 [dev-dependencies]
 matches = "0.1"

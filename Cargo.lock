@@ -4,18 +4,19 @@ version = 3
 
 [[package]]
 name = "abi_stable"
-version = "0.10.2"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "709308333aa82687b93e978aeec6c60688cdecd7bd7d0378a9825227145878c4"
+checksum = "3c8f0d5c8e09e8b591f6db9f56b006c9b9e7a44064acb274411ae51aaaa1364d"
 dependencies = [
- "abi_stable_derive 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "abi_stable_shared 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "abi_stable_derive",
+ "abi_stable_shared",
  "core_extensions",
  "crossbeam-channel",
  "generational-arena",
  "libloading",
  "lock_api",
  "parking_lot",
+ "paste",
  "repr_offset",
  "rustc_version 0.4.0",
  "serde",
@@ -24,46 +25,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "abi_stable"
-version = "0.10.2"
-source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=floating-point#fd4021c5900a91c4823059db3ebb250dd86cdec2"
-dependencies = [
- "abi_stable_derive 0.10.2 (git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=floating-point)",
- "abi_stable_shared 0.10.2 (git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=floating-point)",
- "core_extensions",
- "generational-arena",
- "libloading",
- "lock_api",
- "parking_lot",
- "repr_offset",
- "rustc_version 0.4.0",
- "serde",
- "serde_derive",
-]
-
-[[package]]
 name = "abi_stable_derive"
-version = "0.10.2"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "178bbfd075531f3af85296ca9839f71d923406682819b595353d73fe4d853643"
+checksum = "3b9810ef8debee5544010d92dac0b88b32853cd5bd5ca3298243c99e931da0f0"
 dependencies = [
- "abi_stable_shared 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "as_derive_utils 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "core_extensions",
- "proc-macro2",
- "quote",
- "rustc_version 0.2.3",
- "syn",
- "typed-arena",
-]
-
-[[package]]
-name = "abi_stable_derive"
-version = "0.10.2"
-source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=floating-point#fd4021c5900a91c4823059db3ebb250dd86cdec2"
-dependencies = [
- "abi_stable_shared 0.10.2 (git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=floating-point)",
- "as_derive_utils 0.10.2 (git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=floating-point)",
+ "abi_stable_shared",
+ "as_derive_utils",
  "core_extensions",
  "proc-macro2",
  "quote",
@@ -74,17 +42,9 @@ dependencies = [
 
 [[package]]
 name = "abi_stable_shared"
-version = "0.10.2"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00a97e54ce35e7a69bfbd799b5d44d333c9e4eb430744efa4e4a9aa24670a6bc"
-dependencies = [
- "core_extensions",
-]
-
-[[package]]
-name = "abi_stable_shared"
-version = "0.10.2"
-source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=floating-point#fd4021c5900a91c4823059db3ebb250dd86cdec2"
+checksum = "ece9da89066e018d908b48755e17cdd08a46ce222f84b1f226e837f836f84a5f"
 dependencies = [
  "core_extensions",
 ]
@@ -234,20 +194,9 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 
 [[package]]
 name = "as_derive_utils"
-version = "0.10.2"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "147c76e2cba05d6e2f0206b7e462e2076f907efd79ee37a2297872a1ec3cd177"
-dependencies = [
- "core_extensions",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "as_derive_utils"
-version = "0.10.2"
-source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=floating-point#fd4021c5900a91c4823059db3ebb250dd86cdec2"
+checksum = "e0a26fa495cefb8c86d9ce183b3f39ad11678e54fb3c20e6b7dbd87770811d9b"
 dependencies = [
  "core_extensions",
  "proc-macro2",
@@ -1041,6 +990,15 @@ name = "core_extensions"
 version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79b110b7cd430bd590fa60a5ba58a383488dab61912318bfb05d968a80cdda6d"
+dependencies = [
+ "core_extensions_proc_macros",
+]
+
+[[package]]
+name = "core_extensions_proc_macros"
+version = "1.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c348a81513f573054124b9f10e258a654a0519b65f2dba0142307bd3c7b5b8b6"
 
 [[package]]
 name = "cpufeatures"
@@ -2995,6 +2953,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "paste"
+version = "1.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0744126afe1a6dd7f394cb50a716dbe086cb06e255e53d8d0185d82828358fb5"
+
+[[package]]
 name = "peeking_take_while"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4906,7 +4870,7 @@ dependencies = [
 name = "tremor-runtime"
 version = "0.11.4"
 dependencies = [
- "abi_stable 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "abi_stable",
  "anyhow",
  "async-broadcast",
  "async-compat",
@@ -5021,7 +4985,7 @@ dependencies = [
 name = "tremor-value"
 version = "0.3.2"
 dependencies = [
- "abi_stable 0.10.2 (git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=floating-point)",
+ "abi_stable",
  "base64 0.13.0",
  "float-cmp",
  "getopts",
@@ -5193,8 +5157,10 @@ dependencies = [
 [[package]]
 name = "value-trait"
 version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0393efdd7d82f856a927b0fcafa80bca45911f5c89ef6b9d80197bebc284f72e"
 dependencies = [
- "abi_stable 0.10.2 (git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=floating-point)",
+ "abi_stable",
  "float-cmp",
  "halfbrown",
  "itoa",
@@ -5553,3 +5519,7 @@ dependencies = [
  "cc",
  "libc",
 ]
+
+[[patch.unused]]
+name = "value-trait"
+version = "0.2.9-alpha.0"
