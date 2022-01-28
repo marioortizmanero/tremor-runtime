@@ -96,7 +96,7 @@ impl<'script> Expr<'script> {
         state: &'run mut Value<'static>,
         meta: &'run mut Value<'event>,
         local: &'run mut LocalStack<'event>,
-        expr: &'run Match<Expr<'event>>,
+        expr: &'run Match<'event, Expr<'event>>,
     ) -> Result<Cont<'run, 'event>> {
         // use super::DUMMY_PATH as D;
         let target = stry!(expr.target.run(opts, env, event, state, meta, local));
@@ -231,7 +231,7 @@ impl<'script> Expr<'script> {
         state: &'run mut Value<'static>,
         meta: &'run mut Value<'event>,
         local: &'run mut LocalStack<'event>,
-        expr: &'run Comprehension<'event, Expr>,
+        expr: &'run Comprehension<'event, Expr<'event>>,
     ) -> Result<Cont<'run, 'event>> {
         type Bi<'v, 'r> = (usize, Box<dyn Iterator<Item = (Value<'v>, Value<'v>)> + 'r>);
         // Converting from abi_stable to std

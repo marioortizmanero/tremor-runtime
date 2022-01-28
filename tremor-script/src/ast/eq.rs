@@ -431,7 +431,7 @@ impl<'script> AstEq for PredicatePattern<'script> {
                     key: k2,
                     test: t2,
                 },
-            ) => a1 == a2 && l1 == l2 /*&& k1 == k2*/ && t1.ast_eq(t2.as_ref()),
+            ) => a1 == a2 && l1 == l2 && k1 == k2 && t1.ast_eq(t2.as_ref()),
             (
                 Self::Bin {
                     lhs: l1,
@@ -445,7 +445,7 @@ impl<'script> AstEq for PredicatePattern<'script> {
                     rhs: r2,
                     kind: kind2,
                 },
-            ) => l1 == l2 /*&& k1 == k2*/ && kind1 == kind2 && r1.ast_eq(r2),
+            ) => l1 == l2 && k1 == k2 && kind1 == kind2 && r1.ast_eq(r2),
             (
                 Self::RecordPatternEq { lhs, key, pattern },
                 Self::RecordPatternEq {
@@ -453,7 +453,7 @@ impl<'script> AstEq for PredicatePattern<'script> {
                     key: k2,
                     pattern: p2,
                 },
-            ) => lhs == l2 /*&& key == k2*/ && pattern.ast_eq(p2),
+            ) => lhs == l2 && key == k2 && pattern.ast_eq(p2),
             (
                 Self::ArrayPatternEq { lhs, key, pattern },
                 Self::ArrayPatternEq {
@@ -461,7 +461,7 @@ impl<'script> AstEq for PredicatePattern<'script> {
                     key: k2,
                     pattern: p2,
                 },
-            ) => lhs == l2 /*&& key == k2*/ && pattern.ast_eq(p2),
+            ) => lhs == l2 && key == k2 && pattern.ast_eq(p2),
             _ => self == other,
         }
     }

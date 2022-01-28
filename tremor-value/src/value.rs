@@ -33,7 +33,10 @@ use std::{
 pub use crate::serde::to_value;
 pub use r#static::StaticValue;
 
-use abi_stable::std_types::{RBox, RCow, RHashMap, RVec, Tuple2};
+use abi_stable::{
+    std_types::{RBox, RCow, RHashMap, RVec, Tuple2},
+    StableAbi,
+};
 
 /// Representation of a JSON object
 pub type Object<'value> = RHashMap<RCow<'value, str>, Value<'value>>;
@@ -76,7 +79,8 @@ pub fn parse_to_value_with_buffers<'value>(
 
 /// Borrowed JSON-DOM Value, consider using the `ValueTrait`
 /// to access its content
-#[derive(Debug, Clone)]
+#[repr(C)]
+#[derive(Debug, Clone, StableAbi)]
 pub enum Value<'value> {
     /// Static values
     Static(StaticNode),

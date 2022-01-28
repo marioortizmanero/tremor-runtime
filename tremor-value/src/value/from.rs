@@ -20,7 +20,7 @@ use abi_stable::std_types::{RBox, RCow, ROption, RStr, RString, RVec, Tuple2};
 
 /// FIXME: this should be taken from `tremor_pdk` in the future
 /// FIXME: at some point do a search for all the occurrences of this function
-/// and try to fix them properly by using abi_stable types from the beginning.
+/// and try to fix them properly by using `abi_stable` types from the beginning.
 /// That should give a small performance & usability boost.
 #[must_use]
 pub fn cow_beef_to_sabi(cow: beef::Cow<str>) -> RCow<str> {
