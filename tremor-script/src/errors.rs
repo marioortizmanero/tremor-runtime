@@ -181,14 +181,14 @@ impl ErrorKind {
             InvalidHexLiteral, InvalidIntLiteral, InvalidMod, InvalidPP, InvalidRecur,
             InvalidToken, InvalidUnary, InvalidUtf8Sequence, Io, JsonError, MergeTypeConflict,
             MissingEffectors, MissingFunction, MissingModule, ModuleNotFound, Msg, NoClauseHit,
-            NoConstsAllowed, NoEventReferencesAllowed, NoLocalsAllowed,
-            NoObjectError, NotConstant, NotFound, Oops, ParseIntError, ParserError,
-            PatchKeyExists, PipelineUnknownPort, PreprocessorError, QueryNodeDuplicateName,
-            QueryNodeReservedName, QueryStreamNotDefined, RecursionLimit, RuntimeError,
-            TailingHereDoc, TypeConflict, UnexpectedCharacter, UnexpectedEndOfStream,
-            UnexpectedEscapeCode, UnrecognizedToken, UnterminatedExtractor, UnterminatedHereDoc,
-            UnterminatedIdentLiteral, UnterminatedInterpolation, UnterminatedStringLiteral,
-            UpdateKeyMissing, Utf8Error, ValueError,
+            NoConstsAllowed, NoEventReferencesAllowed, NoLocalsAllowed, NoObjectError, NotConstant,
+            NotFound, Oops, ParseIntError, ParserError, PatchKeyExists, PipelineUnknownPort,
+            PreprocessorError, QueryNodeDuplicateName, QueryNodeReservedName,
+            QueryStreamNotDefined, RecursionLimit, RuntimeError, TailingHereDoc, TypeConflict,
+            UnexpectedCharacter, UnexpectedEndOfStream, UnexpectedEscapeCode, UnrecognizedToken,
+            UnterminatedExtractor, UnterminatedHereDoc, UnterminatedIdentLiteral,
+            UnterminatedInterpolation, UnterminatedStringLiteral, UpdateKeyMissing, Utf8Error,
+            ValueError,
         };
         match self {
             NoClauseHit(outer)

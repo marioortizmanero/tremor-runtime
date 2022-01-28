@@ -16,8 +16,8 @@ use crate::Value;
 use std::fmt;
 use value_trait::{Mutable, Value as ValueTrait, ValueAccess, ValueType};
 
-use abi_stable::std_types::{RHashMap, RCow};
 use crate::value::from::cow_beef_to_sabi;
+use abi_stable::std_types::{RCow, RHashMap};
 
 /// Well known key that can be looked up in a `Value` faster.
 /// It achives this by memorizing the hash.
@@ -92,10 +92,7 @@ impl<'key> KnownKey<'key> {
     /// ```
     #[inline]
     #[must_use]
-    pub fn lookup<'target>(
-        &self,
-        target: &'target Value<'key>,
-    ) -> Option<&'target Value<'key>>
+    pub fn lookup<'target>(&self, target: &'target Value<'key>) -> Option<&'target Value<'key>>
     where
         'key: 'target,
     {
@@ -305,8 +302,7 @@ impl<'key> KnownKey<'key> {
         //           &mut v
         //       }
         //   }
-        map.entry(self.key.clone())
-            .or_insert_with(with)
+        map.entry(self.key.clone()).or_insert_with(with)
     }
 
     /// Inserts a value key into  `Value`, returns None if the
@@ -406,7 +402,7 @@ impl<'script> KnownKey<'script> {
     /// turns the key into one with static lifetime
     #[must_use]
     pub fn into_static(self) -> KnownKey<'static> {
-        let KnownKey { key/*, hash*/ } = self;
+        let KnownKey { key, /*, hash*/ } = self;
         KnownKey {
             key: RCow::Owned(key.to_string().into()),
             // hash,

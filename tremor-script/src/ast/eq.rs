@@ -447,10 +447,7 @@ impl<'script> AstEq for PredicatePattern<'script> {
                 },
             ) => l1 == l2 /*&& k1 == k2*/ && kind1 == kind2 && r1.ast_eq(r2),
             (
-                Self::RecordPatternEq {
-                    lhs,
-                    key, pattern,
-                },
+                Self::RecordPatternEq { lhs, key, pattern },
                 Self::RecordPatternEq {
                     lhs: l2,
                     key: k2,
@@ -458,10 +455,7 @@ impl<'script> AstEq for PredicatePattern<'script> {
                 },
             ) => lhs == l2 /*&& key == k2*/ && pattern.ast_eq(p2),
             (
-                Self::ArrayPatternEq {
-                    lhs,
-                    key, pattern,
-                },
+                Self::ArrayPatternEq { lhs, key, pattern },
                 Self::ArrayPatternEq {
                     lhs: l2,
                     key: k2,

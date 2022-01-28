@@ -58,6 +58,9 @@ use std::{
     iter::Iterator,
 };
 
+use abi_stable::std_types::{ROption::RSome, Tuple2};
+use tremor_value::value::from::cow_beef_to_sabi;
+
 /// constant `true` value
 pub const TRUE: Value<'static> = Value::Static(StaticNode::Bool(true));
 /// constant `false` value
@@ -210,7 +213,7 @@ pub(crate) fn val_eq<'event>(lhs: &Value<'event>, rhs: &Value<'event>) -> bool {
         (Object(l), Object(r)) => {
             if l.len() == r.len() {
                 l.iter()
-                    .all(|(k, lv)| r.get(k).map(|rv| val_eq(lv, rv)) == Some(true))
+                    .all(|Tuple2(k, lv)| r.get(k).map(|rv| val_eq(lv, rv)) == Some(true))
             } else {
                 false
             }
@@ -726,7 +729,7 @@ where
     Inner: BaseExpr,
 {
     if let (Some(rep), Some(map)) = (replacement.as_object(), value.as_object_mut()) {
-        for (k, v) in rep {
+        for Tuple2(k, v) in rep {
             if let Some(k) = map.get_mut(k) {
                 stry!(merge_values(outer, inner, k, v));
             } else {
@@ -890,6 +893,7 @@ fn patch_value<'run, 'event>(
             .ok_or_else(|| err_need_obj(patch_expr, &expr.target, t, env.meta))?;
         match const_op {
             Insert { cow, ident, value } => {
+                let cow = cow_beef_to_sabi(cow);
                 if obj.contains_key(&cow) {
                     let key = cow.to_string();
                     return error_patch_key_exists(patch_expr, ident, key, env.meta);
@@ -897,6 +901,7 @@ fn patch_value<'run, 'event>(
                 obj.insert(cow, value);
             }
             Update { cow, ident, value } => {
+                let cow = cow_beef_to_sabi(cow);
                 if obj.contains_key(&cow) {
                     obj.insert(cow, value);
                 } else {
@@ -905,12 +910,16 @@ fn patch_value<'run, 'event>(
                 }
             }
             Upsert { cow, value } => {
+                let cow = cow_beef_to_sabi(cow);
                 obj.insert(cow, value);
             }
             Erase { cow } => {
+                let cow = cow_beef_to_sabi(cow);
                 obj.remove(&cow);
             }
             Copy { from, to } => {
+                let to = cow_beef_to_sabi(to);
+                let from = cow_beef_to_sabi(from);
                 if obj.contains_key(&to) {
                     return error_patch_key_exists(patch_expr, expr, to.to_string(), env.meta);
                 }
@@ -920,33 +929,39 @@ fn patch_value<'run, 'event>(
                 }
             }
             Move { from, to } => {
+                let to = cow_beef_to_sabi(to);
+                let from = cow_beef_to_sabi(from);
                 if obj.contains_key(&to) {
                     return error_patch_key_exists(patch_expr, expr, to.to_string(), env.meta);
                 }
-                if let Some(old) = obj.remove(&from) {
+                if let RSome(old) = obj.remove(&from) {
                     obj.insert(to, old);
                 }
             }
-            Merge { cow, ident, mvalue } => match obj.get_mut(&cow) {
-                Some(value @ Value::Object(_)) => {
-                    stry!(merge_values(patch_expr, expr, value, &mvalue));
+            Merge { cow, ident, mvalue } => {
+                let cow = cow_beef_to_sabi(cow);
+                match obj.get_mut(&cow) {
+                    Some(value @ Value::Object(_)) => {
+                        stry!(merge_values(patch_expr, expr, value, &mvalue));
+                    }
+                    Some(other) => {
+                        let key = cow.to_string();
+                        return error_patch_merge_type_conflict(
+                            patch_expr, ident, key, other, env.meta,
+                        );
+                    }
+                    None => {
+                        let mut new_value = Value::object();
+                        stry!(merge_values(patch_expr, expr, &mut new_value, &mvalue));
+                        obj.insert(cow, new_value);
+                    }
                 }
-                Some(other) => {
-                    let key = cow.to_string();
-                    return error_patch_merge_type_conflict(
-                        patch_expr, ident, key, other, env.meta,
-                    );
-                }
-                None => {
-                    let mut new_value = Value::object();
-                    stry!(merge_values(patch_expr, expr, &mut new_value, &mvalue));
-                    obj.insert(cow, new_value);
-                }
-            },
+            }
             MergeRecord { mvalue } => {
                 stry!(merge_values(patch_expr, expr, target, &mvalue));
             }
             Default { cow, expr, .. } => {
+                let cow = cow_beef_to_sabi(cow);
                 if !obj.contains_key(&cow) {
                     let default_value = stry!(expr.run(opts, env, event, state, meta, local));
                     obj.insert(cow, default_value.into_owned());
@@ -969,7 +984,7 @@ fn apply_default<'event>(
     target: &mut <Value<'event> as ValueAccess>::Object,
     dflt: &<Value<'event> as ValueAccess>::Object,
 ) {
-    for (k, v) in dflt {
+    for Tuple2(k, v) in dflt {
         if !target.contains_key(k) {
             target.insert(k.clone(), v.clone());
         } else if let Some((target, dflt)) = target

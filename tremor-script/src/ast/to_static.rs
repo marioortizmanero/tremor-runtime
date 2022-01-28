@@ -928,30 +928,21 @@ impl<'script> PredicatePattern<'script> {
                 rhs: rhs.into_static(),
                 kind,
             },
-            PredicatePattern::RecordPatternEq {
-                lhs,
-                key, pattern,
-            } => {
+            PredicatePattern::RecordPatternEq { lhs, key, pattern } => {
                 PredicatePattern::RecordPatternEq {
                     lhs: Cow::owned(lhs.to_string()),
                     key: key.into_static(),
                     pattern: pattern.into_static(),
                 }
             }
-            PredicatePattern::ArrayPatternEq {
-                lhs,
-                key, pattern,
-            } => {
+            PredicatePattern::ArrayPatternEq { lhs, key, pattern } => {
                 PredicatePattern::ArrayPatternEq {
                     lhs: Cow::owned(lhs.to_string()),
                     key: key.into_static(),
                     pattern: pattern.into_static(),
                 }
             }
-            PredicatePattern::TuplePatternEq {
-                lhs,
-               key, pattern,
-            } => {
+            PredicatePattern::TuplePatternEq { lhs, key, pattern } => {
                 PredicatePattern::TuplePatternEq {
                     lhs: Cow::owned(lhs.to_string()),
                     key: key.into_static(),
