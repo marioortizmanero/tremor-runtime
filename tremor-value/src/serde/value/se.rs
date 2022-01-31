@@ -308,7 +308,7 @@ impl serde::ser::SerializeSeq for SerializeVec {
     }
 
     fn end(self) -> Result<Value<'static>> {
-        Ok(Value::Array(self.vec))
+        Ok(Value::Array(self.vec.into()))
     }
 }
 
@@ -359,7 +359,7 @@ impl serde::ser::SerializeTupleVariant for SerializeTupleVariant {
     fn end(self) -> Result<Value<'static>> {
         let mut object = Object::with_capacity(1);
 
-        object.insert(self.name.into(), Value::Array(self.vec));
+        object.insert(self.name.into(), Value::Array(self.vec.into()));
 
         Ok(Value::from(object))
     }

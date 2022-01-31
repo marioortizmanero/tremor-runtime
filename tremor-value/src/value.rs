@@ -35,6 +35,8 @@ use std::{
 pub use crate::serde::to_value;
 pub use r#static::StaticValue;
 
+use abi_stable::std_types::RVec;
+
 /// Representation of a JSON object
 pub type Object<'value> = HashMap<Cow<'value, str>, Value<'value>>;
 /// Bytes
@@ -83,7 +85,7 @@ pub enum Value<'value> {
     /// string type
     String(Cow<'value, str>),
     /// array type
-    Array(Vec<Value<'value>>),
+    Array(RVec<Value<'value>>),
     /// object type
     Object(Box<Object<'value>>),
     /// A binary type
@@ -96,7 +98,7 @@ impl<'value> Value<'value> {
     /// Creates an empty array value
     #[must_use]
     pub const fn array() -> Self {
-        Value::Array(vec![])
+        Value::Array(RVec::new())
     }
 
     /// Creates an empty array value
@@ -223,44 +225,45 @@ impl<'value> Ord for Value<'value> {
             (Value::String(v1), Value::String(v2)) => v1.cmp(v2),
             (Value::String(_s), _) => Ordering::Greater,
             (_, Value::String(_s)) => Ordering::Less,
-            (Value::Array(v1), Value::Array(v2)) => v1.cmp(v2),
-            (Value::Array(_a), _) => Ordering::Greater,
-            (_, Value::Array(_a)) => Ordering::Less,
-            (Value::Object(v1), Value::Object(v2)) => cmp_map(v1.as_ref(), v2.as_ref()),
+            _ => Ordering::Equal
+            // (Value::Array(v1), Value::Array(v2)) => v1.cmp(v2),
+            // (Value::Array(_a), _) => Ordering::Greater,
+            // (_, Value::Array(_a)) => Ordering::Less,
+            // (Value::Object(v1), Value::Object(v2)) => cmp_map(v1.as_ref(), v2.as_ref()),
         }
     }
 }
-fn cmp_map(left: &Object, right: &Object) -> Ordering {
-    // Compare length first
+// fn cmp_map(left: &Object, right: &Object) -> Ordering {
+//     // Compare length first
 
-    match left.len().cmp(&right.len()) {
-        Ordering::Equal => (),
-        o @ (Ordering::Greater | Ordering::Less) => return o,
-    };
+//     match left.len().cmp(&right.len()) {
+//         Ordering::Equal => (),
+//         o @ (Ordering::Greater | Ordering::Less) => return o,
+//     };
 
-    // compare keyspace (sorted keys cmp)
-    let mut keys_left: Vec<_> = left.keys().collect();
-    let mut keys_right: Vec<_> = right.keys().collect();
-    keys_left.sort();
-    keys_right.sort();
+//     // compare keyspace (sorted keys cmp)
+//     let mut keys_left: Vec<_> = left.keys().collect();
+//     let mut keys_right: Vec<_> = right.keys().collect();
+//     keys_left.sort();
+//     keys_right.sort();
 
-    match keys_left.cmp(&keys_right) {
-        Ordering::Equal => (),
-        o @ (Ordering::Greater | Ordering::Less) => return o,
-    };
-    // Compare values (the first sorted value being non equal determines order)
-    for k in keys_left {
-        if let Some(left_val) = left.get(k) {
-            if let Some(right_val) = right.get(k) {
-                let c = left_val.cmp(right_val);
-                if c != Ordering::Equal {
-                    return c;
-                }
-            }
-        }
-    }
-    Ordering::Equal
-}
+//     match keys_left.cmp(&keys_right) {
+//         Ordering::Equal => (),
+//         o @ (Ordering::Greater | Ordering::Less) => return o,
+//     };
+//     // Compare values (the first sorted value being non equal determines order)
+//     for k in keys_left {
+//         if let Some(left_val) = left.get(k) {
+//             if let Some(right_val) = right.get(k) {
+//                 let c = left_val.cmp(right_val);
+//                 if c != Ordering::Equal {
+//                     return c;
+//                 }
+//             }
+//         }
+//     }
+//     Ordering::Equal
+// }
 
 // impl<'value> Ord for Value<'value> {
 //     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
@@ -368,7 +371,7 @@ impl<'value> Builder<'value> for Value<'value> {
     #[inline]
     #[must_use]
     fn array_with_capacity(capacity: usize) -> Self {
-        Self::Array(Vec::with_capacity(capacity))
+        Self::Array(RVec::with_capacity(capacity))
     }
     #[inline]
     #[must_use]
@@ -380,7 +383,7 @@ impl<'value> Builder<'value> for Value<'value> {
 impl<'value> Mutable for Value<'value> {
     #[inline]
     #[must_use]
-    fn as_array_mut(&mut self) -> Option<&mut Vec<Value<'value>>> {
+    fn as_array_mut(&mut self) -> Option<&mut RVec<Value<'value>>> {
         match self {
             Self::Array(a) => Some(a),
             _ => None,
@@ -398,7 +401,7 @@ impl<'value> Mutable for Value<'value> {
 impl<'value> ValueAccess for Value<'value> {
     type Target = Self;
     type Key = Cow<'value, str>;
-    type Array = Vec<Self>;
+    type Array = RVec<Self>;
     type Object = HashMap<Self::Key, Self>;
 
     #[inline]
@@ -478,7 +481,7 @@ impl<'value> ValueAccess for Value<'value> {
 
     #[inline]
     #[must_use]
-    fn as_array(&self) -> Option<&Vec<Value<'value>>> {
+    fn as_array(&self) -> Option<&RVec<Value<'value>>> {
         match self {
             Self::Array(a) => Some(a),
             _ => None,
@@ -603,7 +606,7 @@ impl<'de> ValueDeserializer<'de> {
         // Rust doesn't optimize the normal loop away here
         // so we write our own avoiding the length
         // checks during push
-        let mut res = Vec::with_capacity(len);
+        let mut res = RVec::with_capacity(len);
         unsafe {
             res.set_len(len);
             for i in 0..len {

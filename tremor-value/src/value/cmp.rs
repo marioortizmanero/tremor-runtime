@@ -64,25 +64,25 @@ impl<'value> PartialEq<OwnedValue> for Value<'value> {
     }
 }
 
-impl<'value> PartialEq<BorrowedValue<'value>> for Value<'value> {
-    #[inline]
-    #[must_use]
-    fn eq(&self, other: &BorrowedValue) -> bool {
-        match (self, other) {
-            (Self::Static(s1), BorrowedValue::Static(s2)) => s1 == s2,
-            (Self::String(v1), BorrowedValue::String(v2)) => v1.as_ref().eq(v2.as_ref()),
-            (Self::Array(v1), BorrowedValue::Array(v2)) => v1.eq(v2),
-            (Self::Object(v1), BorrowedValue::Object(v2)) => {
-                if v1.len() != v2.len() {
-                    return false;
-                }
-                v2.iter()
-                    .all(|(key, value)| v1.get(key.as_ref()).map_or(false, |v| v.eq(value)))
-            }
-            _ => false,
-        }
-    }
-}
+// impl<'value> PartialEq<BorrowedValue<'value>> for Value<'value> {
+//     #[inline]
+//     #[must_use]
+//     fn eq(&self, other: &BorrowedValue) -> bool {
+//         match (self, other) {
+//             // (Self::Static(s1), BorrowedValue::Static(s2)) => s1 == s2,
+//             (Self::String(v1), BorrowedValue::String(v2)) => v1.as_ref().eq(v2.as_ref()),
+//             // (Self::Array(v1), BorrowedValue::Array(v2)) => v1.eq(v2),
+//             (Self::Object(v1), BorrowedValue::Object(v2)) => {
+//                 if v1.len() != v2.len() {
+//                     return false;
+//                 }
+//                 v2.iter()
+//                     .all(|(key, value)| v1.get(key.as_ref()).map_or(false, |v| v.eq(value)))
+//             }
+//             _ => false,
+//         }
+//     }
+// }
 
 impl<'value> From<Value<'value>> for OwnedValue {
     #[inline]

@@ -22,6 +22,8 @@ use serde_ext::forward_to_deserialize_any;
 use simd_json::StaticNode;
 use std::fmt;
 
+use abi_stable::std_types::RVec;
+
 impl<'de> de::Deserializer<'de> for Value<'de> {
     type Error = Error;
 
@@ -531,7 +533,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
     {
         let size = seq.size_hint().unwrap_or_default();
 
-        let mut v = Vec::with_capacity(size);
+        let mut v = RVec::with_capacity(size);
         while let Some(e) = seq.next_element()? {
             v.push(e);
         }

@@ -17,6 +17,8 @@ use beef::Cow;
 use simd_json::{BorrowedValue, OwnedValue, StaticNode};
 use std::iter::FromIterator;
 
+use abi_stable::std_types::RVec;
+
 impl<'value> From<OwnedValue> for Value<'value> {
     #[inline]
     #[must_use]
@@ -227,6 +229,17 @@ where
     #[inline]
     #[must_use]
     fn from(v: Vec<S>) -> Self {
+        v.into_iter().collect()
+    }
+}
+
+impl<'value, S> From<RVec<S>> for Value<'value>
+where
+    Value<'value>: From<S>,
+{
+    #[inline]
+    #[must_use]
+    fn from(v: RVec<S>) -> Self {
         v.into_iter().collect()
     }
 }
