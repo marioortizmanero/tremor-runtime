@@ -210,6 +210,8 @@ impl<'value> PartialOrd for Value<'value> {
 }
 impl<'value> Ord for Value<'value> {
     fn cmp(&self, other: &Self) -> Ordering {
+        Ordering::Equal
+            /*
         match (self, other) {
             (Value::Static(v1), Value::Static(v2)) => Static(*v1).cmp(&Static(*v2)),
             (Value::Static(_s), _) => Ordering::Greater,
@@ -231,6 +233,7 @@ impl<'value> Ord for Value<'value> {
             // (_, Value::Array(_a)) => Ordering::Less,
             // (Value::Object(v1), Value::Object(v2)) => cmp_map(v1.as_ref(), v2.as_ref()),
         }
+        */
     }
 }
 // fn cmp_map(left: &Object, right: &Object) -> Ordering {

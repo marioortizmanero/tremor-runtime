@@ -18,6 +18,8 @@ use serde_ext::ser::{
 };
 use simd_json::{stry, StaticNode};
 
+use abi_stable::std_types::RVec;
+
 type Impossible<T> = ser::Impossible<T, Error>;
 
 impl<'value> Serialize for Value<'value> {
@@ -308,7 +310,7 @@ impl serde::ser::SerializeSeq for SerializeVec {
     }
 
     fn end(self) -> Result<Value<'static>> {
-        Ok(Value::Array(self.vec.into()))
+        Ok(Value::Array(RVec::from(self.vec)))
     }
 }
 
@@ -359,7 +361,7 @@ impl serde::ser::SerializeTupleVariant for SerializeTupleVariant {
     fn end(self) -> Result<Value<'static>> {
         let mut object = Object::with_capacity(1);
 
-        object.insert(self.name.into(), Value::Array(self.vec.into()));
+        object.insert(self.name.into(), Value::Array(RVec::from(self.vec)));
 
         Ok(Value::from(object))
     }
