@@ -35,19 +35,19 @@ pub type Bytes<'value> = RCow<'value, [u8]>;
 //
 // FIXME: clean up after creation of `tremor-pdk`, this is repeated in other
 // crates.
-fn conv_str(cow: beef::Cow<str>) -> RCow<str> {
+pub(crate) fn conv_str(cow: beef::Cow<str>) -> RCow<str> {
     let cow: std::borrow::Cow<str> = cow.into();
     cow.into()
 }
-fn conv_u8(cow: beef::Cow<[u8]>) -> RCow<[u8]> {
+pub(crate) fn conv_u8(cow: beef::Cow<[u8]>) -> RCow<[u8]> {
     let cow: std::borrow::Cow<[u8]> = cow.into();
     cow.into()
 }
-fn conv_str_inv(cow: RCow<str>) -> beef::Cow<str> {
+pub(crate) fn conv_str_inv(cow: RCow<str>) -> beef::Cow<str> {
     let cow: std::borrow::Cow<str> = cow.into();
     cow.into()
 }
-fn conv_u8_inv(cow: RCow<[u8]>) -> beef::Cow<[u8]> {
+pub(crate) fn conv_u8_inv(cow: RCow<[u8]>) -> beef::Cow<[u8]> {
     let cow: std::borrow::Cow<[u8]> = cow.into();
     cow.into()
 }
@@ -83,7 +83,7 @@ impl<'value> From<Value<'value>> for PdkValue<'value> {
             // No conversion needed; `StaticNode` implements `StableAbi`
             Value::Static(s) => PdkValue::Static(s),
             // This conversion is cheap
-            Value::String(s) => PdkValue::String(conv_str(s)),
+            Value::String(s) => PdkValue::String(s),
             // This unfortunately requires iterating the array
             Value::Array(a) => {
                 let a = a.into_iter().map(Into::into).collect();
@@ -112,7 +112,7 @@ impl<'value> From<PdkValue<'value>> for Value<'value> {
             // No conversion needed; `StaticNode` implements `StableAbi`
             PdkValue::Static(s) => Value::Static(s),
             // This conversion is cheap
-            PdkValue::String(s) => Value::String(conv_str_inv(s)),
+            PdkValue::String(s) => Value::String(s),
             // This unfortunately requires iterating the array
             PdkValue::Array(a) => {
                 let a = a.into_iter().map(Into::into).collect();

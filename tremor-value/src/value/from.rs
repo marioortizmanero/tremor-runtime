@@ -17,6 +17,9 @@ use beef::Cow;
 use simd_json::{BorrowedValue, OwnedValue, StaticNode};
 use std::iter::FromIterator;
 
+use abi_stable::std_types::RCow;
+use crate::pdk::conv_str;
+
 impl<'value> From<OwnedValue> for Value<'value> {
     #[inline]
     #[must_use]
@@ -66,7 +69,7 @@ impl<'value> From<&'value str> for Value<'value> {
     #[inline]
     #[must_use]
     fn from(s: &'value str) -> Self {
-        Self::String(Cow::from(s))
+        Self::String(RCow::from(s))
     }
 }
 
@@ -82,6 +85,13 @@ impl<'value> From<beef::Cow<'value, str>> for Value<'value> {
     #[inline]
     #[must_use]
     fn from(c: beef::Cow<'value, str>) -> Self {
+        Self::String(conv_str(c))
+    }
+}
+impl<'value> From<RCow<'value, str>> for Value<'value> {
+    #[inline]
+    #[must_use]
+    fn from(c: RCow<'value, str>) -> Self {
         Self::String(c)
     }
 }

@@ -32,6 +32,8 @@ use std::{
     ops::{Index, IndexMut},
 };
 
+use abi_stable::std_types::RCow;
+
 pub use crate::serde::to_value;
 pub use r#static::StaticValue;
 
@@ -81,7 +83,7 @@ pub enum Value<'value> {
     /// Static values
     Static(StaticNode),
     /// string type
-    String(Cow<'value, str>),
+    String(RCow<'value, str>),
     /// array type
     Array(Vec<Value<'value>>),
     /// object type
@@ -113,7 +115,7 @@ impl Eq for Static {}
 
 impl PartialOrd for Static {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+        Some(self.partial_cmp(other)).unwrap()
     }
 }
 impl Ord for Static {
@@ -128,13 +130,13 @@ impl Ord for Static {
             (StaticNode::Null, StaticNode::Null) => Ordering::Equal,
             (StaticNode::Null, _) => Ordering::Greater,
             (_, StaticNode::Null) => Ordering::Less,
-            (StaticNode::Bool(v1), StaticNode::Bool(v2)) => v1.cmp(&v2),
+            (StaticNode::Bool(v1), StaticNode::Bool(v2)) => v1.partial_cmp(&v2).unwrap(),
             (StaticNode::Bool(_b), _) => Ordering::Greater,
             (_, StaticNode::Bool(_b)) => Ordering::Less,
-            (StaticNode::U64(v1), StaticNode::U64(v2)) => v1.cmp(&v2),
+            (StaticNode::U64(v1), StaticNode::U64(v2)) => v1.partial_cmp(&v2).unwrap(),
             (StaticNode::U64(v1), StaticNode::I64(v2)) => {
                 if let Ok(v2) = v2.try_into() {
-                    v1.cmp(&v2)
+                    v1.partial_cmp(&v2).unwrap()
                 } else {
                     Ordering::Greater
                 }
@@ -145,14 +147,14 @@ impl Ord for Static {
                 } else if v2 > u64::max_value() as f64 {
                     Ordering::Less
                 } else {
-                    v1.cmp(&(v2 as u64))
+                    v1.partial_cmp(&(v2 as u64)).unwrap()
                 }
             }
-            (StaticNode::I64(v1), StaticNode::I64(v2)) => v1.cmp(&v2),
+            (StaticNode::I64(v1), StaticNode::I64(v2)) => v1.partial_cmp(&v2).unwrap(),
             (StaticNode::I64(v1), StaticNode::U64(v2)) => {
                 if let Ok(v1) = v1.try_into() {
                     let v1: u64 = v1;
-                    v1.cmp(&v2)
+                    v1.partial_cmp(&v2).unwrap()
                 } else {
                     Ordering::Less
                 }
@@ -163,7 +165,7 @@ impl Ord for Static {
                 } else if v2 > i64::max_value() as f64 {
                     Ordering::Less
                 } else {
-                    v1.cmp(&(v2 as i64))
+                    v1.partial_cmp(&(v2 as i64)).unwrap()
                 }
             }
             // This is not great!
@@ -185,7 +187,7 @@ impl Ord for Static {
                 } else if v1 > u64::max_value() as f64 {
                     Ordering::Greater
                 } else {
-                    (v1 as u64).cmp(&v2)
+                    (v1 as u64).partial_cmp(&v2).unwrap()
                 }
             }
             (StaticNode::F64(v1), StaticNode::I64(v2)) => {
@@ -194,7 +196,7 @@ impl Ord for Static {
                 } else if v1 > i64::max_value() as f64 {
                     Ordering::Greater
                 } else {
-                    (v1 as i64).cmp(&v2)
+                    (v1 as i64).partial_cmp(&v2).unwrap()
                 }
             }
         }
@@ -203,27 +205,27 @@ impl Ord for Static {
 
 impl<'value> PartialOrd for Value<'value> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+        Some(self.partial_cmp(other)).unwrap()
     }
 }
 impl<'value> Ord for Value<'value> {
     fn cmp(&self, other: &Self) -> Ordering {
         match (self, other) {
-            (Value::Static(v1), Value::Static(v2)) => Static(*v1).cmp(&Static(*v2)),
+            (Value::Static(v1), Value::Static(v2)) => Static(*v1).partial_cmp(&Static(*v2)).unwrap(),
             (Value::Static(_s), _) => Ordering::Greater,
             (_, Value::Static(_s)) => Ordering::Less,
-            (Value::Bytes(v1), Value::Bytes(v2)) => v1.cmp(v2),
+            (Value::Bytes(v1), Value::Bytes(v2)) => v1.partial_cmp(v2).unwrap(),
             (Value::Bytes(v1), Value::String(v2)) => {
                 let v1: &[u8] = v1;
-                v1.cmp(v2.as_bytes())
+                v1.partial_cmp(v2.as_bytes()).unwrap()
             }
-            (Value::String(v1), Value::Bytes(v2)) => v1.as_bytes().cmp(v2),
+            (Value::String(v1), Value::Bytes(v2)) => v1.as_bytes().partial_cmp(v2).unwrap(),
             (Value::Bytes(_b), _) => Ordering::Greater,
             (_, Value::Bytes(_b)) => Ordering::Less,
-            (Value::String(v1), Value::String(v2)) => v1.cmp(v2),
+            (Value::String(v1), Value::String(v2)) => v1.partial_cmp(v2).unwrap(),
             (Value::String(_s), _) => Ordering::Greater,
             (_, Value::String(_s)) => Ordering::Less,
-            (Value::Array(v1), Value::Array(v2)) => v1.cmp(v2),
+            (Value::Array(v1), Value::Array(v2)) => v1.partial_cmp(v2).unwrap(),
             (Value::Array(_a), _) => Ordering::Greater,
             (_, Value::Array(_a)) => Ordering::Less,
             (Value::Object(v1), Value::Object(v2)) => cmp_map(v1.as_ref(), v2.as_ref()),
@@ -233,7 +235,7 @@ impl<'value> Ord for Value<'value> {
 fn cmp_map(left: &Object, right: &Object) -> Ordering {
     // Compare length first
 
-    match left.len().cmp(&right.len()) {
+    match left.len().partial_cmp(&right.len()).unwrap() {
         Ordering::Equal => (),
         o @ (Ordering::Greater | Ordering::Less) => return o,
     };
@@ -244,7 +246,7 @@ fn cmp_map(left: &Object, right: &Object) -> Ordering {
     keys_left.sort();
     keys_right.sort();
 
-    match keys_left.cmp(&keys_right) {
+    match keys_left.partial_cmp(&keys_right).unwrap() {
         Ordering::Equal => (),
         o @ (Ordering::Greater | Ordering::Less) => return o,
     };
@@ -252,7 +254,7 @@ fn cmp_map(left: &Object, right: &Object) -> Ordering {
     for k in keys_left {
         if let Some(left_val) = left.get(k) {
             if let Some(right_val) = right.get(k) {
-                let c = left_val.cmp(right_val);
+                let c = left_val.partial_cmp(right_val).unwrap();
                 if c != Ordering::Equal {
                     return c;
                 }
@@ -265,7 +267,7 @@ fn cmp_map(left: &Object, right: &Object) -> Ordering {
 // impl<'value> Ord for Value<'value> {
 //     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
 //         match (self, other) {
-//             (Value::Static(n1), Value::Static(n2)) => n1.cmp(n2),
+//             (Value::Static(n1), Value::Static(n2)) => n1.partial_cmp(n2).unwrap(),
 //             (Value::Static(_), _) => Ordering::Less,
 //         }
 //     }
@@ -279,7 +281,7 @@ impl<'value> Value<'value> {
     #[must_use]
     pub fn into_static(self) -> Value<'static> {
         match self {
-            Self::String(s) => Value::String(Cow::owned(s.to_string())),
+            Self::String(s) => Value::String(RCow::Owned(s.to_string().into())),
             Self::Array(arr) => arr.into_iter().map(Value::into_static).collect(),
             Self::Object(obj) => obj
                 .into_iter()
@@ -296,7 +298,7 @@ impl<'value> Value<'value> {
     #[must_use]
     pub fn clone_static(&self) -> Value<'static> {
         match self {
-            Self::String(s) => Value::String(Cow::owned(s.to_string())),
+            Self::String(s) => Value::String(RCow::Owned(s.to_string().into())),
             Self::Array(arr) => arr.iter().map(Value::clone_static).collect(),
             Self::Object(obj) => obj
                 .iter()

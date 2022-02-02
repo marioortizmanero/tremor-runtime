@@ -22,6 +22,9 @@ use serde_ext::forward_to_deserialize_any;
 use simd_json::StaticNode;
 use std::fmt;
 
+use abi_stable::std_types::RCow;
+use crate::pdk::{conv_str_inv, conv_str};
+
 impl<'de> de::Deserializer<'de> for Value<'de> {
     type Error = Error;
 
@@ -42,13 +45,10 @@ impl<'de> de::Deserializer<'de> for Value<'de> {
             #[cfg(feature = "128bit")]
             Self::Static(StaticNode::U128(n)) => visitor.visit_u128(n),
             Value::Static(StaticNode::F64(n)) => visitor.visit_f64(n),
-            Value::String(s) => {
-                if s.is_borrowed() {
-                    visitor.visit_borrowed_str(s.unwrap_borrowed())
-                } else {
-                    visitor.visit_string(s.into_owned())
-                }
-            }
+            Value::String(s) => match s {
+                RCow::Borrowed(s) => visitor.visit_borrowed_str(s.as_str()),
+                RCow::Owned(s) => visitor.visit_string(s.into())
+            },
             Value::Array(a) => visitor.visit_seq(Array(a.iter())),
             Value::Object(o) => visitor.visit_map(ObjectAccess {
                 i: o.iter(),
@@ -118,7 +118,7 @@ impl<'de> de::Deserializer<'de> for Value<'de> {
                 }
                 (variant, Some(value))
             }
-            Value::String(variant) => (variant, None),
+            Value::String(variant) => (conv_str_inv(variant), None),
             _other => {
                 return Err(Error::Serde("Not a string".to_string()));
             }
@@ -276,7 +276,7 @@ impl<'de, 'value> MapAccess<'de> for ObjectAccess<'value, 'de> {
     {
         if let Some((k, v)) = self.i.next() {
             self.v = v;
-            seed.deserialize(Value::String(k.clone())).map(Some)
+            seed.deserialize(Value::String(conv_str(k.clone()))).map(Some)
         } else {
             Ok(None)
         }

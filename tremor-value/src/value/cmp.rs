@@ -64,6 +64,7 @@ impl<'value> PartialEq<OwnedValue> for Value<'value> {
     }
 }
 
+/*
 impl<'value> PartialEq<BorrowedValue<'value>> for Value<'value> {
     #[inline]
     #[must_use]
@@ -83,6 +84,7 @@ impl<'value> PartialEq<BorrowedValue<'value>> for Value<'value> {
         }
     }
 }
+*/
 
 impl<'value> From<Value<'value>> for OwnedValue {
     #[inline]
