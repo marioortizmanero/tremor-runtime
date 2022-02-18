@@ -34,14 +34,14 @@ pub use crate::serde::to_value;
 pub use r#static::StaticValue;
 
 use abi_stable::{
-    std_types::{RBox, RCow, RHashMap, RVec, Tuple2},
+    std_types::{RBox, RCowSlice, RCowStr, RHashMap, RVec, Tuple2},
     StableAbi,
 };
 
 /// Representation of a JSON object
-pub type Object<'value> = RHashMap<RCow<'value, str>, Value<'value>>;
+pub type Object<'value> = RHashMap<RCowStr<'value>, Value<'value>>;
 /// Bytes
-pub type Bytes<'value> = RCow<'value, [u8]>;
+pub type Bytes<'value> = RCowSlice<'value, u8>;
 
 /// Parses a slice of bytes into a Value dom. This function will
 /// rewrite the slice to de-escape strings.
@@ -85,7 +85,7 @@ pub enum Value<'value> {
     /// Static values
     Static(StaticNode),
     /// string type
-    String(RCow<'value, str>),
+    String(RCowStr<'value>),
     /// array type
     Array(RVec<Value<'value>>),
     /// object type
@@ -283,16 +283,18 @@ impl<'value> Value<'value> {
     #[must_use]
     pub fn into_static(self) -> Value<'static> {
         match self {
-            Self::String(s) => Value::String(RCow::Owned(s.to_string().into())),
+            Self::String(s) => Value::String(RCowStr::Owned(s.to_string().into())),
             Self::Array(arr) => arr.into_iter().map(Value::into_static).collect(),
             // FIXME: call into_inner properly once this is merged:
             // https://github.com/rodrimati1992/abi_stable_crates/pull/74
             Self::Object(obj) => RBox::into_inner(obj)
                 .into_iter()
-                .map(|Tuple2(k, v)| Tuple2(RCow::Owned(k.to_string().into()), v.into_static()))
+                .map(|Tuple2(k, v)| Tuple2(RCowStr::Owned(k.to_string().into()), v.into_static()))
                 .collect(),
             Self::Static(s) => Value::Static(s),
-            Self::Bytes(b) => Value::Bytes(RCow::Owned(RVec::from(b.borrow()))),
+            // FIXME: restore the original conversion back once fixed
+            // Self::Bytes(b) => Value::Bytes(RCowSlice::Owned(RVec::from(b.borrow()))),
+            Self::Bytes(b) => Value::Bytes(RCowSlice::Owned(RVec::from(&*b))),
         }
     }
 
@@ -302,14 +304,16 @@ impl<'value> Value<'value> {
     #[must_use]
     pub fn clone_static(&self) -> Value<'static> {
         match self {
-            Self::String(s) => Value::String(RCow::Owned(s.to_string().into())),
+            Self::String(s) => Value::String(RCowStr::Owned(s.to_string().into())),
             Self::Array(arr) => arr.iter().map(Value::clone_static).collect(),
             Self::Object(obj) => obj
                 .iter()
-                .map(|Tuple2(k, v)| Tuple2(RCow::Owned(k.to_string().into()), v.clone_static()))
+                .map(|Tuple2(k, v)| Tuple2(RCowStr::Owned(k.to_string().into()), v.clone_static()))
                 .collect(),
             Self::Static(s) => Value::Static(*s),
-            Self::Bytes(b) => Value::Bytes(RCow::Owned(RVec::from(b.borrow()))),
+            // FIXME: restore the original conversion back once fixed
+            // Self::Bytes(b) => Value::Bytes(RCowSlice::Owned(RVec::from(b.borrow()))),
+            Self::Bytes(b) => Value::Bytes(RCowSlice::Owned(RVec::from(&**b))),
         }
     }
 
@@ -329,7 +333,7 @@ impl<'value> Value<'value> {
     #[must_use]
     pub fn get_bytes<Q: ?Sized>(&self, k: &Q) -> Option<&[u8]>
     where
-        RCow<'value, str>: Borrow<Q> + Hash + Eq,
+        RCowStr<'value>: Borrow<Q> + Hash + Eq,
         Q: Hash + Eq + Ord,
     {
         self.get(k).and_then(Self::as_bytes)
@@ -358,7 +362,7 @@ impl<'value> Value<'value> {
     #[must_use]
     pub fn get_char<Q: ?Sized>(&self, k: &Q) -> Option<char>
     where
-        RCow<'value, str>: Borrow<Q> + Hash + Eq,
+        RCowStr<'value>: Borrow<Q> + Hash + Eq,
         Q: Hash + Eq + Ord,
     {
         self.get(k).and_then(Self::as_char)
@@ -403,7 +407,7 @@ impl<'value> Mutable for Value<'value> {
 }
 impl<'value> ValueAccess for Value<'value> {
     type Target = Self;
-    type Key = RCow<'value, str>;
+    type Key = RCowStr<'value>;
     type Array = RVec<Self>;
     type Object = RHashMap<Self::Key, Self>;
 

@@ -21,7 +21,7 @@ use serde_ext::forward_to_deserialize_any;
 use simd_json::StaticNode;
 use std::fmt;
 
-use abi_stable::std_types::{map::Iter, RBox, RCow, RVec, Tuple2};
+use abi_stable::std_types::{map::Iter, RBox, RCowStr, RVec, Tuple2};
 
 impl<'de> de::Deserializer<'de> for Value<'de> {
     type Error = Error;
@@ -44,8 +44,8 @@ impl<'de> de::Deserializer<'de> for Value<'de> {
             Self::Static(StaticNode::U128(n)) => visitor.visit_u128(n),
             Value::Static(StaticNode::F64(n)) => visitor.visit_f64(n),
             Value::String(s) => match s {
-                RCow::Borrowed(s) => visitor.visit_borrowed_str(s.into()),
-                RCow::Owned(s) => visitor.visit_string(s.into()),
+                RCowStr::Borrowed(s) => visitor.visit_borrowed_str(s.into()),
+                RCowStr::Owned(s) => visitor.visit_string(s.into()),
             },
             Value::Array(a) => visitor.visit_seq(Array(a.iter())),
             Value::Object(o) => visitor.visit_map(ObjectAccess {
@@ -135,7 +135,7 @@ impl<'de> de::Deserializer<'de> for Value<'de> {
 }
 
 struct EnumDeserializer<'de> {
-    variant: RCow<'de, str>,
+    variant: RCowStr<'de>,
     value: Option<Value<'de>>,
 }
 
@@ -261,7 +261,7 @@ impl<'de, 'value> SeqAccess<'de> for Array<'value, 'de> {
 }
 
 struct ObjectAccess<'de, 'value: 'de> {
-    i: Iter<'de, RCow<'value, str>, Value<'value>>,
+    i: Iter<'de, RCowStr<'value>, Value<'value>>,
     v: &'de Value<'value>,
 }
 

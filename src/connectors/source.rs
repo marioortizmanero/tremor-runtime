@@ -59,7 +59,7 @@ use crate::connectors::prelude::*;
 use crate::pdk::RResult;
 use abi_stable::{
     rvec,
-    std_types::{RBox, RCow, ROption, RResult::ROk, RString, RVec, Tuple2},
+    std_types::{RBox, RCowStr, ROption, RResult::ROk, RString, RVec, Tuple2},
     StableAbi,
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
@@ -122,7 +122,7 @@ pub enum SourceReply {
         /// stream id of the data
         stream: u64,
         /// Port to send to, defaults to `out`
-        port: ROption<RCow<'static, str>>,
+        port: ROption<RCowStr<'static>>,
     },
     /// an already structured event payload
     Structured {
@@ -130,7 +130,7 @@ pub enum SourceReply {
         payload: EventPayload,
         stream: u64,
         /// Port to send to, defaults to `out`
-        port: ROption<RCow<'static, str>>,
+        port: ROption<RCowStr<'static>>,
     },
     /// a bunch of separated `Vec<u8>` with optional metadata
     /// for when the source knows where boundaries are, maybe because it receives chunks already
@@ -138,7 +138,7 @@ pub enum SourceReply {
         origin_uri: EventOriginUri,
         batch_data: RVec<Tuple2<RVec<u8>, ROption<Value<'static>>>>,
         /// Port to send to, defaults to `out`
-        port: ROption<RCow<'static, str>>,
+        port: ROption<RCowStr<'static>>,
         stream: u64,
     },
     /// A stream is closed
@@ -673,8 +673,8 @@ enum SourceState {
 
 // FIXME: make prettier or avoid duplication in pdk mod? It's a bit out of place
 // for now.
-fn conv_cow_str(cow: RCow<str>) -> beef::Cow<str> {
-    let cow: std::borrow::Cow<str> = cow.into();
+fn conv_cow_str<'a>(cow: RCowStr<'a>) -> beef::Cow<'a, str> {
+    let cow: std::borrow::Cow<'a, str> = cow.into();
     cow.into()
 }
 

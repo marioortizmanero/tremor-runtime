@@ -16,21 +16,21 @@ use super::{Object, Value};
 use simd_json::{BorrowedValue, OwnedValue, StaticNode};
 use std::iter::FromIterator;
 
-use abi_stable::std_types::{RBox, RCow, ROption, RStr, RString, RVec, Tuple2};
+use abi_stable::std_types::{RBox, RCowStr, ROption, RStr, RString, RVec, Tuple2};
 
 /// FIXME: this should be taken from `tremor_pdk` in the future
 /// FIXME: at some point do a search for all the occurrences of this function
 /// and try to fix them properly by using `abi_stable` types from the beginning.
 /// That should give a small performance & usability boost.
 #[must_use]
-pub fn cow_beef_to_sabi(cow: beef::Cow<str>) -> RCow<str> {
+pub fn cow_beef_to_sabi<'a>(cow: beef::Cow<'a, str>) -> RCowStr<'a> {
     let cow: std::borrow::Cow<str> = cow.into();
     cow.into()
 }
 
 /// FIXME: this should be taken from `tremor_pdk` in the future
 #[must_use]
-pub fn cow_sabi_to_beef(cow: RCow<str>) -> beef::Cow<str> {
+pub fn cow_sabi_to_beef<'a>(cow: RCowStr<'a>) -> beef::Cow<'a, str> {
     let cow: std::borrow::Cow<str> = cow.into();
     cow.into()
 }
@@ -94,14 +94,14 @@ impl<'value> From<&'value str> for Value<'value> {
     #[inline]
     #[must_use]
     fn from(s: &'value str) -> Self {
-        Self::String(RCow::from(s))
+        Self::String(RCowStr::from(s))
     }
 }
 impl<'value> From<RStr<'value>> for Value<'value> {
     #[inline]
     #[must_use]
     fn from(s: RStr<'value>) -> Self {
-        Self::String(RCow::Borrowed(s))
+        Self::String(RCowStr::Borrowed(s))
     }
 }
 
@@ -121,10 +121,10 @@ impl<'value> From<beef::Cow<'value, str>> for Value<'value> {
     }
 }
 
-impl<'value> From<RCow<'value, str>> for Value<'value> {
+impl<'value> From<RCowStr<'value>> for Value<'value> {
     #[inline]
     #[must_use]
-    fn from(c: RCow<'value, str>) -> Self {
+    fn from(c: RCowStr<'value>) -> Self {
         Self::String(c)
     }
 }
@@ -315,7 +315,7 @@ impl<'value, K: Into<beef::Cow<'value, str>>, V: Into<Value<'value>>> FromIterat
     }
 }
 
-impl<'value, K: Into<RCow<'value, str>>, V: Into<Value<'value>>> FromIterator<Tuple2<K, V>>
+impl<'value, K: Into<RCowStr<'value>>, V: Into<Value<'value>>> FromIterator<Tuple2<K, V>>
     for Value<'value>
 {
     #[inline]

@@ -65,7 +65,7 @@ use crate::{
 };
 use abi_stable::{
     std_types::{
-        RBox, RCow,
+        RBox, RCowStr,
         ROption::{self, RNone, RSome},
         RResult::{RErr, ROk},
         RStr, RString, RVec,
@@ -1005,14 +1005,14 @@ const OUT_PORTS_REF: &'static [Cow<'static, str>; 2] = &OUT_PORTS;
 #[abi_stable::sabi_trait]
 pub trait RawConnector: Send {
     /// Valid input ports for the connector, by default this is `in`
-    fn input_ports(&self) -> RVec<RCow<'static, str>> {
+    fn input_ports(&self) -> RVec<RCowStr<'static>> {
         IN_PORTS_REF
             .into_iter()
             .map(|port| conv_cow_str_inv(port.clone()))
             .collect()
     }
     /// Valid output ports for the connector, by default this is `out` and `err`
-    fn output_ports(&self) -> RVec<RCow<'static, str>> {
+    fn output_ports(&self) -> RVec<RCowStr<'static>> {
         OUT_PORTS_REF
             .into_iter()
             .map(|port| conv_cow_str_inv(port.clone()))

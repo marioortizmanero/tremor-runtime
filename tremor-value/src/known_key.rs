@@ -17,13 +17,13 @@ use std::fmt;
 use value_trait::{Mutable, Value as ValueTrait, ValueAccess, ValueType};
 
 use crate::value::from::cow_beef_to_sabi;
-use abi_stable::std_types::{RCow, RHashMap};
+use abi_stable::std_types::{RCowStr, RHashMap};
 
 /// Well known key that can be looked up in a `Value` faster.
 /// It achives this by memorizing the hash.
 #[derive(Debug, Clone, PartialEq)]
 pub struct KnownKey<'key> {
-    key: RCow<'key, str>,
+    key: RCowStr<'key>,
     // FIXME: temporarily removed to enable PDK support
     // hash: u64,
 }
@@ -45,8 +45,8 @@ impl fmt::Display for Error {
 }
 impl std::error::Error for Error {}
 
-impl<'key> From<RCow<'key, str>> for KnownKey<'key> {
-    fn from(key: RCow<'key, str>) -> Self {
+impl<'key> From<RCowStr<'key>> for KnownKey<'key> {
+    fn from(key: RCowStr<'key>) -> Self {
         // FIXME: temporarily removed to enable PDK support
         // let hash_builder = halfbrown::DefaultHashBuilder::default();
         // let mut hasher = hash_builder.build_hasher();
@@ -117,7 +117,7 @@ impl<'key> KnownKey<'key> {
     #[must_use]
     pub fn map_lookup<'target>(
         &self,
-        map: &'target RHashMap<RCow<'key, str>, Value<'key>>,
+        map: &'target RHashMap<RCowStr<'key>, Value<'key>>,
     ) -> Option<&'target Value<'key>>
     where
         'key: 'target,
@@ -183,7 +183,7 @@ impl<'key> KnownKey<'key> {
     #[inline]
     pub fn map_lookup_mut<'target>(
         &self,
-        map: &'target mut RHashMap<RCow<'key, str>, Value<'key>>,
+        map: &'target mut RHashMap<RCowStr<'key>, Value<'key>>,
     ) -> Option<&'target mut Value<'key>>
     where
         'key: 'target,
@@ -280,7 +280,7 @@ impl<'key> KnownKey<'key> {
     #[inline]
     pub fn map_lookup_or_insert_mut<'target, F>(
         &self,
-        map: &'target mut RHashMap<RCow<'key, str>, Value<'key>>,
+        map: &'target mut RHashMap<RCowStr<'key>, Value<'key>>,
         with: F,
     ) -> &'target mut Value<'key>
     where
@@ -377,7 +377,7 @@ impl<'key> KnownKey<'key> {
     #[inline]
     pub fn map_insert<'target>(
         &self,
-        map: &'target mut RHashMap<RCow<'key, str>, Value<'key>>,
+        map: &'target mut RHashMap<RCowStr<'key>, Value<'key>>,
         value: Value<'key>,
     ) -> Option<Value<'key>>
     where
@@ -404,7 +404,7 @@ impl<'script> KnownKey<'script> {
     pub fn into_static(self) -> KnownKey<'static> {
         let KnownKey { key, /*, hash*/ } = self;
         KnownKey {
-            key: RCow::Owned(key.to_string().into()),
+            key: RCowStr::Owned(key.to_string().into()),
             // hash,
         }
     }
@@ -416,14 +416,14 @@ mod tests {
     use super::*;
     use value_trait::Builder;
 
-    use abi_stable::std_types::RCow;
+    use abi_stable::std_types::RCowStr;
 
     #[test]
     fn known_key() {
         let mut v = Value::object();
         v.try_insert("key", 1);
-        let key1 = KnownKey::from(RCow::from("key"));
-        let key2 = KnownKey::from(RCow::from("cake"));
+        let key1 = KnownKey::from(RCowStr::from("key"));
+        let key2 = KnownKey::from(RCowStr::from("cake"));
 
         assert!(key1.lookup(&Value::null()).is_none());
         assert!(key2.lookup(&Value::null()).is_none());
@@ -437,8 +437,8 @@ mod tests {
     fn known_key_insert() {
         let mut v = Value::object();
         v.try_insert("key", 1);
-        let key1 = KnownKey::from(RCow::from("key"));
-        let key2 = KnownKey::from(RCow::from("cake"));
+        let key1 = KnownKey::from(RCowStr::from("key"));
+        let key2 = KnownKey::from(RCowStr::from("cake"));
 
         let mut v1 = Value::null();
         assert!(key1.insert(&mut v1, 2.into()).is_err());
@@ -453,8 +453,8 @@ mod tests {
     fn lookup_or_insert_mut() {
         let mut v = Value::object();
         v.try_insert("key", 1);
-        let key1 = KnownKey::from(RCow::from("key"));
-        let key2 = KnownKey::from(RCow::from("cake"));
+        let key1 = KnownKey::from(RCowStr::from("key"));
+        let key2 = KnownKey::from(RCowStr::from("cake"));
 
         let mut v1 = Value::null();
         assert!(key1.lookup_or_insert_mut(&mut v1, || 2.into()).is_err());
@@ -473,8 +473,8 @@ mod tests {
     fn known_key_map() {
         let mut v = Value::object_with_capacity(128);
         v.try_insert("key", 1);
-        let key1 = KnownKey::from(RCow::from("key"));
-        let key2 = KnownKey::from(RCow::from("cake"));
+        let key1 = KnownKey::from(RCowStr::from("key"));
+        let key2 = KnownKey::from(RCowStr::from("cake"));
 
         assert!(key1.lookup(&Value::null()).is_none());
         assert!(key2.lookup(&Value::null()).is_none());
@@ -486,8 +486,8 @@ mod tests {
     fn known_key_insert_map() {
         let mut v = Value::object_with_capacity(128);
         v.try_insert("key", 1);
-        let key1 = KnownKey::from(RCow::from("key"));
-        let key2 = KnownKey::from(RCow::from("cake"));
+        let key1 = KnownKey::from(RCowStr::from("key"));
+        let key2 = KnownKey::from(RCowStr::from("cake"));
 
         let mut v1 = Value::null();
 
