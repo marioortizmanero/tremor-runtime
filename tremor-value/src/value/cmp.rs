@@ -94,10 +94,6 @@ impl<'value> From<Value<'value>> for OwnedValue {
             Value::Static(s) => OwnedValue::from(s),
             Value::String(s) => OwnedValue::from(s.to_string()),
             Value::Array(a) => a.into_iter().collect(),
-            // FIXME: simd_json::OwnedValue doesn't have abi_stable support, so
-            // we have to convert the tuples.
-            // FIXME: call into_inner properly once this is merged:
-            // https://github.com/rodrimati1992/abi_stable_crates/pull/74
             Value::Object(m) => RBox::into_inner(m)
                 .into_iter()
                 .map(|Tuple2(key, value)| (key, value))
@@ -117,8 +113,6 @@ impl<'value> From<Value<'value>> for BorrowedValue<'value> {
             Value::Array(a) => a.into_iter().collect(),
             // FIXME: simd_json::BorrowedValue doesn't have abi_stable support, so
             // we have to convert the tuples.
-            // FIXME: call into_inner properly once this is merged:
-            // https://github.com/rodrimati1992/abi_stable_crates/pull/74
             Value::Object(m) => RBox::into_inner(m)
                 .into_iter()
                 .map(|Tuple2(key, value)| (key, value))

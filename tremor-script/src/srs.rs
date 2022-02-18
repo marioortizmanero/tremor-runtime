@@ -841,7 +841,7 @@ impl EventPayload {
     /// ```
 
     #[must_use]
-    pub fn suffix(&self) -> &ValueAndMeta<'static> {
+    pub fn suffix(&self) -> &ValueAndMeta {
         &self.data
     }
 

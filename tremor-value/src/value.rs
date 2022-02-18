@@ -234,7 +234,7 @@ impl<'value> Ord for Value<'value> {
         }
     }
 }
-fn cmp_map<'a>(left: &Object<'a>, right: &Object<'a>) -> Ordering {
+fn cmp_map<'a, 'b>(left: &Object, right: &Object) -> Ordering {
     // Compare length first
 
     match left.len().cmp(&right.len()) {
@@ -285,8 +285,6 @@ impl<'value> Value<'value> {
         match self {
             Self::String(s) => Value::String(RCowStr::Owned(s.to_string().into())),
             Self::Array(arr) => arr.into_iter().map(Value::into_static).collect(),
-            // FIXME: call into_inner properly once this is merged:
-            // https://github.com/rodrimati1992/abi_stable_crates/pull/74
             Self::Object(obj) => RBox::into_inner(obj)
                 .into_iter()
                 .map(|Tuple2(k, v)| Tuple2(RCowStr::Owned(k.to_string().into()), v.into_static()))

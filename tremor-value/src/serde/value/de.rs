@@ -101,8 +101,6 @@ impl<'de> de::Deserializer<'de> for Value<'de> {
     {
         let (variant, value) = match self {
             Value::Object(value) => {
-                // FIXME: call properly once this is merged:
-                // https://github.com/rodrimati1992/abi_stable_crates/pull/74
                 let mut iter = RBox::into_inner(value).into_iter();
                 let Tuple2(variant, value) = match iter.next() {
                     Some(v) => v,
