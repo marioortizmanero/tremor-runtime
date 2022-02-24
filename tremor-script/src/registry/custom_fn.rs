@@ -22,7 +22,7 @@ use beef::Cow;
 //use std::mem;
 const RECUR_STR: &str = "recur";
 pub(crate) const RECUR_PTR: Option<*const u8> = Some(RECUR_STR.as_ptr());
-pub(crate) const RECUR: Value<'static> = Value::String(RCow::Borrowed(RStr::from(RECUR_STR)));
+pub(crate) const RECUR: Value<'static> = Value::String(RCow::Borrowed(RStr::from_str(RECUR_STR)));
 pub(crate) const RECUR_REF: &Value<'static> = &RECUR;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

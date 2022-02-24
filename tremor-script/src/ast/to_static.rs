@@ -28,6 +28,8 @@ use crate::CustomFn;
 use beef::Cow;
 use tremor_value::Value;
 
+use abi_stable::std_types::RBox;
+
 impl<'script> ImutExpr<'script> {
     pub(crate) fn into_static(self) -> ImutExpr<'static> {
         match self {
@@ -177,7 +179,7 @@ impl<'script> Record<'script> {
         let Record { mid, fields, base } = self;
         let v: Value<'static> = Value::from(base).into_static();
         let base = if let Value::Object(v) = v {
-            *v
+            RBox::into_inner(v)
         } else {
             // ALLOW: we know this isn't reachable as we create v above
             unreachable!()

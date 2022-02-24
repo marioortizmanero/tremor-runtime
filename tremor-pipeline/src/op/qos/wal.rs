@@ -400,12 +400,12 @@ impl Operator for Wal {
         let insights = if self.full && !now_full {
             warn!("WAL not full any more. {} elements.", self.cnt);
             let mut e = Event::cb_restore(signal.ingest_ns);
-            e.origin_uri = self.origin_uri.clone();
+            e.origin_uri = self.origin_uri.clone().into();
             vec![e]
         } else if !self.full && now_full {
             warn!("WAL full. {} elements.", self.cnt);
             let mut e = Event::cb_trigger(signal.ingest_ns);
-            e.origin_uri = self.origin_uri.clone();
+            e.origin_uri = self.origin_uri.clone().into();
             vec![e]
         } else {
             vec![]

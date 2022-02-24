@@ -19,6 +19,9 @@ use tremor_script::{
     prelude::*,
     srs,
 };
+
+use abi_stable::std_types::RHashMap;
+
 #[derive(Debug)]
 pub(crate) struct TrickleOperator {
     pub op: Box<dyn Operator>,
@@ -31,7 +34,7 @@ fn mk_node_config(id: String, op_type: String, config: Value) -> NodeConfig {
         op_type,
         config: if config
             .as_object()
-            .map(HashMap::is_empty)
+            .map(RHashMap::is_empty)
             .unwrap_or_default()
         {
             None

@@ -23,6 +23,7 @@ use std::{fmt::Debug, mem, pin::Pin};
 use abi_stable::{
     rvec,
     std_types::{RArc, RVec},
+    StableAbi,
 };
 use tremor_value::value::from::cow_beef_to_sabi;
 
@@ -811,7 +812,8 @@ impl Select {
 /// They **must** remain private. All interactions with them have to be guarded
 /// by the implementation logic to ensure they remain sane.
 ///
-#[derive(Clone, Default)]
+#[repr(C)]
+#[derive(Clone, Default, StableAbi)]
 pub struct EventPayload {
     /// The vector of raw input values.
     pub(crate) raw: RVec<RArc<Pin<RVec<u8>>>>,
@@ -1144,8 +1146,15 @@ impl<'input> simd_json_derive::Deserialize<'input> for EventPayload {
 */
 
 /// Combined struct for an event value and metadata
+#[repr(C)]
 #[derive(
-    Clone, Debug, PartialEq, Serialize, simd_json_derive::Serialize, simd_json_derive::Deserialize,
+    Clone,
+    Debug,
+    PartialEq,
+    Serialize,
+    simd_json_derive::Serialize,
+    simd_json_derive::Deserialize,
+    StableAbi,
 )]
 pub struct ValueAndMeta<'event> {
     pub(crate) v: Value<'event>,

@@ -37,16 +37,18 @@ use halfbrown::HashMap;
 use lazy_static::lazy_static;
 use op::trickle::window;
 use petgraph::graph::{self, NodeIndex};
-use simd_json::OwnedValue;
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::iter::Iterator;
 use std::str::FromStr;
 use std::{fmt, sync::Mutex};
 use tremor_script::{ast::Helper, prelude::*};
 
-use abi_stable::{std_types::RVec, StableAbi};
+use abi_stable::{
+    std_types::{RCow, RCowStr, RHashMap, RStr, RVec},
+    StableAbi,
+};
 
 /// Pipeline Errors
 pub mod errors;
@@ -57,11 +59,11 @@ mod executable_graph;
 mod macros;
 pub(crate) mod op;
 
-const COUNT: Cow<'static, str> = Cow::const_str("count");
-const MEASUREMENT: Cow<'static, str> = Cow::const_str("measurement");
-const TAGS: Cow<'static, str> = Cow::const_str("tags");
-const FIELDS: Cow<'static, str> = Cow::const_str("fields");
-const TIMESTAMP: Cow<'static, str> = Cow::const_str("timestamp");
+const COUNT: RCowStr<'static> = RCow::Borrowed(RStr::from_str("count"));
+const MEASUREMENT: RCowStr<'static> = RCow::Borrowed(RStr::from_str("measurement"));
+const TAGS: RCowStr<'static> = RCow::Borrowed(RStr::from_str("tags"));
+const FIELDS: RCowStr<'static> = RCow::Borrowed(RStr::from_str("fields"));
+const TIMESTAMP: RCowStr<'static> = RCow::Borrowed(RStr::from_str("timestamp"));
 
 /// Tools to turn tremor query into pipelines
 pub mod query;
@@ -198,25 +200,33 @@ where
 }
 
 /// Operator metadata
+#[repr(C)]
 #[derive(
-    Clone, Debug, Default, PartialEq, simd_json_derive::Serialize, simd_json_derive::Deserialize,
+    Clone,
+    Debug,
+    Default,
+    PartialEq,
+    simd_json_derive::Serialize,
+    simd_json_derive::Deserialize,
+    StableAbi,
 )]
 // TODO: optimization: - use two Vecs, one for operator ids, one for operator metadata (Values)
 //                     - make it possible to trace operators with and without metadata
 //                     - insert with bisect (numbers of operators tracked will be low single digit numbers most of the time)
-pub struct OpMeta(BTreeMap<PrimStr<u64>, OwnedValue>);
+// TODO: restore BTreeMap? This was switched to RHashMap for the PDK
+pub struct OpMeta(RHashMap<PrimStr<u64>, Value<'static>>);
 
 impl OpMeta {
     /// inserts a value
-    pub fn insert<V>(&mut self, key: u64, value: V) -> Option<OwnedValue>
+    pub fn insert<V>(&mut self, key: u64, value: V) -> Option<Value<'static>>
     where
-        OwnedValue: From<V>,
+        Value<'static>: From<V>,
     {
-        self.0.insert(PrimStr(key), OwnedValue::from(value))
+        self.0.insert(PrimStr(key), Value::from(value)).into()
     }
     /// reads a value
-    pub fn get(&mut self, key: u64) -> Option<&OwnedValue> {
-        self.0.get(&PrimStr(key))
+    pub fn get(&mut self, key: u64) -> Option<&Value<'static>> {
+        self.0.get(&PrimStr(key)).into()
     }
     /// checks existance of a key
     #[must_use]
@@ -226,7 +236,7 @@ impl OpMeta {
 
     /// Merges two op meta maps, overwriting values with `other` on duplicates
     pub fn merge(&mut self, mut other: Self) {
-        self.0.append(&mut other.0);
+        self.0.extend(&mut other.0.into_iter());
     }
 }
 
@@ -923,6 +933,18 @@ pub fn influx_value(
     count: u64,
     timestamp: u64,
 ) -> Value<'static> {
+    // TODO: avoid duplication once tremor_pdk is done
+    pub fn conv_cow(cow: beef::Cow<str>) -> RCowStr {
+        let cow: std::borrow::Cow<str> = cow.into();
+        cow.into()
+    }
+
+    let metric_name = conv_cow(metric_name);
+    let tags = tags
+        .into_iter()
+        .map(|(k, v)| (conv_cow(k), v))
+        .collect::<RHashMap<_, _>>();
+
     literal!({
         MEASUREMENT: metric_name,
         TAGS: tags,

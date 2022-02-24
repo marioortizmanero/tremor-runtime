@@ -24,6 +24,7 @@ use abi_stable::{
     prefix_type::PrefixTypeTrait,
     rvec, sabi_extern_fn,
     std_types::{
+        RCow, RCowStr,
         ROption::{self, RNone, RSome},
         RResult::{RErr, ROk},
         RStr, RString,
@@ -32,12 +33,11 @@ use abi_stable::{
 };
 use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt};
 use std::future;
-use tremor_value::pdk::Value;
 
-const MEASUREMENT: Cow<'static, str> = Cow::const_str("measurement");
-const TAGS: Cow<'static, str> = Cow::const_str("tags");
-const FIELDS: Cow<'static, str> = Cow::const_str("fields");
-const TIMESTAMP: Cow<'static, str> = Cow::const_str("timestamp");
+const MEASUREMENT: RCowStr<'static> = RCow::Borrowed(RStr::from_str("measurement"));
+const TAGS: RCowStr<'static> = RCow::Borrowed(RStr::from_str("tags"));
+const FIELDS: RCowStr<'static> = RCow::Borrowed(RStr::from_str("fields"));
+const TIMESTAMP: RCowStr<'static> = RCow::Borrowed(RStr::from_str("timestamp"));
 
 /// Note that since it's a built-in plugin, `#[export_root_module]` can't be
 /// used or it would conflict with other plugins.

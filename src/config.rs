@@ -23,6 +23,8 @@ use tremor_script::{
 };
 use tremor_value::prelude::*;
 
+use abi_stable::std_types::Tuple2;
+
 pub(crate) type Id = String;
 
 /// possible reconnect strategies for controlling if and how to reconnect
@@ -205,7 +207,7 @@ impl Connector {
                 .get_object("codec_map")
                 .map(|o| {
                     o.iter()
-                        .map(|(k, v)| Ok((k.to_string(), Codec::from_value(v)?)))
+                        .map(|Tuple2(k, v)| Ok((k.to_string(), Codec::from_value(v)?)))
                         .collect::<Result<HashMap<_, _>>>()
                 })
                 .transpose()?,

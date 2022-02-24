@@ -2,6 +2,7 @@ use crate::{
     connectors::{BoxedRawConnector, ConnectorType},
     pdk::RResult,
 };
+use tremor_value::Value;
 
 use std::fmt;
 
