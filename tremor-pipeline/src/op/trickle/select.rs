@@ -210,12 +210,13 @@ impl Operator for Select {
             ingest_ns,
             ref mut data,
             ref id,
-            origin_uri,
+            ref origin_uri,
             ref op_meta,
             transactional,
             ..
         } = event;
-        let origin_uri = &Option::from(origin_uri);
+        // FIXME: avoid this?
+        let origin_uri = &Option::from(origin_uri.clone());
 
         let mut ctx = EventContext::new(ingest_ns, origin_uri.as_ref());
         ctx.cardinality = groups.len();

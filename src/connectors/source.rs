@@ -59,7 +59,7 @@ use crate::connectors::prelude::*;
 use crate::pdk::RResult;
 use abi_stable::{
     rvec,
-    std_types::{RBox, RCowStr, ROption, RResult::ROk, RString, RVec, Tuple2},
+    std_types::{RBox, RCowStr, ROption, ROption::RSome, RResult::ROk, RString, RVec, Tuple2},
     StableAbi,
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
@@ -1524,7 +1524,7 @@ fn build_event(
         id: stream_state.idgen.next_with_pull_id(pull_id),
         data: payload,
         ingest_ns,
-        origin_uri: Some(origin_uri),
+        origin_uri: RSome(origin_uri),
         transactional: is_transactional,
         ..Event::default()
     }

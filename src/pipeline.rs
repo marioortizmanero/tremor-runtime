@@ -28,6 +28,8 @@ use tremor_pipeline::errors::ErrorKind as PipelineErrorKind;
 use tremor_pipeline::{CbAction, Event, ExecutableGraph, SignalKind};
 use tremor_script::ast::DeployEndpoint;
 
+use abi_stable::std_types::ROption::RSome;
+
 const TICK_MS: u64 = 100;
 type Inputs = halfbrown::HashMap<DeployEndpoint, (bool, InputTarget)>;
 type Dests = halfbrown::HashMap<Cow<'static, str>, Vec<(DeployEndpoint, OutputTarget)>>;
@@ -294,7 +296,7 @@ impl OutputTarget {
             Self::Pipeline(addr) => {
                 // Each pipeline has their own ticks, we don't
                 // want to propagate them
-                if signal.kind != Some(SignalKind::Tick) {
+                if signal.kind != RSome(SignalKind::Tick) {
                     addr.send(Box::new(Msg::Signal(signal))).await?;
                 }
             }

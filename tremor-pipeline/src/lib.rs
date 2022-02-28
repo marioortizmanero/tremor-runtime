@@ -46,7 +46,7 @@ use std::{fmt, sync::Mutex};
 use tremor_script::{ast::Helper, prelude::*};
 
 use abi_stable::{
-    std_types::{RCow, RCowStr, RHashMap, RStr, RVec},
+    std_types::{RCow, RCowStr, RHashMap, RStr, RVec, Tuple2},
     StableAbi,
 };
 
@@ -201,21 +201,29 @@ where
 
 /// Operator metadata
 #[repr(C)]
-#[derive(
-    Clone,
-    Debug,
-    Default,
-    PartialEq,
-    simd_json_derive::Serialize,
-    simd_json_derive::Deserialize,
-    StableAbi,
-)]
+#[derive(Clone, Debug, Default, PartialEq, simd_json_derive::Serialize, StableAbi)]
 // TODO: optimization: - use two Vecs, one for operator ids, one for operator metadata (Values)
 //                     - make it possible to trace operators with and without metadata
 //                     - insert with bisect (numbers of operators tracked will be low single digit numbers most of the time)
 // TODO: restore BTreeMap? This was switched to RHashMap for the PDK
 pub struct OpMeta(RHashMap<PrimStr<u64>, Value<'static>>);
 
+// TODO: avoid this custom implementation?
+impl<'input> simd_json_derive::Deserialize<'input> for OpMeta {
+    #[inline]
+    fn from_tape(tape: &mut simd_json_derive::Tape<'input>) -> simd_json::Result<Self> {
+        let x: RHashMap<PrimStr<u64>, Value<'input>> =
+            simd_json_derive::Deserialize::from_tape(tape)?;
+        // TODO: avoid this clone?
+        let x: RHashMap<PrimStr<u64>, Value<'static>> = x
+            .into_iter()
+            .map(|Tuple2(k, v)| (k, v.clone_static()))
+            .collect();
+        Ok(Self(x))
+    }
+}
+
+#[allow(warnings)]
 impl OpMeta {
     /// inserts a value
     pub fn insert<V>(&mut self, key: u64, value: V) -> Option<Value<'static>>

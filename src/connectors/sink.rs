@@ -58,7 +58,7 @@ use crate::errors::Error;
 use crate::pdk::{RError, RResult};
 use abi_stable::{
     rvec,
-    std_types::{RBox, RResult::ROk, RStr, RString, RVec, SendRBoxError},
+    std_types::{RBox, ROption::RSome, RResult::ROk, RStr, RString, RVec, SendRBoxError},
     type_level::downcasting::TD_Opaque,
     RMut, StableAbi,
 };
@@ -981,7 +981,7 @@ impl SinkManager {
                         SinkMsg::Signal { signal } => {
                             // special treatment
                             match signal.kind {
-                                Some(SignalKind::Drain(source_uid)) => {
+                                RSome(SignalKind::Drain(source_uid)) => {
                                     debug!(
                                         "[Sink::{}] Drain signal received from {}",
                                         &self.ctx.alias, source_uid
@@ -1007,7 +1007,7 @@ impl SinkManager {
                                         .into_cb(CbAction::Drained(source_uid));
                                     send_contraflow(&self.pipelines, &self.ctx.alias, cf).await;
                                 }
-                                Some(SignalKind::Start(source_uid)) => {
+                                RSome(SignalKind::Start(source_uid)) => {
                                     debug!(
                                         "[Sink::{}] Received Start signal from {}",
                                         &self.ctx.alias, source_uid
