@@ -214,10 +214,9 @@ impl<'input> simd_json_derive::Deserialize<'input> for OpMeta {
     fn from_tape(tape: &mut simd_json_derive::Tape<'input>) -> simd_json::Result<Self> {
         let x: RHashMap<PrimStr<u64>, Value<'input>> =
             simd_json_derive::Deserialize::from_tape(tape)?;
-        // TODO: avoid this clone?
         let x: RHashMap<PrimStr<u64>, Value<'static>> = x
             .into_iter()
-            .map(|Tuple2(k, v)| (k, v.clone_static()))
+            .map(|Tuple2(k, v)| (k, v.into_static()))
             .collect();
         Ok(Self(x))
     }
