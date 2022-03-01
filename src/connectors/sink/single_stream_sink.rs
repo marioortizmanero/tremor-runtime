@@ -173,9 +173,6 @@ where
         serializer: &'a mut MutEventSerializer,
         start: u64,
     ) -> BorrowingFfiFuture<'a, RResult<SinkReply>> {
-        // Conversion to use the full functionality of `Event`
-        let event = Event::from(event);
-
         async move {
             let ingest_ns = event.ingest_ns;
             let contraflow = if event.transactional {

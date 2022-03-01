@@ -46,7 +46,8 @@ use std::{fmt, sync::Mutex};
 use tremor_script::{ast::Helper, prelude::*};
 
 use abi_stable::{
-    std_types::{RCow, RCowStr, RHashMap, RStr, RVec, Tuple2},
+    rstr,
+    std_types::{RCow, RCowStr, RHashMap, RVec, Tuple2},
     StableAbi,
 };
 
@@ -59,11 +60,11 @@ mod executable_graph;
 mod macros;
 pub(crate) mod op;
 
-const COUNT: RCowStr<'static> = RCow::Borrowed(RStr::from_str("count"));
-const MEASUREMENT: RCowStr<'static> = RCow::Borrowed(RStr::from_str("measurement"));
-const TAGS: RCowStr<'static> = RCow::Borrowed(RStr::from_str("tags"));
-const FIELDS: RCowStr<'static> = RCow::Borrowed(RStr::from_str("fields"));
-const TIMESTAMP: RCowStr<'static> = RCow::Borrowed(RStr::from_str("timestamp"));
+const COUNT: RCowStr<'static> = RCow::Borrowed(rstr!("count"));
+const MEASUREMENT: RCowStr<'static> = RCow::Borrowed(rstr!("measurement"));
+const TAGS: RCowStr<'static> = RCow::Borrowed(rstr!("tags"));
+const FIELDS: RCowStr<'static> = RCow::Borrowed(rstr!("fields"));
+const TIMESTAMP: RCowStr<'static> = RCow::Borrowed(rstr!("timestamp"));
 
 /// Tools to turn tremor query into pipelines
 pub mod query;

@@ -284,7 +284,7 @@ impl Sink {
     ) -> Result<SinkReply> {
         let mut serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
         self.0
-            .on_event(input.into(), event.into(), ctx, &mut serializer, start)
+            .on_event(input.into(), event, ctx, &mut serializer, start)
             .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
@@ -298,7 +298,7 @@ impl Sink {
     ) -> Result<SinkReply> {
         let mut serializer = MutEventSerializer::from_ptr(serializer, TD_Opaque);
         self.0
-            .on_signal(signal.into(), ctx, &mut serializer)
+            .on_signal(signal, ctx, &mut serializer)
             .await
             .map_err(Into::into) // RBoxError -> Box<dyn Error>
             .into() // RResult -> Result
@@ -636,8 +636,6 @@ impl EventSerializer {
         ingest_ns: u64,
         stream_id: u64,
     ) -> Result<Vec<Vec<u8>>> {
-        // FIXME: super ugly clone here
-        let value: &Value = &value.clone().into();
         if stream_id == DEFAULT_STREAM_ID {
             postprocess(
                 &mut self.postprocessors,
@@ -1053,14 +1051,14 @@ impl SinkManager {
                         AsyncSinkReply::Ack(data, duration) => Event::cb_ack_with_timing(
                             data.ingest_ns,
                             data.event_id,
-                            data.op_meta.into(),
+                            data.op_meta,
                             duration,
                         ),
                         AsyncSinkReply::Fail(data) => {
-                            Event::cb_fail(data.ingest_ns, data.event_id, data.op_meta.into())
+                            Event::cb_fail(data.ingest_ns, data.event_id, data.op_meta)
                         }
                         AsyncSinkReply::CB(data, cb) => {
-                            Event::insight(cb, data.event_id, data.ingest_ns, data.op_meta.into())
+                            Event::insight(cb, data.event_id, data.ingest_ns, data.op_meta)
                         }
                     };
                     send_contraflow(&self.pipelines, &self.ctx.alias, cf).await;
@@ -1084,21 +1082,21 @@ pub struct ContraflowData {
 
 impl ContraflowData {
     fn into_ack(self, duration: u64) -> Event {
-        Event::cb_ack_with_timing(self.ingest_ns, self.event_id, self.op_meta.into(), duration)
+        Event::cb_ack_with_timing(self.ingest_ns, self.event_id, self.op_meta, duration)
     }
     fn into_fail(self) -> Event {
-        Event::cb_fail(self.ingest_ns, self.event_id, self.op_meta.into())
+        Event::cb_fail(self.ingest_ns, self.event_id, self.op_meta)
     }
     fn cb(&self, cb: CbAction) -> Event {
         Event::insight(
             cb,
             self.event_id.clone(),
             self.ingest_ns,
-            self.op_meta.clone().into(),
+            self.op_meta.clone(),
         )
     }
     fn into_cb(self, cb: CbAction) -> Event {
-        Event::insight(cb, self.event_id, self.ingest_ns, self.op_meta.into())
+        Event::insight(cb, self.event_id, self.ingest_ns, self.op_meta)
     }
 }
 
@@ -1107,7 +1105,7 @@ impl From<&Event> for ContraflowData {
         ContraflowData {
             event_id: event.id.clone(),
             ingest_ns: event.ingest_ns,
-            op_meta: event.op_meta.clone().into(), // TODO: mem::swap here?
+            op_meta: event.op_meta.clone(), // TODO: mem::swap here?
         }
     }
 }

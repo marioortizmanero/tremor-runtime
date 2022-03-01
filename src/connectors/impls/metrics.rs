@@ -22,7 +22,7 @@ use crate::pdk::RError;
 use crate::ttry;
 use abi_stable::{
     prefix_type::PrefixTypeTrait,
-    rvec, sabi_extern_fn,
+    rstr, rvec, sabi_extern_fn,
     std_types::{
         RCow, RCowStr,
         ROption::{self, RNone, RSome},
@@ -34,10 +34,10 @@ use abi_stable::{
 use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt};
 use std::future;
 
-const MEASUREMENT: RCowStr<'static> = RCow::Borrowed(RStr::from_str("measurement"));
-const TAGS: RCowStr<'static> = RCow::Borrowed(RStr::from_str("tags"));
-const FIELDS: RCowStr<'static> = RCow::Borrowed(RStr::from_str("fields"));
-const TIMESTAMP: RCowStr<'static> = RCow::Borrowed(RStr::from_str("timestamp"));
+const MEASUREMENT: RCowStr<'static> = RCow::Borrowed(rstr!("measurement"));
+const TAGS: RCowStr<'static> = RCow::Borrowed(rstr!("tags"));
+const FIELDS: RCowStr<'static> = RCow::Borrowed(rstr!("fields"));
+const TIMESTAMP: RCowStr<'static> = RCow::Borrowed(rstr!("timestamp"));
 
 /// Note that since it's a built-in plugin, `#[export_root_module]` can't be
 /// used or it would conflict with other plugins.
@@ -218,9 +218,6 @@ impl RawSink for MetricsSink {
         _serializer: &'a mut MutEventSerializer,
         _start: u64,
     ) -> BorrowingFfiFuture<'a, RResult<SinkReply>> {
-        // Conversion to use the full functionality of `Event`
-        let event = Event::from(event);
-
         async move {
             // verify event format
             for (value, _meta) in event.value_meta_iter() {

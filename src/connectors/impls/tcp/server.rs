@@ -17,8 +17,6 @@ use crate::connectors::sink::channel_sink::ChannelSinkMsg;
 use crate::connectors::utils::tls::{load_server_config, TLSServerConfig};
 use crate::errors::{Error, Kind as ErrorKind};
 use crate::ttry;
-use abi_stable::rvec;
-use abi_stable::std_types::RString;
 use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
 use async_std::net::TcpListener;
 use async_std::task::{self, JoinHandle};
@@ -29,12 +27,14 @@ use simd_json::ValueAccess;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use crate::pdk::RError;
 use abi_stable::{
     prefix_type::PrefixTypeTrait,
-    sabi_extern_fn,
+    rvec, sabi_extern_fn,
     std_types::{
         ROption::{self, RSome},
         RResult::{RErr, ROk},
+        RString,
     },
     type_level::downcasting::TD_Opaque,
 };
@@ -332,7 +332,7 @@ impl RawSource for TcpServerSource {
                 // TODO: configure pull interval in connector config?
                 ROk(SourceReply::Empty(DEFAULT_POLL_INTERVAL))
             }
-            Err(e) => RErr(Error::from(e).into()),
+            Err(e) => RErr(RError::new(e)),
         };
 
         future::ready(res).into_ffi()

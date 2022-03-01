@@ -273,9 +273,9 @@ pub struct ConnectorContext {
     /// type of the connector
     connector_type: ConnectorType,
     /// The Quiescence Beacon
-    pub quiescence_beacon: BoxedQuiescenceBeacon,
+    quiescence_beacon: BoxedQuiescenceBeacon,
     /// Notifier
-    pub notifier: reconnect::BoxedConnectionLostNotifier,
+    notifier: reconnect::BoxedConnectionLostNotifier,
 }
 
 impl Display for ConnectorContext {
@@ -371,7 +371,7 @@ pub async fn spawn(
     let builder = known_connectors
         .get(&config.connector_type)
         .ok_or_else(|| ErrorKind::UnknownConnectorType(config.connector_type.to_string()))?;
-    let connector_config = config.config.clone().map(Into::into).into();
+    let connector_config = config.config.clone().into();
     let connector = builder.from_config()(alias.clone().into(), connector_config).await;
     let connector = Result::from(connector.map_err(Error::from))?;
     let connector = Connector(connector);
@@ -1287,15 +1287,15 @@ impl Connector {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default, StableAbi)]
 pub struct ConnectorType(RString);
 
-impl From<ConnectorType> for RString {
-    fn from(ct: ConnectorType) -> Self {
-        ct.0
-    }
-}
-
 impl From<ConnectorType> for String {
     fn from(ct: ConnectorType) -> Self {
         ct.0.into()
+    }
+}
+
+impl From<ConnectorType> for RString {
+    fn from(ct: ConnectorType) -> Self {
+        ct.0
     }
 }
 

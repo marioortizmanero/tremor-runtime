@@ -119,15 +119,15 @@ pub fn from_config(
                 port: RNone,
                 path: rvec![RString::from(config.source.clone())],
             };
-            let elements: Vec<Vec<u8>> = if let Some(chunk_size) = config.chunk_size {
+            let elements: RVec<RVec<u8>> = if let Some(chunk_size) = config.chunk_size {
                 // split into sized chunks
                 ttry!(data
                     .chunks(chunk_size)
-                    .map(|e| -> Result<Vec<u8>> {
+                    .map(|e| -> Result<RVec<u8>> {
                         if config.base64 {
-                            Ok(base64::decode(e)?)
+                            Ok(RVec::from(base64::decode(e)?))
                         } else {
-                            Ok(e.to_vec())
+                            Ok(RVec::from(e))
                         }
                     })
                     .collect::<Result<_>>())
@@ -135,11 +135,11 @@ pub fn from_config(
                 // split into lines
                 ttry!(BufReader::new(data.as_slice())
                     .lines()
-                    .map(|e| -> Result<Vec<u8>> {
+                    .map(|e| -> Result<RVec<u8>> {
                         if config.base64 {
-                            Ok(base64::decode(&e?.as_bytes())?)
+                            Ok(RVec::from(base64::decode(&e?.as_bytes())?))
                         } else {
-                            Ok(e?.as_bytes().to_vec())
+                            Ok(RVec::from(e?.as_bytes()))
                         }
                     })
                     .collect::<Result<_>>())
@@ -165,12 +165,12 @@ pub fn from_config(
 
 #[derive(Clone, Default)]
 struct Acc {
-    elements: Vec<Vec<u8>>,
+    elements: RVec<RVec<u8>>,
     count: usize,
     iterations: usize,
 }
 impl Acc {
-    fn next(&mut self) -> Vec<u8> {
+    fn next(&mut self) -> RVec<u8> {
         // actually safe because we only get element from a slot < elements.len()
         let next = unsafe {
             self.elements
@@ -193,7 +193,7 @@ pub struct Bench {
 impl RawConnector for Bench {
     fn create_source(
         &mut self,
-        _ctx: SourceContext,
+        _source_context: SourceContext,
         _qsize: usize,
     ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSource>>> {
         let s = Blaster {
@@ -213,7 +213,7 @@ impl RawConnector for Bench {
 
     fn create_sink(
         &mut self,
-        _ctx: SinkContext,
+        _sink_context: SinkContext,
         _qsize: usize,
         reply_tx: BoxedContraflowSender,
     ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSink>>> {
@@ -274,7 +274,7 @@ impl RawSource for Blaster {
 
             ROk(SourceReply::Data {
                 origin_uri: self.origin_uri.clone(),
-                data: self.acc.next().into(),
+                data: self.acc.next(),
                 meta: RNone,
                 stream: DEFAULT_STREAM_ID,
                 port: RNone,

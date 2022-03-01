@@ -23,7 +23,10 @@ use async_std::{
 use futures::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tremor_common::asy::file;
 
-use crate::{pdk::utils::conv_cow_str_inv, ttry};
+use crate::{
+    pdk::{utils::conv_cow_str_inv, RError},
+    ttry,
+};
 use abi_stable::{
     prefix_type::PrefixTypeTrait,
     rtry, rvec, sabi_extern_fn,
@@ -299,13 +302,13 @@ impl RawSource for FileSource {
                     SourceReply::EndStream {
                         origin_uri: self.origin_uri.clone(),
                         stream: DEFAULT_STREAM_ID,
-                        meta: RSome(self.meta.clone().into()),
+                        meta: RSome(self.meta.clone()),
                     }
                 } else {
                     SourceReply::Data {
                         origin_uri: self.origin_uri.clone(),
                         stream: DEFAULT_STREAM_ID,
-                        meta: RSome(self.meta.clone().into()),
+                        meta: RSome(self.meta.clone()),
                         // ALLOW: with the read above we ensure that this access is valid, unless async_std is broken
                         data: RVec::from(&self.buf[0..bytes_read]),
                         port: RSome(conv_cow_str_inv(OUT)),
@@ -386,7 +389,6 @@ impl RawSink for FileSink {
         _start: u64,
     ) -> BorrowingFfiFuture<'a, RResult<SinkReply>> {
         async move {
-            let event: Event = event.into();
             let file = ttry!(self
                 .file
                 .as_mut()
@@ -399,14 +401,14 @@ impl RawSink for FileSink {
                         error!("{} Error writing to file: {}", &ctx, &e);
                         self.file = None;
                         rtry!(ctx.notifier().notify().await);
-                        return RErr(Error::from(e).into());
+                        return RErr(RError::new(e));
                     }
                 }
                 if let Err(e) = file.flush().await {
                     error!("{} Error flushing file: {}", &ctx, &e);
                     self.file = None;
                     rtry!(ctx.notifier().notify().await);
-                    return RErr(Error::from(e).into());
+                    return RErr(RError::new(e));
                 }
             }
             ROk(SinkReply::NONE)
