@@ -299,8 +299,6 @@ impl<'value, V: Into<Value<'value>>> FromIterator<V> for Value<'value> {
     }
 }
 
-// FIXME: perhaps avoid this conversion in the future for a small performance
-// boost (i.e. code should use abi_stable's types since the beginning).
 impl<'value, K: Into<beef::Cow<'value, str>>, V: Into<Value<'value>>> FromIterator<(K, V)>
     for Value<'value>
 {
@@ -336,8 +334,6 @@ impl<'value> From<Object<'value>> for Value<'value> {
         Self::Object(RBox::new(v))
     }
 }
-// FIXME: perhaps avoid this conversion in the future for a small performance
-// boost (i.e. code should use abi_stable's types since the beginning).
 impl<'value> From<halfbrown::HashMap<beef::Cow<'value, str>, Value<'value>>> for Value<'value> {
     #[inline]
     #[must_use]

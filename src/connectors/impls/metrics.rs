@@ -229,7 +229,7 @@ impl RawSink for MetricsSink {
                 origin_uri, data, ..
             } = event;
 
-            let metrics_msg = MetricsMsg::new(data, origin_uri);
+            let metrics_msg = MetricsMsg::new(data, origin_uri.into());
             let ack_or_fail = match self.tx.try_broadcast(metrics_msg) {
                 Err(TrySendError::Closed(_)) => {
                     // channel is closed

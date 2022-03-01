@@ -290,9 +290,7 @@ impl<'value> Value<'value> {
                 .map(|Tuple2(k, v)| Tuple2(RCowStr::Owned(k.to_string().into()), v.into_static()))
                 .collect(),
             Self::Static(s) => Value::Static(s),
-            // FIXME: restore the original conversion back once fixed
-            // Self::Bytes(b) => Value::Bytes(RCowSlice::Owned(RVec::from(b.borrow()))),
-            Self::Bytes(b) => Value::Bytes(RCowSlice::Owned(RVec::from(&*b))),
+            Self::Bytes(b) => Value::Bytes(RCowSlice::Owned(RVec::from(b.borrow()))),
         }
     }
 

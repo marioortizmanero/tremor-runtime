@@ -546,7 +546,7 @@ impl SourceManagerBuilder {
         // the pipeline is waiting for the source to process contraflow and the source waits for
         // the pipeline to process forward flow.
 
-        let name = format!("{}-src", ctx.alias());
+        let name = format!("{}-src", ctx.alias);
         let (source_tx, source_rx) = unbounded();
         let source_addr = SourceAddr { addr: source_tx };
         let manager = SourceManager::new(source, ctx, self, source_rx, source_addr.clone());
@@ -1192,21 +1192,20 @@ impl SourceManager {
             } => {
                 let mut ingest_ns = nanotime();
                 let stream_state = self.streams.get_or_create_stream(stream, &self.ctx)?; // we only error here due to misconfigured codec etc
-                let alias = &self.ctx.alias;
+                let connector_url = &self.ctx.alias;
                 let port: Option<Cow<'static, str>> = port.map(conv_cow_str).into();
 
                 let mut results = Vec::with_capacity(batch_data.len()); // assuming 1:1 mapping
                 for Tuple2(data, meta) in batch_data {
-                    let meta: Value<'static> = meta.map(Value::from).unwrap_or_else(Value::object);
                     let mut events = build_events(
-                        alias,
+                        connector_url,
                         stream_state,
                         &mut ingest_ns,
                         pull_id,
-                        origin_uri.clone().into(), // TODO: use split_last on batch_data to avoid last clone
+                        origin_uri.clone(), // TODO: use split_last on batch_data to avoid last clone
                         port.as_ref(),
                         data.into(),
-                        &meta,
+                        &meta.unwrap_or_else(Value::object).into(),
                         self.is_transactional,
                     );
                     results.append(&mut events);
@@ -1240,14 +1239,13 @@ impl SourceManager {
                     stream_state,
                     pull_id,
                     ingest_ns,
-                    EventPayload::from(payload),
+                    payload,
                     origin_uri,
                     self.is_transactional,
                 );
 
-                let port: Cow<'static, str> = port.map(conv_cow_str).unwrap_or(OUT);
-
-                let error = self.route_events(vec![(port, event)]).await;
+                let port: ROption<Cow<'static, str>> = port.map(conv_cow_str);
+                let error = self.route_events(vec![(port.unwrap_or(OUT), event)]).await;
                 if error {
                     self.ctx.log_err(
                         self.source.fail(stream, pull_id, &self.ctx).await,
@@ -1260,7 +1258,7 @@ impl SourceManager {
                 meta,
                 stream: stream_id,
             } => {
-                debug!("{} Ending stream {}", &self.ctx, stream_id);
+                debug!("[Source::{}] Ending stream {}", &self.ctx.alias, stream_id);
                 let mut ingest_ns = nanotime();
                 if let Some(mut stream_state) = self.streams.end_stream(stream_id) {
                     let results = build_last_events(
@@ -1270,7 +1268,7 @@ impl SourceManager {
                         pull_id,
                         origin_uri,
                         None,
-                        &meta.map(Into::into).unwrap_or_else(Value::object),
+                        &meta.unwrap_or_else(Value::object),
                         self.is_transactional,
                     );
                     if results.is_empty() {
@@ -1279,7 +1277,10 @@ impl SourceManager {
                             .on_no_events(pull_id, stream_id, &self.ctx)
                             .await
                         {
-                            error!("{} Error on no events callback: {}", &self.ctx, e);
+                            error!(
+                                "[Source::{}] Error on no events callback: {}",
+                                &self.ctx.alias, e
+                            );
                         }
                     } else {
                         let error = self.route_events(results).await;
@@ -1362,7 +1363,7 @@ impl SourceManager {
             // FIXME: change reply from true/false to something descriptive like enum {Stop Continue} or the rust controlflow thingy
             if self.control_plane().await? == Control::Terminate {
                 // source has been stopped, lets stop running here
-                debug!("{} Terminating source task...", &self.ctx);
+                debug!("[Source::{}] Terminating source task...", self.ctx.alias);
                 return Ok(());
             }
 

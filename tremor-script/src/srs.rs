@@ -816,8 +816,8 @@ impl Select {
 #[derive(Clone, Default, StableAbi)]
 pub struct EventPayload {
     /// The vector of raw input values.
-    pub(crate) raw: RVec<RArc<Pin<RVec<u8>>>>,
-    pub(crate) data: ValueAndMeta<'static>,
+    raw: RVec<RArc<Pin<RVec<u8>>>>,
+    data: ValueAndMeta<'static>,
 }
 
 #[cfg(not(tarpaulin_include))] // this is a simple Debug implementation
@@ -1157,8 +1157,8 @@ impl<'input> simd_json_derive::Deserialize<'input> for EventPayload {
     StableAbi,
 )]
 pub struct ValueAndMeta<'event> {
-    pub(crate) v: Value<'event>,
-    pub(crate) m: Value<'event>,
+    v: Value<'event>,
+    m: Value<'event>,
 }
 
 impl<'event> ValueAndMeta<'event> {
