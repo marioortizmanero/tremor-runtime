@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use super::flow::{Flow, FlowId};
-use crate::connectors::{ConnectorBuilder, ConnectorType, KnownConnectors};
+use crate::connectors::{ConnectorType, KnownConnectors};
 use crate::errors::{Kind as ErrorKind, Result};
 use crate::system::DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT;
 use async_std::channel::{bounded, Sender};
@@ -22,6 +22,8 @@ use async_std::task::{self, JoinHandle};
 use hashbrown::{hash_map::Entry, HashMap};
 use tremor_common::ids::{ConnectorIdGen, OperatorIdGen};
 use tremor_script::srs::DeployFlow;
+
+use crate::pdk::connectors::ConnectorMod_Ref;
 
 pub(crate) type Channel = Sender<Msg>;
 
@@ -40,7 +42,7 @@ pub(crate) enum Msg {
         /// the type of connector
         connector_type: ConnectorType,
         /// the builder
-        builder: Box<dyn ConnectorBuilder>,
+        builder: ConnectorMod_Ref,
     },
     GetFlows(Sender<Result<Vec<Flow>>>),
     GetFlow(FlowId, Sender<Result<Flow>>),
@@ -87,7 +89,7 @@ impl Manager {
                         {
                             error!(
                                 "FIXME: error on duplicate connectors: {}",
-                                old.connector_type()
+                                old.connector_type()()
                             );
                         }
                     }

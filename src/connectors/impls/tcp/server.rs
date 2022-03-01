@@ -17,6 +17,7 @@ use crate::connectors::sink::channel_sink::ChannelSinkMsg;
 use crate::connectors::utils::tls::{load_server_config, TLSServerConfig};
 use crate::errors::{Error, ErrorKind};
 use crate::ttry;
+use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
 use async_std::net::TcpListener;
 use async_std::task::{self, JoinHandle};
 use async_tls::TlsAcceptor;
@@ -27,6 +28,7 @@ use std::future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use crate::pdk::RError;
 use abi_stable::{
     export_root_module,
     prefix_type::PrefixTypeTrait,
@@ -42,7 +44,7 @@ use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt};
 
 const URL_SCHEME: &str = "tremor-tcp-server";
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     // kept as a str, so it is re-resolved upon each connect
@@ -95,28 +97,31 @@ pub fn connector_type() -> ConnectorType {
 }
 
 #[sabi_extern_fn]
-pub fn from_config(
-    id: TremorUrl,
-    raw_config: ConnectorConfig,
-) -> FfiFuture<RResult<BoxedRawConnector>> {
+pub fn from_config<'a>(
+    id: RStr<'a>,
+    raw_config: &'a ConnectorConfig,
+) -> BorrowingFfiFuture<'a, RResult<BoxedRawConnector>> {
     async move {
-        if let Some(raw_config) = &raw_config.config {
-            let config = Config::new(raw_config)?;
+        if let RSome(raw_config) = &raw_config.config {
+            let config = ttry!(Config::new(raw_config));
 
             let tls_server_config = if let Some(tls_config) = config.tls.as_ref() {
-                Some(load_server_config(tls_config)?)
+                Some(ttry!(load_server_config(tls_config)))
             } else {
                 None
             };
             let (sink_tx, sink_rx) = bounded(crate::QSIZE.load(Ordering::Relaxed));
-            Ok(Box::new(TcpServer {
-                config,
-                tls_server_config,
-                sink_tx,
-                sink_rx,
-            }))
+            ROk(BoxedRawConnector::from_value(
+                TcpServer {
+                    config,
+                    tls_server_config,
+                    sink_tx,
+                    sink_rx,
+                },
+                TD_Opaque,
+            ))
         } else {
-            Err(ErrorKind::MissingConfiguration(id.to_string()).into())
+            RErr(ErrorKind::MissingConfiguration(id.to_string()).into())
         }
     }
     .into_ffi()
@@ -161,7 +166,7 @@ impl RawConnector for TcpServer {
         // we use this constructor as we need the sink channel already when creating the source
         let sink = ChannelSink::from_channel_no_meta(
             resolve_connection_meta,
-            builder.reply_tx(),
+            reply_tx,
             self.sink_tx.clone(),
             self.sink_rx.clone(),
         );
@@ -247,9 +252,9 @@ impl RawSource for TcpServerSource {
                     // Async<T> allows us to read in one thread and write in another concurrently - see its documentation
                     // So we don't need no BiLock like we would when using `.split()`
                     let origin_uri = EventOriginUri {
-                        scheme: URL_SCHEME.to_string(),
-                        host: peer_addr.ip().to_string(),
-                        port: Some(peer_addr.port()),
+                        scheme: RString::from(URL_SCHEME),
+                        host: RString::from(peer_addr.ip().to_string()),
+                        port: RSome(peer_addr.port()),
                         path: path.clone(), // captures server port
                     };
 
@@ -270,7 +275,7 @@ impl RawSource for TcpServerSource {
                             tls_read_stream,
                             stream.clone(),
                             vec![0; buf_size],
-                            ctx.alias.clone(),
+                            ctx.alias.clone().into(),
                             origin_uri.clone(),
                             meta,
                         );
@@ -293,7 +298,7 @@ impl RawSource for TcpServerSource {
                         let tcp_reader = TcpReader::new(
                             stream.clone(),
                             vec![0; buf_size],
-                            ctx.alias.clone(),
+                            ctx.alias.clone().into(),
                             origin_uri.clone(),
                             meta,
                         );
@@ -310,12 +315,13 @@ impl RawSource for TcpServerSource {
 
                 // notify connector task about disconnect
                 // of the listening socket
-                ctx.notifier().notify().await?;
+                Result::from(ctx.notifier().notify().await.map_err(Error::from))?;
                 Ok(())
             }));
 
             ROk(true)
-        }.into_ffi()
+        }
+        .into_ffi()
     }
 
     fn pull_data<'a>(

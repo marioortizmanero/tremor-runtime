@@ -23,7 +23,7 @@ use tremor_script::prelude::*;
 use tremor_script::utils::*;
 use tremor_script::{AggrType, EventContext, Return, Script};
 
-use abi_stable::std_types::{RSome, RVec};
+use abi_stable::{rvec, std_types::RSome};
 
 macro_rules! test_cases {
     ($($file:ident),* ,) => {
@@ -57,7 +57,7 @@ macro_rules! test_cases {
                 for (id, mut json) in in_json.into_iter().enumerate() {
                     let uri = EventOriginUri{
                         host: "test".into(),
-                        path: RVec::from(vec!["snot".into()]),
+                        path: rvec!["snot".into()],
                         port: RSome(23),
                         scheme: "snot".into(),
                     };

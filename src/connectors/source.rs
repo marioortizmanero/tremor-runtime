@@ -118,27 +118,27 @@ pub enum SourceReply {
         /// the data
         data: RVec<u8>,
         /// metadata associated with this data
-        meta: ROption<PdkValue<'static>>,
+        meta: ROption<Value<'static>>,
         /// stream id of the data
         stream: u64,
         /// Port to send to, defaults to `out`
-        port: ROption<RCow<'static, str>>,
+        port: ROption<RCowStr<'static>>,
     },
     /// an already structured event payload
     Structured {
         origin_uri: EventOriginUri,
-        payload: PdkEventPayload,
+        payload: EventPayload,
         stream: u64,
         /// Port to send to, defaults to `out`
-        port: ROption<RCow<'static, str>>,
+        port: ROption<RCowStr<'static>>,
     },
     /// a bunch of separated `Vec<u8>` with optional metadata
     /// for when the source knows where boundaries are, maybe because it receives chunks already
     BatchData {
         origin_uri: EventOriginUri,
-        batch_data: RVec<Tuple2<RVec<u8>, ROption<PdkValue<'static>>>>,
+        batch_data: RVec<Tuple2<RVec<u8>, ROption<Value<'static>>>>,
         /// Port to send to, defaults to `out`
-        port: ROption<RCow<'static, str>>,
+        port: ROption<RCowStr<'static>>,
         stream: u64,
     },
     /// A stream is closed
@@ -149,7 +149,7 @@ pub enum SourceReply {
     EndStream {
         origin_uri: EventOriginUri,
         stream: u64,
-        meta: ROption<PdkValue<'static>>,
+        meta: ROption<Value<'static>>,
     },
     /// Stream Failed, resources related to that stream should be cleaned up
     StreamFail(u64),
@@ -167,7 +167,13 @@ pub type BoxedRawSource = RawSource_TO<'static, RBox<()>>;
 #[abi_stable::sabi_trait]
 pub trait RawSource: Send {
     /// Pulls an event from the source if one exists
-    /// `idgen` is passed in so the source can inspect what event id it would get if it was producing 1 event from the pulled data
+    /// the `pull_id` identifies the number of the call to `pull_data` and is passed in so
+    /// sources can keep track of which event stems from which call of `pull_data` and so can
+    /// form a connection between source-specific units and events when receiving `ack`/`fail` notifications.
+    ///
+    /// `pull_id` can be modified, but users need to beware that it needs to remain unique per event stream. The modified `pull_id`
+    /// will be used in the `EventId` and will be passed backl into the `ack`/`fail` methods. This allows sources to encode
+    /// information into the `pull_id` to keep track of internal state.
     fn pull_data<'a>(
         &'a mut self,
         pull_id: &'a mut u64,
@@ -187,7 +193,7 @@ pub trait RawSource: Send {
     }
 
     /// Pulls custom metrics from the source
-    fn metrics(&mut self, _timestamp: u64, _ctx: &SourceContext) -> RVec<PdkEventPayload> {
+    fn metrics(&mut self, _timestamp: u64, _ctx: &SourceContext) -> RVec<EventPayload> {
         rvec![]
     }
 
@@ -295,7 +301,7 @@ pub trait RawSource: Send {
 ///
 /// Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
 /// types so that it's easier to use with `std`.
-pub struct Source(pub BoxedRawSource);
+pub(crate) struct Source(pub BoxedRawSource);
 impl Source {
     #[inline]
     pub async fn pull_data(
@@ -323,22 +329,20 @@ impl Source {
             .into() // RResult -> Result
     }
 
-    /// Pulls custom metrics from the source
     #[inline]
-    pub fn metrics(&mut self, timestamp: u64) -> Vec<EventPayload> {
-        self.0
-            .metrics(timestamp)
-            .into_iter()
-            .map(Into::into)
-            .collect()
+    pub fn metrics(&mut self, timestamp: u64, ctx: &SourceContext) -> Vec<EventPayload> {
+        self.0.metrics(timestamp, ctx).into()
     }
 
     #[inline]
     pub async fn on_start(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0.on_start(ctx).await.map_err(Into::into).into()
+        self.0
+            .on_start(ctx)
+            .await
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
-    /// Wrapper for [`BoxedRawSource::connect`]
     pub async fn connect(&mut self, ctx: &SourceContext, attempt: &Attempt) -> Result<bool> {
         self.0
             .connect(ctx, attempt)
@@ -347,27 +351,46 @@ impl Source {
             .into() // RResult -> Result
     }
 
-    /// Wrapper for [`BoxedRawSource::on_pause`]
     #[inline]
     pub async fn on_pause(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0.on_pause(ctx).await.map_err(Into::into).into()
+        self.0
+            .on_pause(ctx)
+            .await
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
     #[inline]
     pub async fn on_resume(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0.on_resume(ctx).await.map_err(Into::into).into()
+        self.0
+            .on_resume(ctx)
+            .await
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
     #[inline]
     pub async fn on_stop(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0.on_stop(ctx).await.map_err(Into::into).into()
+        self.0
+            .on_stop(ctx)
+            .await
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]
     pub async fn on_cb_close(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0.on_cb_close(ctx).await.map_err(Into::into).into()
+        self.0
+            .on_cb_close(ctx)
+            .await
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
     #[inline]
     pub async fn on_cb_open(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0.on_cb_open(ctx).await.map_err(Into::into).into()
+        self.0
+            .on_cb_open(ctx)
+            .await
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]
@@ -375,16 +398,16 @@ impl Source {
         self.0
             .ack(stream_id, pull_id, ctx)
             .await
-            .map_err(Into::into)
-            .into()
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
     #[inline]
     pub async fn fail(&mut self, stream_id: u64, pull_id: u64, ctx: &SourceContext) -> Result<()> {
         self.0
             .fail(stream_id, pull_id, ctx)
             .await
-            .map_err(Into::into)
-            .into()
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]
@@ -392,16 +415,16 @@ impl Source {
         self.0
             .on_connection_lost(ctx)
             .await
-            .map_err(Into::into)
-            .into()
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
     #[inline]
     pub async fn on_connection_established(&mut self, ctx: &SourceContext) -> Result<()> {
         self.0
             .on_connection_established(ctx)
             .await
-            .map_err(Into::into)
-            .into()
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]
@@ -501,7 +524,7 @@ impl SourceManagerBuilder {
         self.qsize
     }
 
-    pub fn spawn(self, source: Source, ctx: SourceContext) -> Result<SourceAddr> {
+    pub fn spawn(self, source: BoxedRawSource, ctx: SourceContext) -> Result<SourceAddr> {
         // We use a unbounded channel for counterflow, while an unbounded channel seems dangerous
         // there is soundness to this.
         // The unbounded channel ensures that on counterflow we never have to block, or in other
@@ -523,7 +546,7 @@ impl SourceManagerBuilder {
         // the pipeline is waiting for the source to process contraflow and the source waits for
         // the pipeline to process forward flow.
 
-        let name = format!("{}-src", ctx.alias()); // connector source
+        let name = format!("{}-src", ctx.alias);
         let (source_tx, source_rx) = unbounded();
         let source_addr = SourceAddr { addr: source_tx };
         let manager = SourceManager::new(source, ctx, self, source_rx, source_addr.clone());
@@ -557,16 +580,18 @@ pub fn builder(
                 CodecConfig::from("null")
             }
         }
-        CodecReq::Required => config
-            .codec
-            .clone()
-            .ok_or_else(|| format!("Missing codec for connector {}", config.connector_type))?,
+        CodecReq::Required => Result::from(config.codec.clone().ok_or_else(|| {
+            Error::from(format!(
+                "Missing codec for connector {}",
+                config.connector_type
+            ))
+        }))?,
         CodecReq::Optional(opt) => config
             .codec
             .clone()
             .unwrap_or_else(|| CodecConfig::from(opt.as_str())),
     };
-    let streams = Streams::new(connector_uid, codec_config, preprocessor_configs)?;
+    let streams = Streams::new(connector_uid, codec_config, preprocessor_configs.into())?;
 
     Ok(SourceManagerBuilder {
         qsize,
@@ -673,16 +698,9 @@ enum SourceState {
 
 // FIXME: make prettier or avoid duplication in pdk mod? It's a bit out of place
 // for now.
-fn conv_cow_str(cow: RCow<str>) -> beef::Cow<str> {
-    let cow: std::borrow::Cow<str> = cow.into();
+fn conv_cow_str<'a>(cow: RCowStr<'a>) -> beef::Cow<'a, str> {
+    let cow: std::borrow::Cow<'a, str> = cow.into();
     cow.into()
-}
-
-/// control flow enum
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Control {
-    Continue,
-    Terminate,
 }
 
 /// entity driving the source task
@@ -712,9 +730,16 @@ pub(crate) struct SourceManager {
     cb_open_received: bool,
 }
 
+/// control flow enum
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Control {
+    Continue,
+    Terminate,
+}
+
 impl SourceManager {
     fn new(
-        source: Source,
+        source: BoxedRawSource,
         ctx: SourceContext,
         builder: SourceManagerBuilder,
         rx: Receiver<SourceMsg>,
@@ -729,7 +754,7 @@ impl SourceManager {
         let is_asynchronous = source.asynchronous();
 
         Self {
-            source,
+            source: Source(source),
             ctx,
             rx,
             addr,
@@ -943,9 +968,9 @@ impl SourceManager {
                 Ok(Control::Continue)
             }
             SourceMsg::Cb(CbAction::Fail, id) => {
-                if let Some((stream_id, pull_id)) = id.get_min_by_source(self.ctx.uid) {
+                if let Some((stream_id, id)) = id.get_min_by_source(self.ctx.uid) {
                     self.ctx.log_err(
-                        self.source.fail(stream_id, pull_id, &self.ctx).await,
+                        self.source.fail(stream_id, id, &self.ctx).await,
                         "fail failed",
                     );
                 }
@@ -1138,16 +1163,15 @@ impl SourceManager {
                 let mut ingest_ns = nanotime();
                 let stream_state = self.streams.get_or_create_stream(stream, &self.ctx)?; // we fail if we cannot create a stream (due to misconfigured codec, preprocessors, ...) (should not happen)
                 let port: Option<Cow<'static, str>> = port.map(conv_cow_str).into();
-                let meta: Option<Value> = meta.map(Value::from).into();
                 let results = build_events(
                     &self.ctx.alias,
                     stream_state,
                     &mut ingest_ns,
                     pull_id,
-                    origin_uri.into(),
+                    origin_uri,
                     port.as_ref(),
                     data.into(),
-                    &meta.unwrap_or_else(Value::object),
+                    &meta.unwrap_or_else(Value::object).into(),
                     self.is_transactional,
                 );
                 if results.is_empty() {
@@ -1175,21 +1199,20 @@ impl SourceManager {
             } => {
                 let mut ingest_ns = nanotime();
                 let stream_state = self.streams.get_or_create_stream(stream, &self.ctx)?; // we only error here due to misconfigured codec etc
-                let alias = &self.ctx.alias;
+                let connector_url = &self.ctx.alias;
                 let port: Option<Cow<'static, str>> = port.map(conv_cow_str).into();
 
                 let mut results = Vec::with_capacity(batch_data.len()); // assuming 1:1 mapping
                 for Tuple2(data, meta) in batch_data {
-                    let meta: Value<'static> = meta.map(Value::from).unwrap_or_else(Value::object);
                     let mut events = build_events(
-                        alias,
+                        connector_url,
                         stream_state,
                         &mut ingest_ns,
                         pull_id,
-                        origin_uri.clone().into(), // TODO: use split_last on batch_data to avoid last clone
+                        origin_uri.clone(), // TODO: use split_last on batch_data to avoid last clone
                         port.as_ref(),
                         data.into(),
-                        &meta,
+                        &meta.unwrap_or_else(Value::object).into(),
                         self.is_transactional,
                     );
                     results.append(&mut events);
@@ -1223,14 +1246,13 @@ impl SourceManager {
                     stream_state,
                     pull_id,
                     ingest_ns,
-                    EventPayload::from(payload),
-                    origin_uri.into(),
+                    payload,
+                    origin_uri,
                     self.is_transactional,
                 );
 
-                let port: Cow<'static, str> = port.map(conv_cow_str).unwrap_or(OUT);
-
-                let error = self.route_events(vec![(port, event)]).await;
+                let port: ROption<Cow<'static, str>> = port.map(conv_cow_str);
+                let error = self.route_events(vec![(port.unwrap_or(OUT), event)]).await;
                 if error {
                     self.ctx.log_err(
                         self.source.fail(stream, pull_id, &self.ctx).await,
@@ -1243,7 +1265,7 @@ impl SourceManager {
                 meta,
                 stream: stream_id,
             } => {
-                debug!("{} Ending stream {}", &self.ctx, stream_id);
+                debug!("[Source::{}] Ending stream {}", &self.ctx.alias, stream_id);
                 let mut ingest_ns = nanotime();
                 if let Some(mut stream_state) = self.streams.end_stream(stream_id) {
                     let results = build_last_events(
@@ -1251,9 +1273,9 @@ impl SourceManager {
                         &mut stream_state,
                         &mut ingest_ns,
                         pull_id,
-                        origin_uri.into(),
+                        origin_uri,
                         None,
-                        &meta.map(Into::into).unwrap_or_else(Value::object),
+                        &meta.unwrap_or_else(Value::object),
                         self.is_transactional,
                     );
                     if results.is_empty() {
@@ -1262,7 +1284,10 @@ impl SourceManager {
                             .on_no_events(pull_id, stream_id, &self.ctx)
                             .await
                         {
-                            error!("{} Error on no events callback: {}", &self.ctx, e);
+                            error!(
+                                "[Source::{}] Error on no events callback: {}",
+                                &self.ctx.alias, e
+                            );
                         }
                     } else {
                         let error = self.route_events(results).await;
@@ -1345,7 +1370,7 @@ impl SourceManager {
             // FIXME: change reply from true/false to something descriptive like enum {Stop Continue} or the rust controlflow thingy
             if self.control_plane().await? == Control::Terminate {
                 // source has been stopped, lets stop running here
-                debug!("{} Terminating source task...", &self.ctx);
+                debug!("[Source::{}] Terminating source task...", self.ctx.alias);
                 return Ok(());
             }
 
@@ -1529,7 +1554,7 @@ fn build_event(
         id: stream_state.idgen.next_with_pull_id(pull_id),
         data: payload,
         ingest_ns,
-        origin_uri: Some(origin_uri),
+        origin_uri: RSome(origin_uri),
         transactional: is_transactional,
         ..Event::default()
     }

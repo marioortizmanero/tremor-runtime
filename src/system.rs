@@ -106,10 +106,13 @@ impl World {
     ///
     /// # Errors
     ///  * If the system is unavailable
-    pub(crate) async fn register_builtin_connector_type(&self, builder: ConnectorMod_Ref) -> Result<()> {
+    pub(crate) async fn register_builtin_connector_type(
+        &self,
+        builder: ConnectorMod_Ref,
+    ) -> Result<()> {
         self.system
             .send(manager::Msg::RegisterConnectorType {
-                connector_type: builder.connector_type(),
+                connector_type: builder.connector_type()(),
                 builder,
             })
             .await?;

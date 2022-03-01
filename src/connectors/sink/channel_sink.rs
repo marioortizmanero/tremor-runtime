@@ -42,7 +42,6 @@ use abi_stable::{
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
 use std::future;
-use tremor_pipeline::pdk::PdkEvent;
 
 /// Behavioral trait for defining if a Channel Sink needs metadata or not
 pub trait SinkMetaBehaviour: Send + Sync {
@@ -164,7 +163,9 @@ where
     F: Fn(&Value<'_>) -> Option<T>,
     B: SinkMetaBehaviour,
 {
-    /// constructor
+    /// constructor of a ChannelSink that is sending the event metadata to the StreamWriter
+    /// in case it needs it in the write.
+    /// This costs a clone.
     pub fn new(
         resolver: F,
         reply_tx: BoxedContraflowSender,
@@ -321,12 +322,9 @@ where
             }
             let error = match writer.on_done(stream).await {
                 Err(e) => RSome(e),
-                Ok(StreamDone::ConnectorClosed) => ctx
-                    .notifier()
-                    .notify()
-                    .await
-                    .err()
-                    .map(|e| ErrorKind::PluginError(e).into()),
+                Ok(StreamDone::ConnectorClosed) => {
+                    ctx.notifier().notify().await.err().map(Error::from)
+                }
                 Ok(_) => RNone,
             };
             if let RSome(e) = error {
@@ -351,7 +349,7 @@ fn get_sink_meta<'lt, 'value>(
     meta: &'lt Value<'value>,
     ctx: &SinkContext,
 ) -> Option<&'lt Value<'value>> {
-    meta.get(ctx.connector_type().to_string().as_str())
+    meta.get(ctx.connector_type.to_string().as_str())
 }
 
 impl<T, F, B> RawSink for ChannelSink<T, F, B>
@@ -364,15 +362,12 @@ where
     fn on_event<'a>(
         &'a mut self,
         _input: RStr<'a>,
-        event: PdkEvent,
+        event: Event,
         ctx: &'a SinkContext,
         serializer: &'a mut MutEventSerializer,
         start: u64,
     ) -> BorrowingFfiFuture<'a, RResult<SinkReply>> {
         async move {
-            // Conversion to use the full functionality of `Event`
-            let event = Event::from(event);
-
             // clean up
             // make sure channels for the given event are added to avoid stupid errors
             // due to channels not yet handled
@@ -390,6 +385,7 @@ where
             trace!("{} on_event stream_ids: {:?}", &ctx, stream_ids);
 
             let contraflow_utils = if event.transactional {
+                // FIXME: avoid downcasting?
                 let reply_tx = self
                     .reply_tx
                     .obj
@@ -421,11 +417,7 @@ where
 
                 for (stream_id, sender) in streams {
                     trace!("{} Send to stream {}.", &ctx, stream_id);
-                    let data = rtry!(serializer.serialize_for_stream(
-                        &value.clone().into(),
-                        ingest_ns,
-                        *stream_id
-                    ));
+                    let data = rtry!(serializer.serialize_for_stream(value, ingest_ns, *stream_id));
                     let meta = if B::NEEDS_META {
                         Some(meta.clone_static())
                     } else {
@@ -462,7 +454,7 @@ where
 
     fn on_signal<'a>(
         &'a mut self,
-        signal: PdkEvent,
+        signal: Event,
         _ctx: &'a SinkContext,
         serializer: &'a mut MutEventSerializer,
     ) -> BorrowingFfiFuture<'a, RResult<SinkReply>> {

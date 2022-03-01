@@ -79,13 +79,12 @@ impl TcpReader<ReadHalf<async_tls::server::TlsStream<TcpStream>>> {
     }
 }
 
-/* TODO: add back
 impl TcpReader<ReadHalf<async_tls::client::TlsStream<TcpStream>>> {
     fn tls_client(
         stream: ReadHalf<async_tls::client::TlsStream<TcpStream>>,
         underlying_stream: TcpStream,
         buffer: Vec<u8>,
-        url: TremorUrl,
+        alias: String,
         origin_uri: EventOriginUri,
         meta: Value<'static>,
     ) -> Self {
@@ -93,13 +92,12 @@ impl TcpReader<ReadHalf<async_tls::client::TlsStream<TcpStream>>> {
             wrapped_stream: stream,
             underlying_stream,
             buffer,
-            url,
+            alias,
             origin_uri,
             meta,
         }
     }
 }
-*/
 
 #[async_trait::async_trait]
 impl<S> StreamReader for TcpReader<S>
@@ -113,8 +111,8 @@ where
             trace!("[Connector::{}] Stream {stream} EOF", &self.alias);
             return Ok(SourceReply::EndStream {
                 origin_uri: self.origin_uri.clone(),
-                meta: RSome(self.meta.clone().into()),
-                stream: stream,
+                meta: RSome(self.meta.clone()),
+                stream,
             });
         }
         debug!("[Connector::{}] Read {} bytes", &self.alias, bytes_read);
@@ -122,7 +120,7 @@ where
         Ok(SourceReply::Data {
             origin_uri: self.origin_uri.clone(),
             stream,
-            meta: RSome(self.meta.clone().into()),
+            meta: RSome(self.meta.clone()),
             // ALLOW: we know bytes_read is smaller than or equal buf_size
             data: RVec::from(&self.buffer[0..bytes_read]),
             port: RNone,
@@ -168,19 +166,6 @@ impl TcpWriter<WriteHalf<async_tls::server::TlsStream<TcpStream>>> {
         }
     }
 }
-/* TODO: add back
-impl TcpWriter<WriteHalf<async_tls::client::TlsStream<TcpStream>>> {
-    fn tls_client(
-        tls_stream: WriteHalf<async_tls::client::TlsStream<TcpStream>>,
-        underlying_stream: TcpStream,
-    ) -> Self {
-        Self {
-            wrapped_stream: tls_stream,
-            underlying_stream,
-        }
-    }
-}
-*/
 
 #[async_trait::async_trait]
 impl<S> StreamWriter for TcpWriter<S>

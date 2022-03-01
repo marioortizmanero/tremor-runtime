@@ -27,6 +27,8 @@ use simd_json::prelude::*;
 use simd_json_derive::Serialize;
 use tremor_value::KnownKey;
 
+use tremor_value::value::from::{cow_beef_to_sabi, cow_sabi_to_beef};
+
 /// Walks a AST and performs constant folding on arguments
 pub struct ConstFolder<'run, 'script>
 where
@@ -353,7 +355,7 @@ where
             StrLitElement::Expr(e) if e.is_lit() => {
                 let value = e.try_into_lit(self.meta)?;
                 match value {
-                    Value::String(s) => *string = StrLitElement::Lit(s),
+                    Value::String(s) => *string = StrLitElement::Lit(cow_sabi_to_beef(s)),
                     // TODO: The float scenario is different in erlang and rust
                     // We knowingly excluded float correctness in string interpolation
                     // as we don't want to over engineer and write own format functions.
@@ -408,7 +410,7 @@ where
                 Field { name, value, .. } if name.as_str().is_some() && value.is_lit() => {
                     let k = name.into_str().ok_or("unreachable error str and not str")?;
                     let v = value.try_into_lit(self.meta)?;
-                    record.base.insert(k, v);
+                    record.base.insert(cow_beef_to_sabi(k), v);
                 }
                 other => record.fields.push(other),
             }

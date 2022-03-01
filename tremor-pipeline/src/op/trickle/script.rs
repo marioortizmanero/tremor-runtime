@@ -60,7 +60,7 @@ impl Operator for Script {
         state: &mut Value<'static>,
         mut event: Event,
     ) -> Result<EventAndInsights> {
-        let context = EventContext::new(event.ingest_ns, event.origin_uri.as_ref());
+        let context = EventContext::new(event.ingest_ns, event.origin_uri.as_ref().into());
 
         let port = event.data.apply_decl(&self.script, |data, decl| {
             let (unwind_event, event_meta) = data.parts_mut();

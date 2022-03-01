@@ -30,7 +30,7 @@ pub(crate) mod bench;
 // pub(crate) mod exit;
 /// file connector implementation
 pub(crate) mod file;
-// 
+//
 // /// HTTP
 // pub(crate) mod http;
 // /// Kafka consumer and producer
@@ -51,7 +51,7 @@ pub(crate) mod metrics;
 pub(crate) mod tcp;
 // /// udp connector impls
 // pub(crate) mod udp;
-// 
+//
 // /// Unix Domain socket impls
 // #[cfg(unix)]
 // pub(crate) mod unix_socket;

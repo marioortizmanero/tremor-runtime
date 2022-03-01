@@ -31,7 +31,7 @@ use self::metrics::{SinkReporter, SourceReporter};
 use self::sink::{SinkAddr, SinkContext, SinkMsg};
 use self::source::{SourceAddr, SourceContext, SourceMsg};
 use self::utils::quiescence::QuiescenceBeacon;
-use crate::config::Connector as ConnectorConfig;
+pub use crate::config::Connector as ConnectorConfig;
 use crate::errors::{Error, Kind as ErrorKind, Result};
 use crate::instance::InstanceState;
 use crate::pipeline;
@@ -280,9 +280,9 @@ pub struct ConnectorContext {
     /// type of the connector
     connector_type: ConnectorType,
     /// The Quiescence Beacon
-    pub quiescence_beacon: BoxedQuiescenceBeacon,
+    quiescence_beacon: BoxedQuiescenceBeacon,
     /// Notifier
-    pub notifier: reconnect::BoxedConnectionLostNotifier,
+    notifier: reconnect::BoxedConnectionLostNotifier,
 }
 
 impl Display for ConnectorContext {
@@ -378,8 +378,7 @@ pub async fn spawn(
     let builder = known_connectors
         .get(&config.connector_type)
         .ok_or_else(|| ErrorKind::UnknownConnectorType(config.connector_type.to_string()))?;
-    let connector_config = config.config.clone().into();
-    let connector = builder.from_config()(alias.clone().into(), connector_config).await;
+    let connector = builder.from_config()(alias.as_str().into(), &config).await;
     let connector = Result::from(connector.map_err(Error::from))?;
     let connector = Connector(connector);
 
@@ -407,13 +406,11 @@ async fn connector_task(
     let source_metrics_reporter = SourceReporter::new(
         alias.clone(),
         METRICS_CHANNEL.tx(),
-        config.metrics_interval_s,
+        config.metrics_interval_s.into(),
     );
 
     let default_codec = connector.codec_requirements();
-    if connector.codec_requirements() == CodecReq::Structured
-        && (config.codec.is_some() || config.codec_map.is_some())
-    {
+    if connector.codec_requirements() == CodecReq::Structured && (config.codec.is_some()) {
         return Err(format!(
             "[Connector::{}] is a structured connector and can't be configured with a codec",
             alias
@@ -433,7 +430,7 @@ async fn connector_task(
     let sink_metrics_reporter = SinkReporter::new(
         alias.clone(),
         METRICS_CHANNEL.tx(),
-        config.metrics_interval_s,
+        config.metrics_interval_s.into(),
     );
     let sink_builder = sink::builder(&config, default_codec, qsize, sink_metrics_reporter)?;
     let sink_ctx = SinkContext {
@@ -465,11 +462,11 @@ async fn connector_task(
         alias: alias.clone().into(),
         connector_type: config.connector_type.clone(),
         quiescence_beacon: quiescence_beacon.clone(),
-        notifier: notifier,
+        notifier,
     };
 
     let send_addr = connector_addr.clone();
-    let mut connector_state = InstanceState::Initialized;
+    let mut connector_state = InstanceState::Initializing;
     let mut drainage = None;
     let mut start_sender: Option<Sender<ConnectorResult<()>>> = None;
 
@@ -681,19 +678,23 @@ async fn connector_task(
                         }
                     }
                     // ugly extra check
-                    if new == Connectivity::Disconnected && !will_retry && start_sender.is_some() {
-                        if let Some(start_sender) = start_sender.take() {
-                            ctx.log_err(
-                                start_sender
-                                    .send(ConnectorResult::err(&ctx, "Connect failed."))
-                                    .await,
-                                "Error sending start response",
-                            )
+                    if new == Connectivity::Disconnected && !will_retry {
+                        // if we weren't able to connect and gave up retrying, we are failed. That's life.
+                        connector_state = InstanceState::Failed;
+                        if start_sender.is_some() {
+                            if let Some(start_sender) = start_sender.take() {
+                                ctx.log_err(
+                                    start_sender
+                                        .send(ConnectorResult::err(&ctx, "Connect failed."))
+                                        .await,
+                                    "Error sending start response",
+                                )
+                            }
                         }
                     }
                     connectivity = new;
                 }
-                Msg::Start(sender) if connector_state == InstanceState::Initialized => {
+                Msg::Start(sender) if connector_state == InstanceState::Initializing => {
                     info!("[Connector::{}] Starting...", &connector_addr.alias);
                     start_sender = Some(sender);
 
@@ -920,7 +921,8 @@ async fn connector_task(
         // TODO: inform registry that this instance is gone now
         Ok(())
     });
-    Ok(send_addr)}
+    Ok(send_addr)
+}
 
 #[derive(Debug, PartialEq)]
 enum DrainState {
@@ -1011,14 +1013,14 @@ const OUT_PORTS_REF: &'static [Cow<'static, str>; 2] = &OUT_PORTS;
 #[abi_stable::sabi_trait]
 pub trait RawConnector: Send {
     /// Valid input ports for the connector, by default this is `in`
-    fn input_ports(&self) -> RVec<RCow<'static, str>> {
+    fn input_ports(&self) -> RVec<RCowStr<'static>> {
         IN_PORTS_REF
             .into_iter()
             .map(|port| conv_cow_str_inv(port.clone()))
             .collect()
     }
     /// Valid output ports for the connector, by default this is `out` and `err`
-    fn output_ports(&self) -> RVec<RCow<'static, str>> {
+    fn output_ports(&self) -> RVec<RCowStr<'static>> {
         OUT_PORTS_REF
             .into_iter()
             .map(|port| conv_cow_str_inv(port.clone()))
@@ -1147,14 +1149,12 @@ pub type BoxedRawConnector = RawConnector_TO<'static, RBox<()>>;
 ///
 /// Note that it may hurt performance in some parts of the connector interface,
 /// so some of the functionality may not be fully wrapped.
-pub struct Connector(pub BoxedRawConnector);
+pub(crate) struct Connector(pub BoxedRawConnector);
 impl Connector {
-    /// Wrapper for [`BoxedRawConnector::input_ports`]
     #[inline]
     pub fn input_ports(&self) -> Vec<Cow<'static, str>> {
         self.0.input_ports().into_iter().map(conv_cow_str).collect()
     }
-    /// Wrapper for [`BoxedRawConnector::output_ports`]
     #[inline]
     pub fn output_ports(&self) -> Vec<Cow<'static, str>> {
         self.0
@@ -1164,19 +1164,16 @@ impl Connector {
             .collect()
     }
 
-    /// Wrapper for [`BoxedRawConnector::is_valid_input_port`]
     #[inline]
     pub fn is_valid_input_port(&self, port: &str) -> bool {
         self.0.is_valid_input_port(port.into())
     }
 
-    /// Wrapper for [`BoxedRawConnector::is_valid_output_port`]
     #[inline]
     pub fn is_valid_output_port(&self, port: &str) -> bool {
         self.0.is_valid_output_port(port.into())
     }
 
-    /// Wrapper for [`BoxedRawConnector::create_source`]
     #[inline]
     pub async fn create_source(
         &mut self,
@@ -1188,16 +1185,12 @@ impl Connector {
             .create_source(source_context.clone(), builder.qsize())
             .await
         {
-            ROk(RSome(raw_source)) => {
-                let wrapper = Source(raw_source);
-                builder.spawn(wrapper, source_context).map(Some)
-            }
+            ROk(RSome(source)) => builder.spawn(source, source_context).map(Some),
             ROk(RNone) => Ok(None),
             RErr(err) => Err(err.into()),
         }
     }
 
-    /// Wrapper for [`BoxedRawConnector::create_sink`]
     #[inline]
     pub async fn create_sink(
         &mut self,
@@ -1212,16 +1205,12 @@ impl Connector {
             .create_sink(sink_context.clone(), builder.qsize(), reply_tx)
             .await
         {
-            ROk(RSome(raw_sink)) => {
-                let wrapper = Sink(raw_sink);
-                builder.spawn(wrapper, sink_context).map(Some)
-            }
+            ROk(RSome(sink)) => builder.spawn(sink, sink_context).map(Some),
             ROk(RNone) => Ok(None),
             RErr(err) => Err(err.into()),
         }
     }
 
-    /// Wrapper for [`BoxedRawConnector::connect`]
     #[inline]
     pub async fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> Result<bool> {
         self.0
@@ -1231,7 +1220,6 @@ impl Connector {
             .into() // RResult -> Result
     }
 
-    /// Wrapper for [`BoxedRawConnector::on_start`]
     #[inline]
     pub async fn on_start(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
@@ -1241,7 +1229,6 @@ impl Connector {
             .into() // RResult -> Result
     }
 
-    /// Wrapper for [`BoxedRawConnector::on_pause`]
     #[inline]
     pub async fn on_pause(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
@@ -1251,7 +1238,6 @@ impl Connector {
             .into() // RResult -> Result
     }
 
-    /// Wrapper for [`BoxedRawConnector::on_resume`]
     #[inline]
     pub async fn on_resume(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
@@ -1261,7 +1247,6 @@ impl Connector {
             .into() // RResult -> Result
     }
 
-    /// Wrapper for [`BoxedRawConnector::on_drain`]
     #[inline]
     pub async fn on_drain(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
@@ -1271,7 +1256,6 @@ impl Connector {
             .into() // RResult -> Result
     }
 
-    /// Wrapper for [`BoxedRawConnector::on_stop`]
     #[inline]
     pub async fn on_stop(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
@@ -1281,7 +1265,6 @@ impl Connector {
             .into() // RResult -> Result
     }
 
-    /// Wrapper for [`BoxedRawConnector::codec_requirements`]
     #[inline]
     pub fn codec_requirements(&self) -> CodecReq {
         self.0.codec_requirements()
@@ -1293,15 +1276,15 @@ impl Connector {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default, StableAbi)]
 pub struct ConnectorType(RString);
 
-impl From<ConnectorType> for RString {
-    fn from(ct: ConnectorType) -> Self {
-        ct.0
-    }
-}
-
 impl From<ConnectorType> for String {
     fn from(ct: ConnectorType) -> Self {
         ct.0.into()
+    }
+}
+
+impl From<ConnectorType> for RString {
+    fn from(ct: ConnectorType) -> Self {
+        ct.0
     }
 }
 
@@ -1359,11 +1342,11 @@ pub fn debug_connector_types() -> Vec<ConnectorMod_Ref> {
 #[cfg(not(tarpaulin_include))]
 pub async fn register_builtin_connector_types(world: &World, debug: bool) -> Result<()> {
     for builder in builtin_connector_types() {
-        world.register_connector_type(builder).await?;
+        world.register_builtin_connector_type(builder).await?;
     }
     if debug {
         for builder in debug_connector_types() {
-            world.register_connector_type(builder).await?;
+            world.register_builtin_connector_type(builder).await?;
         }
     }
 
@@ -1376,7 +1359,7 @@ pub async fn register_builtin_connector_types(world: &World, debug: bool) -> Res
         log::info!("Dynamically loading plugins in directory '{}'", path);
         for plugin in pdk::find_recursively(&path) {
             log::info!("Found and loaded plugin '{}'", plugin.connector_type()());
-            world.register_connector_type(plugin).await?;
+            world.register_builtin_connector_type(plugin).await?;
         }
     }
 

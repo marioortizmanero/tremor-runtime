@@ -15,11 +15,11 @@
 pub use crate::connectors::quiescence::QuiescenceBeacon;
 pub use crate::connectors::sink::{
     AsyncSinkReply, ChannelSink, ChannelSinkRuntime, ContraflowData, EventSerializer,
-    SingleStreamSink, SingleStreamSinkRuntime, Sink, SinkAck, SinkAddr, SinkContext,
-    SinkManagerBuilder, SinkMeta, SinkReply, StreamWriter,
+    SingleStreamSink, SingleStreamSinkRuntime, SinkAck, SinkAddr, SinkContext, SinkManagerBuilder,
+    SinkMeta, SinkReply, StreamWriter,
 };
 pub use crate::connectors::source::{
-    ChannelSource, ChannelSourceRuntime, Source, SourceAddr, SourceContext, SourceManagerBuilder,
+    ChannelSource, ChannelSourceRuntime, SourceAddr, SourceContext, SourceManagerBuilder,
     SourceReply, SourceReplySender, StreamReader, DEFAULT_POLL_INTERVAL,
 };
 pub use crate::connectors::utils::reconnect::{Attempt, ConnectionLostNotifier};
@@ -53,6 +53,7 @@ pub(crate) fn default_buf_size() -> usize {
 pub use crate::connectors::ConnectorConfig;
 
 /// For the PDK
+pub(crate) use crate::connectors::{sink::Sink, source::Source, Connector};
 pub use crate::{
     connectors::{
         quiescence::BoxedQuiescenceBeacon,
