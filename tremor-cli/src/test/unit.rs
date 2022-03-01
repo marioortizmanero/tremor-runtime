@@ -31,6 +31,8 @@ use tremor_script::interpreter::{AggrType, Env, ExecOpts, LocalStack};
 use tremor_script::prelude::*;
 use tremor_script::Value;
 
+use abi_stable::std_types::RVec;
+
 use super::TestConfig;
 const EXEC_OPTS: ExecOpts = ExecOpts {
     result_needed: true,
@@ -153,7 +155,7 @@ fn eval_suite_tests(
                 let mut info = hh.to_string();
                 let success = if let Some(success) = value.as_bool() {
                     success
-                } else if let Some([expected, got]) = value.as_array().map(Vec::as_slice) {
+                } else if let Some([expected, got]) = value.as_array().map(RVec::as_slice) {
                     info.push_str(&format!("{} != {}", expected, got));
                     false
                 } else {
@@ -179,7 +181,7 @@ fn eval_suite_tests(
                     tremor_script::Script::highlight_script_with_range_indent(
                         "       ", script, extent, &mut hh,
                     )?;
-                    if let Some([expected, got]) = value.as_array().map(Vec::as_slice) {
+                    if let Some([expected, got]) = value.as_array().map(RVec::as_slice) {
                         println!("             | {} != {}", expected, got);
                     }
                     hh.finalize()?;
