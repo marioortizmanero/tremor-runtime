@@ -163,7 +163,9 @@ where
     F: Fn(&Value<'_>) -> Option<T>,
     B: SinkMetaBehaviour,
 {
-    /// constructor
+    /// constructor of a ChannelSink that is sending the event metadata to the StreamWriter
+    /// in case it needs it in the write.
+    /// This costs a clone.
     pub fn new(
         resolver: F,
         reply_tx: BoxedContraflowSender,
@@ -320,12 +322,9 @@ where
             }
             let error = match writer.on_done(stream).await {
                 Err(e) => RSome(e),
-                Ok(StreamDone::ConnectorClosed) => ctx
-                    .notifier()
-                    .notify()
-                    .await
-                    .err()
-                    .map(|e| ErrorKind::PluginError(e).into()),
+                Ok(StreamDone::ConnectorClosed) => {
+                    ctx.notifier().notify().await.err().map(Error::from)
+                }
                 Ok(_) => RNone,
             };
             if let RSome(e) = error {
@@ -350,7 +349,7 @@ fn get_sink_meta<'lt, 'value>(
     meta: &'lt Value<'value>,
     ctx: &SinkContext,
 ) -> Option<&'lt Value<'value>> {
-    meta.get(ctx.connector_type().to_string().as_str())
+    meta.get(ctx.connector_type.to_string().as_str())
 }
 
 impl<T, F, B> RawSink for ChannelSink<T, F, B>
@@ -386,6 +385,7 @@ where
             trace!("{} on_event stream_ids: {:?}", &ctx, stream_ids);
 
             let contraflow_utils = if event.transactional {
+                // FIXME: avoid downcasting?
                 let reply_tx = self
                     .reply_tx
                     .obj

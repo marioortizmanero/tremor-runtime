@@ -1141,14 +1141,12 @@ pub type BoxedRawConnector = RawConnector_TO<'static, RBox<()>>;
 ///
 /// Note that it may hurt performance in some parts of the connector interface,
 /// so some of the functionality may not be fully wrapped.
-pub struct Connector(pub BoxedRawConnector);
+pub(crate) struct Connector(pub BoxedRawConnector);
 impl Connector {
-    /// Wrapper for [`BoxedRawConnector::input_ports`]
     #[inline]
     pub fn input_ports(&self) -> Vec<Cow<'static, str>> {
         self.0.input_ports().into_iter().map(conv_cow_str).collect()
     }
-    /// Wrapper for [`BoxedRawConnector::output_ports`]
     #[inline]
     pub fn output_ports(&self) -> Vec<Cow<'static, str>> {
         self.0
@@ -1158,19 +1156,16 @@ impl Connector {
             .collect()
     }
 
-    /// Wrapper for [`BoxedRawConnector::is_valid_input_port`]
     #[inline]
     pub fn is_valid_input_port(&self, port: &str) -> bool {
         self.0.is_valid_input_port(port.into())
     }
 
-    /// Wrapper for [`BoxedRawConnector::is_valid_output_port`]
     #[inline]
     pub fn is_valid_output_port(&self, port: &str) -> bool {
         self.0.is_valid_output_port(port.into())
     }
 
-    /// Wrapper for [`BoxedRawConnector::create_source`]
     #[inline]
     pub async fn create_source(
         &mut self,
@@ -1182,16 +1177,12 @@ impl Connector {
             .create_source(source_context.clone(), builder.qsize())
             .await
         {
-            ROk(RSome(raw_source)) => {
-                let wrapper = Source(raw_source);
-                builder.spawn(wrapper, source_context).map(Some)
-            }
+            ROk(RSome(source)) => builder.spawn(source, source_context).map(Some),
             ROk(RNone) => Ok(None),
             RErr(err) => Err(err.into()),
         }
     }
 
-    /// Wrapper for [`BoxedRawConnector::create_sink`]
     #[inline]
     pub async fn create_sink(
         &mut self,
@@ -1206,16 +1197,12 @@ impl Connector {
             .create_sink(sink_context.clone(), builder.qsize(), reply_tx)
             .await
         {
-            ROk(RSome(raw_sink)) => {
-                let wrapper = Sink(raw_sink);
-                builder.spawn(wrapper, sink_context).map(Some)
-            }
+            ROk(RSome(sink)) => builder.spawn(sink, sink_context).map(Some),
             ROk(RNone) => Ok(None),
             RErr(err) => Err(err.into()),
         }
     }
 
-    /// Wrapper for [`BoxedRawConnector::connect`]
     #[inline]
     pub async fn connect(&mut self, ctx: &ConnectorContext, attempt: &Attempt) -> Result<bool> {
         self.0
@@ -1225,7 +1212,6 @@ impl Connector {
             .into() // RResult -> Result
     }
 
-    /// Wrapper for [`BoxedRawConnector::on_start`]
     #[inline]
     pub async fn on_start(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
@@ -1235,7 +1221,6 @@ impl Connector {
             .into() // RResult -> Result
     }
 
-    /// Wrapper for [`BoxedRawConnector::on_pause`]
     #[inline]
     pub async fn on_pause(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
@@ -1245,7 +1230,6 @@ impl Connector {
             .into() // RResult -> Result
     }
 
-    /// Wrapper for [`BoxedRawConnector::on_resume`]
     #[inline]
     pub async fn on_resume(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
@@ -1255,7 +1239,6 @@ impl Connector {
             .into() // RResult -> Result
     }
 
-    /// Wrapper for [`BoxedRawConnector::on_drain`]
     #[inline]
     pub async fn on_drain(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
@@ -1265,7 +1248,6 @@ impl Connector {
             .into() // RResult -> Result
     }
 
-    /// Wrapper for [`BoxedRawConnector::on_stop`]
     #[inline]
     pub async fn on_stop(&mut self, ctx: &ConnectorContext) -> Result<()> {
         self.0
@@ -1275,7 +1257,6 @@ impl Connector {
             .into() // RResult -> Result
     }
 
-    /// Wrapper for [`BoxedRawConnector::codec_requirements`]
     #[inline]
     pub fn codec_requirements(&self) -> CodecReq {
         self.0.codec_requirements()

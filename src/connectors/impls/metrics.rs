@@ -150,7 +150,7 @@ impl RawSource for MetricsSource {
     ) -> BorrowingFfiFuture<'a, RResult<SourceReply>> {
         let reply = match self.rx.try_recv() {
             Ok(msg) => ROk(SourceReply::Structured {
-                payload: msg.payload.into(),
+                payload: msg.payload,
                 origin_uri: msg.origin_uri.unwrap_or_else(|| self.origin_uri.clone()),
                 stream: DEFAULT_STREAM_ID,
                 port: RNone,
@@ -229,7 +229,7 @@ impl RawSink for MetricsSink {
                 origin_uri, data, ..
             } = event;
 
-            let metrics_msg = MetricsMsg::new(data, origin_uri.into());
+            let metrics_msg = MetricsMsg::new(data, origin_uri);
             let ack_or_fail = match self.tx.try_broadcast(metrics_msg) {
                 Err(TrySendError::Closed(_)) => {
                     // channel is closed

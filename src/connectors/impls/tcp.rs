@@ -168,17 +168,6 @@ impl TcpWriter<WriteHalf<async_tls::server::TlsStream<TcpStream>>> {
         }
     }
 }
-impl TcpWriter<WriteHalf<async_tls::client::TlsStream<TcpStream>>> {
-    fn tls_client(
-        tls_stream: WriteHalf<async_tls::client::TlsStream<TcpStream>>,
-        underlying_stream: TcpStream,
-    ) -> Self {
-        Self {
-            wrapped_stream: tls_stream,
-            underlying_stream,
-        }
-    }
-}
 
 #[async_trait::async_trait]
 impl<S> StreamWriter for TcpWriter<S>

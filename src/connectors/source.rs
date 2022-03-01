@@ -167,7 +167,13 @@ pub type BoxedRawSource = RawSource_TO<'static, RBox<()>>;
 #[abi_stable::sabi_trait]
 pub trait RawSource: Send {
     /// Pulls an event from the source if one exists
-    /// `idgen` is passed in so the source can inspect what event id it would get if it was producing 1 event from the pulled data
+    /// the `pull_id` identifies the number of the call to `pull_data` and is passed in so
+    /// sources can keep track of which event stems from which call of `pull_data` and so can
+    /// form a connection between source-specific units and events when receiving `ack`/`fail` notifications.
+    ///
+    /// `pull_id` can be modified, but users need to beware that it needs to remain unique per event stream. The modified `pull_id`
+    /// will be used in the `EventId` and will be passed backl into the `ack`/`fail` methods. This allows sources to encode
+    /// information into the `pull_id` to keep track of internal state.
     fn pull_data<'a>(
         &'a mut self,
         pull_id: &'a mut u64,
@@ -295,7 +301,7 @@ pub trait RawSource: Send {
 ///
 /// Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
 /// types so that it's easier to use with `std`.
-pub struct Source(pub BoxedRawSource);
+pub(crate) struct Source(pub BoxedRawSource);
 impl Source {
     #[inline]
     pub async fn pull_data(
@@ -323,22 +329,20 @@ impl Source {
             .into() // RResult -> Result
     }
 
-    /// Pulls custom metrics from the source
     #[inline]
     pub fn metrics(&mut self, timestamp: u64) -> Vec<EventPayload> {
-        self.0
-            .metrics(timestamp)
-            .into_iter()
-            .map(Into::into)
-            .collect()
+        self.0.metrics(timestamp).into()
     }
 
     #[inline]
     pub async fn on_start(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0.on_start(ctx).await.map_err(Into::into).into()
+        self.0
+            .on_start(ctx)
+            .await
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
-    /// Wrapper for [`BoxedRawSource::connect`]
     pub async fn connect(&mut self, ctx: &SourceContext, attempt: &Attempt) -> Result<bool> {
         self.0
             .connect(ctx, attempt)
@@ -347,27 +351,46 @@ impl Source {
             .into() // RResult -> Result
     }
 
-    /// Wrapper for [`BoxedRawSource::on_pause`]
     #[inline]
     pub async fn on_pause(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0.on_pause(ctx).await.map_err(Into::into).into()
+        self.0
+            .on_pause(ctx)
+            .await
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
     #[inline]
     pub async fn on_resume(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0.on_resume(ctx).await.map_err(Into::into).into()
+        self.0
+            .on_resume(ctx)
+            .await
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
     #[inline]
     pub async fn on_stop(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0.on_stop(ctx).await.map_err(Into::into).into()
+        self.0
+            .on_stop(ctx)
+            .await
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]
     pub async fn on_cb_close(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0.on_cb_close(ctx).await.map_err(Into::into).into()
+        self.0
+            .on_cb_close(ctx)
+            .await
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
     #[inline]
     pub async fn on_cb_open(&mut self, ctx: &SourceContext) -> Result<()> {
-        self.0.on_cb_open(ctx).await.map_err(Into::into).into()
+        self.0
+            .on_cb_open(ctx)
+            .await
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]
@@ -375,16 +398,16 @@ impl Source {
         self.0
             .ack(stream_id, pull_id, ctx)
             .await
-            .map_err(Into::into)
-            .into()
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
     #[inline]
     pub async fn fail(&mut self, stream_id: u64, pull_id: u64, ctx: &SourceContext) -> Result<()> {
         self.0
             .fail(stream_id, pull_id, ctx)
             .await
-            .map_err(Into::into)
-            .into()
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]
@@ -392,16 +415,16 @@ impl Source {
         self.0
             .on_connection_lost(ctx)
             .await
-            .map_err(Into::into)
-            .into()
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
     #[inline]
     pub async fn on_connection_established(&mut self, ctx: &SourceContext) -> Result<()> {
         self.0
             .on_connection_established(ctx)
             .await
-            .map_err(Into::into)
-            .into()
+            .map_err(Into::into) // RBoxError -> Box<dyn Error>
+            .into() // RResult -> Result
     }
 
     #[inline]
@@ -501,7 +524,7 @@ impl SourceManagerBuilder {
         self.qsize
     }
 
-    pub fn spawn(self, source: Source, ctx: SourceContext) -> Result<SourceAddr> {
+    pub fn spawn(self, source: BoxedRawSource, ctx: SourceContext) -> Result<SourceAddr> {
         // We use a unbounded channel for counterflow, while an unbounded channel seems dangerous
         // there is soundness to this.
         // The unbounded channel ensures that on counterflow we never have to block, or in other
@@ -523,7 +546,7 @@ impl SourceManagerBuilder {
         // the pipeline is waiting for the source to process contraflow and the source waits for
         // the pipeline to process forward flow.
 
-        let name = format!("{}-src", ctx.alias()); // connector source
+        let name = format!("{}-src", ctx.alias());
         let (source_tx, source_rx) = unbounded();
         let source_addr = SourceAddr { addr: source_tx };
         let manager = SourceManager::new(source, ctx, self, source_rx, source_addr.clone());
@@ -678,13 +701,6 @@ fn conv_cow_str<'a>(cow: RCowStr<'a>) -> beef::Cow<'a, str> {
     cow.into()
 }
 
-/// control flow enum
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Control {
-    Continue,
-    Terminate,
-}
-
 /// entity driving the source task
 /// and keeping the source state around
 pub(crate) struct SourceManager {
@@ -711,9 +727,16 @@ pub(crate) struct SourceManager {
     cb_open_received: bool,
 }
 
+/// control flow enum
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Control {
+    Continue,
+    Terminate,
+}
+
 impl SourceManager {
     fn new(
-        source: Source,
+        source: BoxedRawSource,
         ctx: SourceContext,
         builder: SourceManagerBuilder,
         rx: Receiver<SourceMsg>,
@@ -728,7 +751,7 @@ impl SourceManager {
         let is_asynchronous = source.asynchronous();
 
         Self {
-            source,
+            source: Source(source),
             ctx,
             rx,
             addr,
@@ -931,9 +954,9 @@ impl SourceManager {
                 Ok(Control::Continue)
             }
             SourceMsg::Cb(CbAction::Fail, id) => {
-                if let Some((stream_id, pull_id)) = id.get_min_by_source(self.ctx.uid) {
+                if let Some((stream_id, id)) = id.get_min_by_source(self.ctx.uid) {
                     self.ctx.log_err(
-                        self.source.fail(stream_id, pull_id, &self.ctx).await,
+                        self.source.fail(stream_id, id, &self.ctx).await,
                         "fail failed",
                     );
                 }
@@ -1133,16 +1156,15 @@ impl SourceManager {
                 let mut ingest_ns = nanotime();
                 let stream_state = self.streams.get_or_create_stream(stream, &self.ctx)?; // we fail if we cannot create a stream (due to misconfigured codec, preprocessors, ...) (should not happen)
                 let port: Option<Cow<'static, str>> = port.map(conv_cow_str).into();
-                let meta: Option<Value> = meta.map(Value::from).into();
                 let results = build_events(
                     &self.ctx.alias,
                     stream_state,
                     &mut ingest_ns,
                     pull_id,
-                    origin_uri.into(),
+                    origin_uri,
                     port.as_ref(),
                     data.into(),
-                    &meta.unwrap_or_else(Value::object),
+                    &meta.unwrap_or_else(Value::object).into(),
                     self.is_transactional,
                 );
                 if results.is_empty() {
@@ -1219,7 +1241,7 @@ impl SourceManager {
                     pull_id,
                     ingest_ns,
                     EventPayload::from(payload),
-                    origin_uri.into(),
+                    origin_uri,
                     self.is_transactional,
                 );
 
@@ -1246,7 +1268,7 @@ impl SourceManager {
                         &mut stream_state,
                         &mut ingest_ns,
                         pull_id,
-                        origin_uri.into(),
+                        origin_uri,
                         None,
                         &meta.map(Into::into).unwrap_or_else(Value::object),
                         self.is_transactional,

@@ -105,8 +105,12 @@ pub struct SingleStreamSinkRuntime {
 }
 
 impl SingleStreamSinkRuntime {
-    pub fn register_stream_writer<W>(&self, stream: u64, ctx: &ConnectorContext, mut writer: W)
-    where
+    pub(crate) fn register_stream_writer<W>(
+        &self,
+        stream: u64,
+        ctx: &ConnectorContext,
+        mut writer: W,
+    ) where
         W: StreamWriter + 'static,
     {
         let ctx = ctx.clone();
@@ -143,12 +147,9 @@ impl SingleStreamSinkRuntime {
             }
             let error = match writer.on_done(stream).await {
                 Err(e) => RSome(e),
-                Ok(StreamDone::ConnectorClosed) => ctx
-                    .notifier
-                    .notify()
-                    .await
-                    .err()
-                    .map(|e| ErrorKind::PluginError(e).into()),
+                Ok(StreamDone::ConnectorClosed) => {
+                    ctx.notifier.notify().await.err().map(Error::from)
+                }
                 Ok(_) => RNone,
             };
             if let RSome(e) = error {
@@ -185,7 +186,7 @@ where
             {
                 // handle first couple of items (if batched)
                 for (value, meta) in value_meta_iter {
-                    let data = rtry!(serializer.serialize(&value.clone().into(), ingest_ns));
+                    let data = rtry!(serializer.serialize(value, ingest_ns));
                     let meta = if B::NEEDS_META {
                         Some(meta.clone_static())
                     } else {
@@ -203,7 +204,7 @@ where
                     }
                 }
                 // handle last item
-                let data = rtry!(serializer.serialize(&last_value.clone().into(), ingest_ns));
+                let data = rtry!(serializer.serialize(last_value, ingest_ns));
                 let meta = if B::NEEDS_META {
                     Some(last_meta.clone_static())
                 } else {
