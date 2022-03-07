@@ -5,12 +5,13 @@ version = 3
 [[package]]
 name = "abi_stable"
 version = "0.10.4"
-source = "git+https://github.com/rodrimati1992/abi_stable_crates.git?branch=0_11#ae31031ad97fddd0cd15102641df4d48437a47cc"
+source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=halfbrown#533e7fbcf1417e5a537cda163f196665e795e42c"
 dependencies = [
  "abi_stable_derive",
  "abi_stable_shared",
  "core_extensions",
  "generational-arena",
+ "halfbrown 0.1.12 (git+https://github.com/marioortizmanero/halfbrown.git?branch=remove-entry)",
  "libloading",
  "lock_api",
  "parking_lot 0.11.2",
@@ -24,7 +25,7 @@ dependencies = [
 [[package]]
 name = "abi_stable_derive"
 version = "0.10.3"
-source = "git+https://github.com/rodrimati1992/abi_stable_crates.git?branch=0_11#ae31031ad97fddd0cd15102641df4d48437a47cc"
+source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=halfbrown#533e7fbcf1417e5a537cda163f196665e795e42c"
 dependencies = [
  "abi_stable_shared",
  "as_derive_utils",
@@ -39,7 +40,7 @@ dependencies = [
 [[package]]
 name = "abi_stable_shared"
 version = "0.10.3"
-source = "git+https://github.com/rodrimati1992/abi_stable_crates.git?branch=0_11#ae31031ad97fddd0cd15102641df4d48437a47cc"
+source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=halfbrown#533e7fbcf1417e5a537cda163f196665e795e42c"
 dependencies = [
  "core_extensions",
 ]
@@ -223,7 +224,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "as_derive_utils"
 version = "0.10.3"
-source = "git+https://github.com/rodrimati1992/abi_stable_crates.git?branch=0_11#ae31031ad97fddd0cd15102641df4d48437a47cc"
+source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=halfbrown#533e7fbcf1417e5a537cda163f196665e795e42c"
 dependencies = [
  "core_extensions",
  "proc-macro2",
@@ -1937,7 +1938,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b93ec2fc4df5aeba3c50bcee606404b60fb2d53ad798403d65c132e36c2f33b4"
 dependencies = [
- "halfbrown",
+ "halfbrown 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "simd-json",
 ]
 
@@ -2606,6 +2607,14 @@ dependencies = [
  "fxhash",
  "hashbrown 0.11.2",
  "serde",
+]
+
+[[package]]
+name = "halfbrown"
+version = "0.1.12"
+source = "git+https://github.com/marioortizmanero/halfbrown.git?branch=remove-entry#c00c784fd8b715b4011d5519bf50b483dac685db"
+dependencies = [
+ "hashbrown 0.11.2",
 ]
 
 [[package]]
@@ -5388,7 +5397,7 @@ version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8db546b694ee6a410ec93748bcb445051b7a74d4992f8ab4a23d94f289449bd7"
 dependencies = [
- "halfbrown",
+ "halfbrown 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "serde_json",
  "simdutf8",
@@ -6392,7 +6401,7 @@ name = "tremor-api"
 version = "0.11.4"
 dependencies = [
  "async-std",
- "halfbrown",
+ "halfbrown 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "http-types",
  "log",
  "serde",
@@ -6423,7 +6432,7 @@ dependencies = [
  "float-cmp",
  "futures",
  "globwalk",
- "halfbrown",
+ "halfbrown 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "http-types",
  "lalrpop",
  "lazy_static",
@@ -6511,7 +6520,7 @@ dependencies = [
  "byteorder",
  "criterion",
  "error-chain",
- "halfbrown",
+ "halfbrown 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "indexmap",
  "lazy_static",
  "log",
@@ -6573,7 +6582,7 @@ dependencies = [
  "googapis",
  "gouth",
  "grok",
- "halfbrown",
+ "halfbrown 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashbrown 0.12.0",
  "hdrhistogram",
  "hex",
@@ -6662,7 +6671,7 @@ dependencies = [
  "fxhash",
  "glob",
  "grok",
- "halfbrown",
+ "halfbrown 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "hdrhistogram",
  "hostname",
  "jumphash",
@@ -6702,7 +6711,7 @@ dependencies = [
  "beef",
  "float-cmp",
  "getopts",
- "halfbrown",
+ "halfbrown 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "proptest",
  "serde",
  "serde_json",
@@ -6976,7 +6985,7 @@ checksum = "23ba0ca16d76436ca217263f891e6cbe67e32faa8e20eda061c59e8fd7c6d34c"
 dependencies = [
  "abi_stable",
  "float-cmp",
- "halfbrown",
+ "halfbrown 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "itoa 0.4.8",
  "ryu",
 ]

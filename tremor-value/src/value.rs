@@ -88,7 +88,8 @@ pub enum Value<'value> {
     String(RCowStr<'value>),
     /// array type
     Array(RVec<Value<'value>>),
-    /// object type
+    /// Object type. Note that since the PDK there is no need to `Box` the map,
+    /// because `RHashMap` is an opaque type and already boxed.
     Object(Object<'value>),
     /// A binary type
     Bytes(Bytes<'value>),
