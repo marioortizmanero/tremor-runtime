@@ -61,7 +61,7 @@ file-mode = "0.1"
 futures = "0.3.19"
 event-listener = "2.5"
 glob = "0.3"
-halfbrown = "0.1"
+halfbrown = "0.1.13"
 hashbrown = { version = "0.12", features = ["serde"] }
 hex = "0.4"
 hostname = "0.3"
@@ -249,8 +249,6 @@ abi_stable = { git = "https://github.com/marioortizmanero/abi_stable_crates.git"
 # FIXME: update to crates.io when this is added to a new version:
 # https://github.com/simd-lite/simd-json-derive/pull/9
 simd-json-derive = { git = "https://github.com/marioortizmanero/simd-json-derive.git", branch = "abi-stable" }
-# FIXME: update when upstreamed
-halfbrown = { git = "https://github.com/marioortizmanero/halfbrown.git", branch = "abi_stable" }
 
 # for use during debian packaging, via cargo-deb
 # https://github.com/mmstick/cargo-deb#packagemetadatadeb-options

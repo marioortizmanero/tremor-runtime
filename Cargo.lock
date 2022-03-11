@@ -11,7 +11,7 @@ dependencies = [
  "abi_stable_shared",
  "core_extensions",
  "generational-arena",
- "halfbrown",
+ "halfbrown 0.1.12",
  "hashbrown 0.12.0",
  "libloading",
  "lock_api",
@@ -1939,7 +1939,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b93ec2fc4df5aeba3c50bcee606404b60fb2d53ad798403d65c132e36c2f33b4"
 dependencies = [
- "halfbrown",
+ "halfbrown 0.1.13",
  "simd-json",
 ]
 
@@ -2604,8 +2604,17 @@ name = "halfbrown"
 version = "0.1.12"
 source = "git+https://github.com/marioortizmanero/halfbrown.git?branch=abi_stable#5861d58eeeebbb64d3bb637bb86a1b8cb889b1c0"
 dependencies = [
- "fxhash",
  "hashbrown 0.11.2",
+]
+
+[[package]]
+name = "halfbrown"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49e26621a30b9fdb4f949b9c6a7fa42ce88112851c33ac4ca00bfa7848d26fb4"
+dependencies = [
+ "fxhash",
+ "hashbrown 0.12.0",
  "serde",
 ]
 
@@ -5389,7 +5398,7 @@ version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8db546b694ee6a410ec93748bcb445051b7a74d4992f8ab4a23d94f289449bd7"
 dependencies = [
- "halfbrown",
+ "halfbrown 0.1.13",
  "serde",
  "serde_json",
  "simdutf8",
@@ -6393,7 +6402,7 @@ name = "tremor-api"
 version = "0.11.4"
 dependencies = [
  "async-std",
- "halfbrown",
+ "halfbrown 0.1.13",
  "http-types",
  "log",
  "serde",
@@ -6424,7 +6433,7 @@ dependencies = [
  "float-cmp",
  "futures",
  "globwalk",
- "halfbrown",
+ "halfbrown 0.1.13",
  "http-types",
  "lalrpop",
  "lazy_static",
@@ -6512,7 +6521,7 @@ dependencies = [
  "byteorder",
  "criterion",
  "error-chain",
- "halfbrown",
+ "halfbrown 0.1.13",
  "indexmap",
  "lazy_static",
  "log",
@@ -6574,7 +6583,7 @@ dependencies = [
  "googapis",
  "gouth",
  "grok",
- "halfbrown",
+ "halfbrown 0.1.13",
  "hashbrown 0.12.0",
  "hdrhistogram",
  "hex",
@@ -6663,7 +6672,7 @@ dependencies = [
  "fxhash",
  "glob",
  "grok",
- "halfbrown",
+ "halfbrown 0.1.13",
  "hdrhistogram",
  "hostname",
  "jumphash",
@@ -6703,7 +6712,7 @@ dependencies = [
  "beef",
  "float-cmp",
  "getopts",
- "halfbrown",
+ "halfbrown 0.1.13",
  "proptest",
  "serde",
  "serde_json",
@@ -6977,7 +6986,7 @@ checksum = "23ba0ca16d76436ca217263f891e6cbe67e32faa8e20eda061c59e8fd7c6d34c"
 dependencies = [
  "abi_stable",
  "float-cmp",
- "halfbrown",
+ "halfbrown 0.1.13",
  "itoa 0.4.8",
  "ryu",
 ]
