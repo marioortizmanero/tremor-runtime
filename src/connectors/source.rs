@@ -59,11 +59,13 @@ use crate::connectors::prelude::*;
 use crate::pdk::RResult;
 use abi_stable::{
     rvec,
-    std_types::{RBox, RCowStr, ROption, ROption::RSome, RResult::ROk, RString, RVec, Tuple2},
+    std_types::{RBox, RCow, ROption, ROption::RSome, RResult::ROk, RString, RVec, Tuple2},
     StableAbi,
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
 use std::future;
+use tremor_value::pdk::PdkValue;
+use tremor_script::pdk::PdkEventPayload;
 
 /// The default poll interval for `try_recv` on channels in connectors
 pub const DEFAULT_POLL_INTERVAL: u64 = 10;

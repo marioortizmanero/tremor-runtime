@@ -29,6 +29,7 @@ use tremor_api as api;
 use tremor_common::file;
 use tremor_runtime::system::{ShutdownMode, World};
 use tremor_runtime::{self, version};
+use tremor_runtime::pdk::RError;
 
 macro_rules! log_and_print_error {
     ($($arg:tt)*) => {

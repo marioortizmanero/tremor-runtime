@@ -39,6 +39,8 @@ use abi_stable::{
     type_level::downcasting::TD_Opaque,
 };
 use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt};
+use async_std::channel::{bounded, Receiver, Sender, TryRecvError};
+use crate::pdk::RError;
 
 const URL_SCHEME: &str = "tremor-tcp-server";
 
@@ -161,7 +163,7 @@ impl RawConnector for TcpServer {
         // we use this constructor as we need the sink channel already when creating the source
         let sink = ChannelSink::from_channel_no_meta(
             resolve_connection_meta,
-            builder.reply_tx(),
+            reply_tx,
             self.sink_tx.clone(),
             self.sink_rx.clone(),
         );

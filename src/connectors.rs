@@ -31,7 +31,7 @@ use self::metrics::{SinkReporter, SourceReporter};
 use self::sink::{SinkAddr, SinkContext, SinkMsg};
 use self::source::{SourceAddr, SourceContext, SourceMsg};
 use self::utils::quiescence::QuiescenceBeacon;
-use crate::config::Connector as ConnectorConfig;
+pub use crate::config::Connector as ConnectorConfig;
 use crate::errors::{Error, Kind as ErrorKind, Result};
 use crate::instance::InstanceState;
 use crate::pipeline;
@@ -65,7 +65,7 @@ use crate::{
 };
 use abi_stable::{
     std_types::{
-        RBox, RCowStr,
+        RBox, RCow,
         ROption::{self, RNone, RSome},
         RResult::{RErr, ROk},
         RStr, RString, RVec,

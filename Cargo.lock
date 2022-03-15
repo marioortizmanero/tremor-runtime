@@ -4,8 +4,8 @@ version = 3
 
 [[package]]
 name = "abi_stable"
-version = "0.10.4"
-source = "git+https://github.com/rodrimati1992/abi_stable_crates.git?branch=0_11#f7486afbf5cd4478e877625c49ef27c1ad18e4e4"
+version = "0.10.3"
+source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=rvec-append#1946b2b79b4074882a6812f1c0dd28b66eeffdcf"
 dependencies = [
  "abi_stable_derive",
  "abi_stable_shared",
@@ -24,7 +24,7 @@ dependencies = [
 [[package]]
 name = "abi_stable_derive"
 version = "0.10.3"
-source = "git+https://github.com/rodrimati1992/abi_stable_crates.git?branch=0_11#f7486afbf5cd4478e877625c49ef27c1ad18e4e4"
+source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=rvec-append#1946b2b79b4074882a6812f1c0dd28b66eeffdcf"
 dependencies = [
  "abi_stable_shared",
  "as_derive_utils",
@@ -39,7 +39,7 @@ dependencies = [
 [[package]]
 name = "abi_stable_shared"
 version = "0.10.3"
-source = "git+https://github.com/rodrimati1992/abi_stable_crates.git?branch=0_11#f7486afbf5cd4478e877625c49ef27c1ad18e4e4"
+source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=rvec-append#1946b2b79b4074882a6812f1c0dd28b66eeffdcf"
 dependencies = [
  "core_extensions",
 ]
@@ -223,7 +223,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "as_derive_utils"
 version = "0.10.3"
-source = "git+https://github.com/rodrimati1992/abi_stable_crates.git?branch=0_11#f7486afbf5cd4478e877625c49ef27c1ad18e4e4"
+source = "git+https://github.com/marioortizmanero/abi_stable_crates.git?branch=rvec-append#1946b2b79b4074882a6812f1c0dd28b66eeffdcf"
 dependencies = [
  "core_extensions",
  "proc-macro2",
@@ -5398,7 +5398,7 @@ dependencies = [
 [[package]]
 name = "simd-json-derive"
 version = "0.2.3-alpha.0"
-source = "git+https://github.com/marioortizmanero/simd-json-derive.git?branch=abi-stable#4519e1a591c610ea0b764280f4b99b258d845f1c"
+source = "git+https://github.com/marioortizmanero/simd-json-derive.git?rev=29abc3f#29abc3f2df4f81054f672cd7959069820b19981e"
 dependencies = [
  "abi_stable",
  "chrono",
@@ -5412,7 +5412,7 @@ dependencies = [
 [[package]]
 name = "simd-json-derive-int"
 version = "0.2.2-alpha.0"
-source = "git+https://github.com/marioortizmanero/simd-json-derive.git?branch=abi-stable#4519e1a591c610ea0b764280f4b99b258d845f1c"
+source = "git+https://github.com/marioortizmanero/simd-json-derive.git?rev=29abc3f#29abc3f2df4f81054f672cd7959069820b19981e"
 dependencies = [
  "proc-macro2",
  "quote",
