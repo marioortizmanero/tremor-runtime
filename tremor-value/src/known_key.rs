@@ -14,9 +14,8 @@
 
 use crate::Value;
 use beef::Cow;
-use halfbrown::RawEntryMut;
+use halfbrown::HashMap;
 use std::fmt;
-use std::hash::{BuildHasher, Hash, Hasher};
 use value_trait::{Mutable, Value as ValueTrait, ValueAccess, ValueType};
 
 /// Well known key that can be looked up in a `Value` faster.
@@ -24,12 +23,8 @@ use value_trait::{Mutable, Value as ValueTrait, ValueAccess, ValueType};
 #[derive(Debug, Clone, PartialEq)]
 pub struct KnownKey<'key> {
     key: Cow<'key, str>,
-    hash: u64,
-}
-impl<'key> std::fmt::Display for KnownKey<'key> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.key.fmt(f)
-    }
+    // FIXME: temporarily removed to enable PDK support
+    // hash: u64,
 }
 
 /// Error for known keys
@@ -49,17 +44,14 @@ impl fmt::Display for Error {
 }
 impl std::error::Error for Error {}
 
-impl<'key, S> From<S> for KnownKey<'key>
-where
-    Cow<'key, str>: From<S>,
-{
-    fn from(key: S) -> Self {
-        let key = Cow::from(key);
-        let hash_builder = halfbrown::DefaultHashBuilder::default();
-        let mut hasher = hash_builder.build_hasher();
-        key.hash(&mut hasher);
+impl<'key> From<Cow<'key, str>> for KnownKey<'key> {
+    fn from(key: Cow<'key, str>) -> Self {
+        // FIXME: temporarily removed to enable PDK support
+        // let hash_builder = halfbrown::DefaultHashBuilder::default();
+        // let mut hasher = hash_builder.build_hasher();
+        // key.hash(&mut hasher);
         Self {
-            hash: hasher.finish(),
+            // hash: hasher.finish(),
             key,
         }
     }
@@ -87,16 +79,13 @@ impl<'key> KnownKey<'key> {
     /// ```
     #[inline]
     #[must_use]
-    pub fn lookup<'target, 'value>(
-        &self,
-        target: &'target Value<'value>,
-    ) -> Option<&'target Value<'value>>
+    pub fn lookup<'target>(&self, target: &'target Value<'key>) -> Option<&'target Value<'key>>
     where
-        'value: 'target,
+        'key: 'target,
     {
         target.as_object().and_then(|m| self.map_lookup(m))
     }
-    /// Looks up this key in a `HashMap<<Cow<'value, str>, Value<'value>>` the inner representation of an object `Value`, returns None if the
+    /// Looks up this key in a `HashMap<<Cow<'key, str>, Value<'key>>` the inner representation of an object `Value`, returns None if the
     /// key wasn't present.
     ///
     /// ```rust
@@ -113,16 +102,18 @@ impl<'key> KnownKey<'key> {
 
     #[inline]
     #[must_use]
-    pub fn map_lookup<'target, 'value>(
+    pub fn map_lookup<'target>(
         &self,
-        map: &'target halfbrown::HashMap<Cow<'value, str>, Value<'value>>,
-    ) -> Option<&'target Value<'value>>
+        map: &'target HashMap<Cow<'key, str>, Value<'key>>,
+    ) -> Option<&'target Value<'key>>
     where
-        'value: 'target,
+        'key: 'target,
     {
-        map.raw_entry()
-            .from_key_hashed_nocheck(self.hash, self.key())
-            .map(|kv| kv.1)
+        // FIXME: temporarily removed to enable PDK support
+        // map.raw_entry()
+        //     .from_key_hashed_nocheck(self.hash, self.key())
+        //     .map(|kv| kv.1)
+        map.get(self.key())
     }
 
     /// Looks up this key in a `Value`, returns None if the
@@ -145,18 +136,17 @@ impl<'key> KnownKey<'key> {
     /// assert_eq!(object["answer"], 42);
     /// ```
     #[inline]
-    pub fn lookup_mut<'target, 'value>(
+    pub fn lookup_mut<'target>(
         &self,
-        target: &'target mut Value<'value>,
-    ) -> Option<&'target mut Value<'value>>
+        target: &'target mut Value<'key>,
+    ) -> Option<&'target mut Value<'key>>
     where
-        'key: 'value,
-        'value: 'target,
+        'key: 'target,
     {
         target.as_object_mut().and_then(|m| self.map_lookup_mut(m))
     }
 
-    /// Looks up this key in a `HashMap<Cow<'value, str>, Value<'value>>`, the inner representation of an object value.
+    /// Looks up this key in a `HashMap<Cow<'key, str>, Value<'key>>`, the inner representation of an object value.
     /// returns None if the key wasn't present.
     ///
     /// ```rust
@@ -178,21 +168,22 @@ impl<'key> KnownKey<'key> {
     ///
     /// ```
     #[inline]
-    pub fn map_lookup_mut<'target, 'value>(
+    pub fn map_lookup_mut<'target>(
         &self,
-        map: &'target mut halfbrown::HashMap<Cow<'value, str>, Value<'value>>,
-    ) -> Option<&'target mut Value<'value>>
+        map: &'target mut HashMap<Cow<'key, str>, Value<'key>>,
+    ) -> Option<&'target mut Value<'key>>
     where
-        'key: 'value,
-        'value: 'target,
+        'key: 'target,
     {
-        match map
-            .raw_entry_mut()
-            .from_key_hashed_nocheck(self.hash, &self.key)
-        {
-            RawEntryMut::Occupied(e) => Some(e.into_mut()),
-            RawEntryMut::Vacant(_e) => None,
-        }
+        // FIXME: temporarily removed to enable PDK support
+        // match map
+        //     .raw_entry_mut()
+        //     .from_key_hashed_nocheck(self.hash, &self.key)
+        // {
+        //     RawEntryMut::Occupied(e) => Some(e.into_mut()),
+        //     RawEntryMut::Vacant(_e) => None,
+        // }
+        map.get_mut(self.key())
     }
 
     /// Looks up this key in a `Value`, inserts `with` when the key
@@ -227,15 +218,14 @@ impl<'key> KnownKey<'key> {
     /// assert_eq!(object["also the answer"], 42);
     /// ```
     #[inline]
-    pub fn lookup_or_insert_mut<'target, 'value, F>(
+    pub fn lookup_or_insert_mut<'target, F>(
         &self,
-        target: &'target mut Value<'value>,
+        target: &'target mut Value<'key>,
         with: F,
-    ) -> Result<&'target mut Value<'value>, Error>
+    ) -> Result<&'target mut Value<'key>, Error>
     where
-        'key: 'value,
-        'value: 'target,
-        F: FnOnce() -> Value<'value>,
+        'key: 'target,
+        F: FnOnce() -> Value<'key>,
     {
         // we make use of internals here, but this is the fastest way, only requiring one match
         match target {
@@ -244,7 +234,7 @@ impl<'key> KnownKey<'key> {
         }
     }
 
-    /// Looks up this key in a `HashMap<Cow<'value, str>, Value<'value>>`, the inner representation of an object `Value`.
+    /// Looks up this key in a `HashMap<Cow<'key, str>, Value<'key>>`, the inner representation of an object `Value`.
     /// Inserts `with` when the key when wasn't present.
     ///
     /// ```rust
@@ -275,21 +265,31 @@ impl<'key> KnownKey<'key> {
     /// assert_eq!(object["also the answer"], 42);
     /// ```
     #[inline]
-    pub fn map_lookup_or_insert_mut<'target, 'value, F>(
+    pub fn map_lookup_or_insert_mut<'target, F>(
         &self,
-        map: &'target mut halfbrown::HashMap<Cow<'value, str>, Value<'value>>,
+        map: &'target mut HashMap<Cow<'key, str>, Value<'key>>,
         with: F,
-    ) -> &'target mut Value<'value>
+    ) -> &'target mut Value<'key>
     where
-        'key: 'value,
-        'value: 'target,
-        F: FnOnce() -> Value<'value>,
+        'key: 'target,
+        F: FnOnce() -> Value<'key>,
     {
-        let key: &str = &self.key;
-        map.raw_entry_mut()
-            .from_key_hashed_nocheck(self.hash, key)
-            .or_insert_with(|| (self.key.clone(), with()))
-            .1
+        // FIXME: temporarily removed to enable PDK support
+        // let key: &str = &self.key;
+        // map.raw_entry_mut()
+        //     .from_key_hashed_nocheck(self.hash, key)
+        //     .or_insert_with(|| (self.key.clone(), with()))
+        //     .1
+        //
+        //   match map.get_mut(self.key()) {
+        //       Some(v) => v,
+        //       None => {
+        //           let mut v = with();
+        //           map.insert(self.key, v);
+        //           &mut v
+        //       }
+        //   }
+        map.entry(self.key.clone()).or_insert_with(with)
     }
 
     /// Inserts a value key into  `Value`, returns None if the
@@ -319,14 +319,13 @@ impl<'key> KnownKey<'key> {
     /// assert_eq!(object["also the answer"], 42);
     /// ```
     #[inline]
-    pub fn insert<'target, 'value>(
+    pub fn insert<'target>(
         &self,
-        target: &'target mut Value<'value>,
-        value: Value<'value>,
-    ) -> Result<Option<Value<'value>>, Error>
+        target: &'target mut Value<'key>,
+        value: Value<'key>,
+    ) -> Result<Option<Value<'key>>, Error>
     where
-        'key: 'value,
-        'value: 'target,
+        'key: 'target,
     {
         target
             .as_object_mut()
@@ -363,25 +362,26 @@ impl<'key> KnownKey<'key> {
     /// assert_eq!(object["also the answer"], 42);
     /// ```
     #[inline]
-    pub fn map_insert<'target, 'value>(
+    pub fn map_insert<'target>(
         &self,
-        map: &'target mut halfbrown::HashMap<Cow<'value, str>, Value<'value>>,
-        value: Value<'value>,
-    ) -> Option<Value<'value>>
+        map: &'target mut HashMap<Cow<'key, str>, Value<'key>>,
+        value: Value<'key>,
+    ) -> Option<Value<'key>>
     where
-        'key: 'value,
-        'value: 'target,
+        'key: 'target,
     {
-        match map
-            .raw_entry_mut()
-            .from_key_hashed_nocheck(self.hash, self.key())
-        {
-            RawEntryMut::Occupied(mut e) => Some(e.insert(value)),
-            RawEntryMut::Vacant(e) => {
-                e.insert_hashed_nocheck(self.hash, self.key.clone(), value);
-                None
-            }
-        }
+        // FIXME: temporarily removed to enable PDK support
+        // match map
+        //     .raw_entry_mut()
+        //     .from_key_hashed_nocheck(self.hash, self.key())
+        // {
+        //     RawEntryMut::Occupied(mut e) => Some(e.insert(value)),
+        //     RawEntryMut::Vacant(e) => {
+        //         e.insert_hashed_nocheck(self.hash, self.key.clone(), value);
+        //         None
+        //     }
+        // }
+        map.insert(self.key.clone(), value).into()
     }
 }
 
@@ -389,10 +389,10 @@ impl<'script> KnownKey<'script> {
     /// turns the key into one with static lifetime
     #[must_use]
     pub fn into_static(self) -> KnownKey<'static> {
-        let KnownKey { key, hash } = self;
+        let KnownKey { key, /*, hash*/ } = self;
         KnownKey {
-            key: Cow::owned(key.to_string()),
-            hash,
+            key: Cow::owned(key.to_string().into()),
+            // hash,
         }
     }
 }
@@ -401,7 +401,6 @@ impl<'script> KnownKey<'script> {
 mod tests {
     #![allow(clippy::unnecessary_operation, clippy::non_ascii_literal)]
     use super::*;
-    use beef::Cow;
     use value_trait::Builder;
 
     #[test]
