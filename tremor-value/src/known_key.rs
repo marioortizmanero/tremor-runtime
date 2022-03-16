@@ -24,8 +24,7 @@ use abi_stable::std_types::{RCowStr, RHashMap};
 #[derive(Debug, Clone, PartialEq)]
 pub struct KnownKey<'key> {
     key: RCowStr<'key>,
-    // FIXME: temporarily removed to enable PDK support
-    // hash: u64,
+    hash: u64,
 }
 
 /// Error for known keys
@@ -47,24 +46,22 @@ impl std::error::Error for Error {}
 
 impl<'key> From<RCowStr<'key>> for KnownKey<'key> {
     fn from(key: RCowStr<'key>) -> Self {
-        // FIXME: temporarily removed to enable PDK support
-        // let hash_builder = halfbrown::DefaultHashBuilder::default();
-        // let mut hasher = hash_builder.build_hasher();
-        // key.hash(&mut hasher);
+        let hash_builder = halfbrown::DefaultHashBuilder::default();
+        let mut hasher = hash_builder.build_hasher();
+        key.hash(&mut hasher);
         Self {
-            // hash: hasher.finish(),
+            hash: hasher.finish(),
             key,
         }
     }
 }
 impl<'key> From<beef::Cow<'key, str>> for KnownKey<'key> {
     fn from(key: beef::Cow<'key, str>) -> Self {
-        // FIXME: temporarily removed to enable PDK support
-        // let hash_builder = halfbrown::DefaultHashBuilder::default();
-        // let mut hasher = hash_builder.build_hasher();
-        // key.hash(&mut hasher);
+        let hash_builder = halfbrown::DefaultHashBuilder::default();
+        let mut hasher = hash_builder.build_hasher();
+        key.hash(&mut hasher);
         Self {
-            // hash: hasher.finish(),
+            hash: hasher.finish(),
             key: cow_beef_to_sabi(key),
         }
     }
@@ -122,11 +119,9 @@ impl<'key> KnownKey<'key> {
     where
         'key: 'target,
     {
-        // FIXME: temporarily removed to enable PDK support
-        // map.raw_entry()
-        //     .from_key_hashed_nocheck(self.hash, self.key())
-        //     .map(|kv| kv.1)
-        map.get(self.key())
+        map.raw_entry()
+            .from_key_hashed_nocheck(self.hash, self.key())
+            .map(|kv| kv.1)
     }
 
     /// Looks up this key in a `Value`, returns None if the
