@@ -283,6 +283,7 @@ impl RawSource for Blaster {
                 port: RNone,
                 codec_overwrite: RNone,
             })
+        }
     }
 
     fn is_transactional(&self) -> bool {

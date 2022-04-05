@@ -14,7 +14,10 @@
 
 //! Tremor script scripting language
 
-#![deny(missing_docs)]
+// TODO: turn back on
+// #![deny(missing_docs)]
+// TODO: remove allow
+#![allow(unused)]
 #![recursion_limit = "1024"]
 #![deny(
     clippy::all,

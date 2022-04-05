@@ -105,7 +105,11 @@ impl ChannelSourceRuntime {
             }
             if reader.on_done(stream).await == StreamDone::ConnectorClosed {
                 ctx.swallow_err(
-                    ctx.notifier().connection_lost().await.map_err(Into::into).into(),
+                    ctx.notifier()
+                        .connection_lost()
+                        .await
+                        .map_err(Into::into)
+                        .into(),
                     "Failed to notify connector",
                 );
             }

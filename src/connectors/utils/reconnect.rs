@@ -137,14 +137,9 @@ impl ReconnectStrategy for RetryWithBackoff {
 }
 
 /// describing the number of previous connection attempts
-<<<<<<< HEAD
-#[derive(Debug, Default, PartialEq, Eq, Clone)]
-pub(crate) struct Attempt {
-=======
 #[repr(C)]
 #[derive(Debug, Default, PartialEq, Eq, StableAbi, Clone)]
 pub struct Attempt {
->>>>>>> 4ba44d6de (Many small improvements and cleaning up)
     overall: u64,
     success: u64,
     since_last_success: u64,
@@ -210,11 +205,7 @@ pub(crate) struct ConnectionLostNotifier(Sender<Msg>);
 
 impl ConnectionLostNotifier {
     /// constructor
-<<<<<<< HEAD
-    pub(crate) fn new(tx: Sender<Msg>) -> Self {
-=======
     pub fn new(tx: Sender<Msg>) -> Self {
->>>>>>> 4ba44d6de (Many small improvements and cleaning up)
         Self(tx)
     }
 }
@@ -226,14 +217,7 @@ impl ConnectionLostNotifier {
 #[abi_stable::sabi_trait]
 pub trait ConnectionLostNotifierOpaque: Clone + Send + Sync {
     /// notify the runtime that this connector lost its connection
-<<<<<<< HEAD
-    pub(crate) async fn connection_lost(&self) -> Result<()> {
-        self.0.send(Msg::ConnectionLost).await?;
-        Ok(())
-    }
-}
-=======
-    fn notify(&self) -> BorrowingFfiFuture<'_, RResult<()>>;
+    fn connection_lost(&self) -> BorrowingFfiFuture<'_, RResult<()>>;
 }
 impl ConnectionLostNotifierOpaque for ConnectionLostNotifier {
     fn notify(&self) -> BorrowingFfiFuture<'_, RResult<()>> {
@@ -249,7 +233,6 @@ impl ConnectionLostNotifierOpaque for ConnectionLostNotifier {
 }
 /// Alias for the FFI-safe notifier, boxed
 pub type BoxedConnectionLostNotifier = ConnectionLostNotifierOpaque_TO<'static, RBox<()>>;
->>>>>>> 4ba44d6de (Many small improvements and cleaning up)
 
 impl ReconnectRuntime {
     pub(crate) fn notifier(&self) -> BoxedConnectionLostNotifier {
@@ -420,13 +403,6 @@ impl ReconnectRuntime {
 
 #[cfg(test)]
 mod tests {
-<<<<<<< HEAD
-=======
-    // use crate::connectors::quiescence::QuiescenceBeacon;
-
-    use crate::connectors::{quiescence::QuiescenceBeacon, CodecReq};
-
->>>>>>> 4ba44d6de (Many small improvements and cleaning up)
     use super::*;
     use crate::connectors::{utils::quiescence::QuiescenceBeacon, CodecReq};
 
@@ -446,12 +422,6 @@ mod tests {
     struct FakeConnector {
         answer: Option<bool>,
     }
-<<<<<<< HEAD
-    #[async_trait::async_trait]
-    impl Connector for FakeConnector {
-        async fn connect(&mut self, _ctx: &ConnectorContext, _attempt: &Attempt) -> Result<bool> {
-            self.answer.ok_or("Blergh!".into())
-=======
     impl RawConnector for FakeConnector {
         fn connect<'a>(
             &'a mut self,
@@ -464,7 +434,6 @@ mod tests {
                     .into(),
             )
             .into_ffi()
->>>>>>> 4ba44d6de (Many small improvements and cleaning up)
         }
 
         fn codec_requirements(&self) -> CodecReq {
@@ -535,12 +504,7 @@ mod tests {
         ));
         let qb = BoxedQuiescenceBeacon::from_value(QuiescenceBeacon::default(), TD_Opaque);
         let ctx = ConnectorContext {
-<<<<<<< HEAD
             alias,
-=======
-            uid: 1,
-            alias: alias.into(),
->>>>>>> 4ba44d6de (Many small improvements and cleaning up)
             connector_type: "fake".into(),
             quiescence_beacon: qb,
             notifier: runtime.notifier(),
@@ -583,12 +547,7 @@ mod tests {
         ));
         let qb = BoxedQuiescenceBeacon::from_value(QuiescenceBeacon::default(), TD_Opaque);
         let ctx = ConnectorContext {
-<<<<<<< HEAD
             alias,
-=======
-            uid: 1,
-            alias: alias.into(),
->>>>>>> 4ba44d6de (Many small improvements and cleaning up)
             connector_type: "fake".into(),
             quiescence_beacon: qb,
             notifier: runtime.notifier(),

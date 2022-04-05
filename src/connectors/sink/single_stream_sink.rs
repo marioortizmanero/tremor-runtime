@@ -151,7 +151,9 @@ impl SingleStreamSinkRuntime {
             }
             let error = match writer.on_done(stream).await {
                 Err(e) => RSome(e),
-                Ok(StreamDone::ConnectorClosed) => ctx.notifier.connection_lost().await.err().map(Error::from),
+                Ok(StreamDone::ConnectorClosed) => {
+                    ctx.notifier.connection_lost().await.err().map(Error::from)
+                }
                 Ok(_) => RNone,
             };
             if let Some(e) = error {

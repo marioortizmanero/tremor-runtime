@@ -929,20 +929,20 @@ fn patch_value<'run, 'event>(
             } => {
                 let cow = cow_beef_to_sabi(cow);
                 match obj.get_mut(&cow) {
-                Some(value @ Value::Object(_)) => {
-                    stry!(merge_values(patch_expr, expr, value, &mvalue));
-                }
-                Some(other) => {
-                    let key = cow.to_string();
-                    return error_patch_merge_type_conflict(patch_expr, mid, key, other);
-                }
-                None => {
-                    let mut new_value = Value::object();
-                    stry!(merge_values(patch_expr, expr, &mut new_value, &mvalue));
-                    obj.insert(cow, new_value);
+                    Some(value @ Value::Object(_)) => {
+                        stry!(merge_values(patch_expr, expr, value, &mvalue));
+                    }
+                    Some(other) => {
+                        let key = cow.to_string();
+                        return error_patch_merge_type_conflict(patch_expr, mid, key, other);
+                    }
+                    None => {
+                        let mut new_value = Value::object();
+                        stry!(merge_values(patch_expr, expr, &mut new_value, &mvalue));
+                        obj.insert(cow, new_value);
+                    }
                 }
             }
-            },
             MergeRecord { mvalue, .. } => {
                 stry!(merge_values(patch_expr, expr, target, &mvalue));
             }

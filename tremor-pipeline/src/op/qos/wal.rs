@@ -223,10 +223,10 @@ impl Wal {
             broken: true,
             full: false,
             origin_uri: Some(EventOriginUri {
-                scheme: Self::URI_SCHEME.to_string(),
-                host: "pipeline".to_string(),
-                port: None,
-                path: vec![id],
+                scheme: RString::from(Self::URI_SCHEME),
+                host: RString::from("pipeline"),
+                port: RNone,
+                path: rvec![RString::from(id)],
             }),
         })
     }

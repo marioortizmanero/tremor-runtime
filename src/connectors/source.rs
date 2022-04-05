@@ -102,19 +102,19 @@ pub enum SourceReply {
         /// origin uri
         origin_uri: EventOriginUri,
         /// the data
-        data: Vec<u8>,
+        data: RVec<u8>,
         /// metadata associated with this data
         meta: ROption<Value<'static>>,
         /// stream id of the data
         /// if no stream is provided, this data is treated as a discrete unit,
         /// not part of any stream. preprocessors will be finalized after this etc.
         /// The event_id will have the `DEFAULT_STREAM_ID` set as stream_id.
-        stream: Option<u64>,
+        stream: ROption<u64>,
         /// Port to send to, defaults to `out`
         port: ROption<RCowStr<'static>>,
         /// Overwrite the codec being used for deserializing this data.
         /// Should only be used when setting `stream` to `None`
-        codec_overwrite: Option<Box<dyn Codec>>,
+        codec_overwrite: ROption<RBox<dyn Codec>>,
     },
     /// an already structured event payload
     Structured {
@@ -126,7 +126,6 @@ pub enum SourceReply {
         stream: u64,
         /// Port to send to, defaults to `out`
         port: ROption<RCowStr<'static>>,
-    },
     },
     /// A stream is closed
     /// This might result in additional events being flushed from
@@ -151,8 +150,8 @@ pub enum SourceReply {
 pub type SourceReplySender = Sender<SourceReply>;
 
 /// source part of a connector
-#[async_trait::async_trait]
-pub(crate) trait Source: Send {
+#[abi_stable::sabi_trait]
+pub trait RawSource: Send {
     /// Pulls an event from the source if one exists
     /// the `pull_id` identifies the number of the call to `pull_data` and is passed in so
     /// sources can keep track of which event stems from which call of `pull_data` and so can

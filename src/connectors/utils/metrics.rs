@@ -55,10 +55,18 @@ impl SourceReporter {
     pub(crate) fn periodic_flush(&mut self, timestamp: u64) -> Option<u64> {
         if let Some(interval) = self.flush_interval_ns {
             if timestamp >= self.last_flush_ns + interval {
-                let payload_out =
-                    make_event_count_metrics_payload(timestamp, Cow::from(OUT), self.metrics_out, &self.alias);
-                let payload_err =
-                    make_event_count_metrics_payload(timestamp, Cow::from(ERR), self.metrics_err, &self.alias);
+                let payload_out = make_event_count_metrics_payload(
+                    timestamp,
+                    Cow::from(OUT),
+                    self.metrics_out,
+                    &self.alias,
+                );
+                let payload_err = make_event_count_metrics_payload(
+                    timestamp,
+                    Cow::from(ERR),
+                    self.metrics_err,
+                    &self.alias,
+                );
                 send(&self.tx, payload_out, &self.alias);
                 send(&self.tx, payload_err, &self.alias);
                 self.last_flush_ns = timestamp;
@@ -103,8 +111,12 @@ impl SinkReporter {
     pub(crate) fn periodic_flush(&mut self, timestamp: u64) -> Option<u64> {
         if let Some(interval) = self.flush_interval_ns {
             if timestamp >= self.last_flush_ns + interval {
-                let payload =
-                    make_event_count_metrics_payload(timestamp, Cow::from(IN), self.metrics_in, &self.alias);
+                let payload = make_event_count_metrics_payload(
+                    timestamp,
+                    Cow::from(IN),
+                    self.metrics_in,
+                    &self.alias,
+                );
                 send(&self.tx, payload, &self.alias);
                 self.last_flush_ns = timestamp;
                 return Some(timestamp);

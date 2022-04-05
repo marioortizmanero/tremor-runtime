@@ -115,10 +115,7 @@ fn connector_type() -> ConnectorType {
 }
 
 #[sabi_extern_fn]
-pub fn from_config(
-    id: RString,
-    config: ConnectorConfig,
-) -> FfiFuture<RResult<BoxedRawConnector>> {
+pub fn from_config(id: RString, config: ConnectorConfig) -> FfiFuture<RResult<BoxedRawConnector>> {
     async move {
         if let RSome(raw_config) = config.config {
             let config = ttry!(Config::new(&raw_config.into()));
@@ -274,15 +271,14 @@ impl RawSource for FileSource {
                 self.reader = Some(Box::new(XzDecoder::new(BufReader::new(read_file.clone()))));
                 self.underlying_file = Some(read_file);
             } else {
-                    SourceReply::Data {
-                        origin_uri: self.origin_uri.clone(),
-                        stream: RSome(DEFAULT_STREAM_ID),
-                        meta: RSome(self.meta.clone()),
-                        // ALLOW: with the read above we ensure that this access is valid, unless async_std is broken
-                        data: RVec::from(self.buf[0..bytes_read]),
-                        port: RSome(OUT),
-                        codec_overwrite: RNone,
-                    }
+                SourceReply::Data {
+                    origin_uri: self.origin_uri.clone(),
+                    stream: RSome(DEFAULT_STREAM_ID),
+                    meta: RSome(self.meta.clone()),
+                    // ALLOW: with the read above we ensure that this access is valid, unless async_std is broken
+                    data: RVec::from(self.buf[0..bytes_read]),
+                    port: RSome(OUT),
+                    codec_overwrite: RNone,
                 }
             };
             ROk(reply)

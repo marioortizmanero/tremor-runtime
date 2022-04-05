@@ -78,7 +78,7 @@ serde = "1"
 serde_derive = "1"
 serde_yaml = "0.8"
 simd-json = { version = "0.4", features = ["known-key"] }
-simd-json-derive = "0.2"
+simd-json-derive = { version = "0.2.3", features = ["impl-abi_stable"] }
 snap = "1"
 
 syslog_loose = "0.16"
@@ -88,7 +88,7 @@ tremor-pipeline = { path = "tremor-pipeline" }
 tremor-script = { path = "tremor-script" }
 tremor-value = { path = "tremor-value" }
 url = "2.2"
-value-trait = "0.2"
+value-trait = { version = "0.2.12", features = ["c-abi"] }
 zstd = "0.11"
 
 mapr = "0.8"
@@ -276,8 +276,7 @@ rust-bert = { git = 'https://github.com/mfelsche/rust-bert.git', rev = '1140989'
 rust_tokenizers = { git = 'https://github.com/mfelsche/rust-tokenizers.git', rev = '5a7860d' }
 # FIXME: update to v0.11 when it's released
 abi_stable = { git = "https://github.com/rodrimati1992/abi_stable_crates.git", branch = "0_11" }
-# FIXME: update to crates.io when this is added to a new version:
-# https://github.com/simd-lite/simd-json-derive/pull/9
+# FIXME: update to v0.2.3 when it's released
 simd-json-derive = { git = "https://github.com/marioortizmanero/simd-json-derive.git", branch = "abi-stable" }
 
 # for use during debian packaging, via cargo-deb

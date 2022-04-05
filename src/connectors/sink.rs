@@ -151,8 +151,8 @@ pub(crate) enum AsyncSinkReply {
 }
 
 /// connector sink - receiving events
-#[async_trait::async_trait]
-pub(crate) trait Sink: Send {
+#[abi_stable::sabi_trait]
+pub trait RawSink: Send {
     /// called when receiving an event
     fn on_event<'a>(
         &'a mut self,

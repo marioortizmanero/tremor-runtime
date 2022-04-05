@@ -111,7 +111,7 @@ impl<'de> de::Deserializer<'de> for Value<'de> {
                     }
                 };
                 // enums are encoded in json as maps with a single key:value pair
-                if let Some((extra, _)) = iter.next() {
+                if let Some(Tuple2(extra, _)) = iter.next() {
                     return Err(Error::Serde(format!(
                         "extra values in enum `{name}`: `{variant}` .. `{extra}`"
                     )));

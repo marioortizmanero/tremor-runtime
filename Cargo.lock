@@ -1896,9 +1896,9 @@ checksum = "a357d28ed41a50f9c765dbfe56cbc04a64e53e5fc58ba79fbc34c10ef3df831f"
 
 [[package]]
 name = "encoding_rs"
-version = "0.8.30"
+version = "0.8.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7896dc8abb250ffdda33912550faa54c88ec8b998dec0b2c55ab224921ce11df"
+checksum = "9852635589dc9f9ea1b6fe9f05b50ef208c85c834a562f0c6abb1c475736ec2b"
 dependencies = [
  "cfg-if 1.0.0",
 ]
@@ -4993,10 +4993,10 @@ dependencies = [
 
 [[package]]
 name = "simd-json-derive"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3221374cc85242d6da1fea48d5b6edb417cf79cf9f6d6c636cd8425161faa096"
+version = "0.2.3"
+source = "git+https://github.com/marioortizmanero/simd-json-derive.git?branch=abi-stable#c52285d800cb00eaef2c7a710c8d9d4cd378be8f"
 dependencies = [
+ "abi_stable",
  "chrono",
  "itoa 0.4.8",
  "ryu",
@@ -5007,9 +5007,8 @@ dependencies = [
 
 [[package]]
 name = "simd-json-derive-int"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "929b468389809e93768ab7962f21aad7911774d472aca6211e332f74824c4635"
+version = "0.2.2-alpha.0"
+source = "git+https://github.com/marioortizmanero/simd-json-derive.git?branch=abi-stable#c52285d800cb00eaef2c7a710c8d9d4cd378be8f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6519,6 +6518,7 @@ version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fe40a74a6f052b10668ef021c8c3ae56ab38269f9c0f401daa6ed36f96662fd"
 dependencies = [
+ "abi_stable",
  "float-cmp",
  "halfbrown",
  "itoa 0.4.8",
@@ -7011,8 +7011,3 @@ dependencies = [
  "cc",
  "libc",
 ]
-
-[[patch.unused]]
-name = "simd-json-derive"
-version = "0.2.3-alpha.0"
-source = "git+https://github.com/marioortizmanero/simd-json-derive.git?branch=abi-stable#4519e1a591c610ea0b764280f4b99b258d845f1c"

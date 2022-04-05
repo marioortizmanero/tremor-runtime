@@ -440,7 +440,13 @@ pub(crate) async fn spawn(
     let connector = Result::from(connector.map_err(Error::from))?;
     let connector = Connector(connector);
 
-    Ok(connector_task(alias.to_string(), connector, config, connector_id_gen.next_id()).await?)
+    Ok(connector_task(
+        alias.to_string(),
+        connector,
+        config,
+        connector_id_gen.next_id(),
+    )
+    .await?)
 }
 
 #[allow(clippy::too_many_lines)]
@@ -1005,9 +1011,8 @@ const OUT_PORTS_REF: &[Cow<'static, str>; 2] = &OUT_PORTS;
 /// It is a meta entity on top of the sink and source part.
 /// The connector has its own control plane and is an artefact in the tremor repository.
 /// It controls the sink and source parts which are connected to the rest of the runtime via links to pipelines.
-
-#[async_trait::async_trait]
-pub(crate) trait Connector: Send {
+#[abi_stable::sabi_trait]
+pub trait RawConnector: Send {
     /// Valid input ports for the connector, by default this is `in`
     fn input_ports(&self) -> RVec<RCowStr<'static>> {
         IN_PORTS_REF

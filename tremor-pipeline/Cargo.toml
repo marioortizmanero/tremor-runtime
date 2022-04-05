@@ -26,13 +26,13 @@ serde = "1"
 serde_derive = "1"
 serde_yaml = "0.8"
 simd-json = { version = "0.4", features = ["known-key"] }
-simd-json-derive = "0.2"
+simd-json-derive = { version = "0.2.3", features = ["impl-abi_stable"] }
 sled = "0.34"
 tremor-common = { path = "../tremor-common" }
 tremor-script = { path = "../tremor-script" }
 tremor-value = { path = "../tremor-value" }
 url = "2.2.2"
-value-trait = "0.2"
+value-trait = { version = "0.2.12", features = ["c-abi"] }
 window = { git = "https://github.com/tremor-rs/window.git", tag = "v0.1.1" }
 
 [dev-dependencies]

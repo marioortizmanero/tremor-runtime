@@ -20,7 +20,6 @@ use crate::{
     ast::{visitors::IsConstFn, Expr, Exprs, FnDefn, ImutExpr, ImutExprs, NodeMeta},
     NO_AGGRS,
 };
-use beef::Cow;
 
 use abi_stable::{rstr, std_types::RCow};
 
