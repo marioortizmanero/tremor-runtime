@@ -71,6 +71,16 @@ pub struct TcpServer {
     sink_rx: Receiver<ChannelSinkMsg<ConnectionMeta>>,
 }
 
+/// Note that since it's a built-in plugin, `#[export_root_module]` can't be
+/// used or it would conflict with other plugins.
+pub fn instantiate_root_module() -> ConnectorMod_Ref {
+    ConnectorMod {
+        connector_type,
+        from_config,
+    }
+    .leak_into_prefix()
+}
+
 #[sabi_extern_fn]
 pub fn connector_type() -> ConnectorType {
     "tcp_server".into()

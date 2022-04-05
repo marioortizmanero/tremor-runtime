@@ -33,7 +33,7 @@ use tremor_pipeline::{CbAction, Event, SignalKind};
 use tremor_value::Value;
 use value_trait::ValueAccess;
 
-use crate::errors::{Kind as ErrorKind, Result};
+use crate::errors::{Kind as ErrorKind};
 use crate::pdk::RResult;
 use abi_stable::{
     rtry,
@@ -43,7 +43,7 @@ use abi_stable::{
         RStr,
     },
 };
-use async_ffi::{BorrowingFfiFuture, FutureExt};
+use async_ffi::{BorrowingFfiFuture, FutureExt as FfiFutureExt};
 use std::future;
 
 /// Behavioral trait for defining if a Channel Sink needs metadata or not

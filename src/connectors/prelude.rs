@@ -12,34 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(crate) use crate::connectors::sink::{
+pub use crate::connectors::sink::{
     AsyncSinkReply, ChannelSink, ChannelSinkRuntime, ContraflowData, EventSerializer,
-    SingleStreamSink, SingleStreamSinkRuntime, Sink, SinkAck, SinkAddr, SinkContext,
+    SingleStreamSink, SingleStreamSinkRuntime, SinkAck, SinkAddr, SinkContext,
     SinkManagerBuilder, SinkMeta, SinkReply, SinkRuntime, StreamWriter,
 };
 
-pub(crate) use crate::connectors::source::{
-    ChannelSource, ChannelSourceRuntime, Source, SourceAddr, SourceContext, SourceManagerBuilder,
+pub use crate::connectors::source::{
+    ChannelSource, ChannelSourceRuntime, SourceAddr, SourceContext, SourceManagerBuilder,
     SourceReply, StreamReader, DEFAULT_POLL_INTERVAL,
 };
-pub(crate) use crate::connectors::utils::{
+pub use crate::connectors::utils::{
     reconnect::Attempt,
     url::{Defaults, Url},
 };
-pub(crate) use crate::connectors::{
-    spawn_task, CodecReq, Connector, ConnectorBuilder, ConnectorContext, ConnectorType, Context,
+pub use crate::connectors::{
+    spawn_task, CodecReq, ConnectorBuilder, ConnectorContext, ConnectorType, Context,
     StreamDone, StreamIdGen, ACCEPT_TIMEOUT,
 };
-pub(crate) use crate::errors::{Error, Kind as ErrorKind, Result};
-pub(crate) use crate::utils::hostname;
-pub(crate) use crate::{Event, QSIZE};
-pub(crate) use std::sync::atomic::Ordering;
-pub(crate) use tremor_common::ports::{ERR, IN, OUT};
+pub use crate::errors::{Error, Kind as ErrorKind, Result};
+pub use crate::utils::hostname;
+pub use crate::{Event, QSIZE};
+pub use std::sync::atomic::Ordering;
+pub use tremor_common::ports::{ERR, IN, OUT};
 pub use tremor_pipeline::{
     CbAction, ConfigImpl, EventIdGenerator, EventOriginUri, DEFAULT_STREAM_ID,
 };
 
-pub(crate) use tremor_script::prelude::*;
+pub use tremor_script::prelude::*;
 /// default buf size used for reading from files and streams (sockets etc)
 ///
 /// equals default chunk size for `BufReader`
@@ -50,7 +50,7 @@ pub(crate) fn default_buf_size() -> usize {
 }
 
 /// Encapsulates connector configuration
-pub(crate) use crate::connectors::ConnectorConfig;
+pub use crate::connectors::ConnectorConfig;
 
 /// For the PDK
 pub(crate) use crate::connectors::{sink::Sink, source::Source, Connector};
