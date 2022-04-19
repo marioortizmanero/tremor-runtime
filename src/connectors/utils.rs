@@ -59,7 +59,7 @@ pub(crate) mod url {
         static ref URL_SCHEME_REGEX: Regex = Regex::new("^[A-Za-z-]+://").expect("Invalid Regex");
     }
 
-    pub(crate) trait Defaults {
+    pub trait Defaults {
         /// Default scheme
         const SCHEME: &'static str;
         /// Default host
@@ -83,7 +83,7 @@ pub(crate) mod url {
     }
     /// Endpoint URL
     #[derive(Serialize)]
-    pub(crate) struct Url<D: Defaults = HttpDefaults> {
+    pub struct Url<D: Defaults = HttpDefaults> {
         url: url::Url,
         #[serde(skip)]
         _marker: PhantomData<D>,

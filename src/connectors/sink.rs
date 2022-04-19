@@ -67,7 +67,7 @@ use std::future;
 ///
 /// A response is an event generated from the sink delivery.
 #[derive(Clone, Debug, Default, Copy, PartialEq)]
-pub(crate) struct SinkReply {
+pub struct SinkReply {
     /// guaranteed delivery response - did we sent the event successfully `SinkAck::Ack` or did it fail `SinkAck::Fail`
     pub(crate) ack: SinkAck,
     /// circuit breaker action
@@ -115,7 +115,7 @@ impl SinkReply {
 /// stuff a sink replies back upon an event or a signal
 /// to the calling sink/connector manager
 #[derive(Clone, Debug, Copy, PartialEq)]
-pub(crate) enum SinkAck {
+pub enum SinkAck {
     /// no reply - maybe no reply yet, maybe replies come asynchronously...
     None,
     /// everything went smoothly, chill
@@ -141,7 +141,7 @@ impl From<bool> for SinkAck {
 }
 
 /// Possible replies from asynchronous sinks via `reply_channel` from event or signal handling
-pub(crate) enum AsyncSinkReply {
+pub enum AsyncSinkReply {
     /// success
     Ack(ContraflowData, u64),
     /// failure
@@ -373,7 +373,7 @@ impl Sink {
 
 /// handles writing to 1 stream (e.g. file or TCP connection)
 #[async_trait::async_trait]
-pub(crate) trait StreamWriter: Send + Sync {
+pub trait StreamWriter: Send + Sync {
     /// write the given data out to the stream
     async fn write(&mut self, data: Vec<Vec<u8>>, meta: Option<SinkMeta>) -> Result<()>;
     /// handle the stream being done, by error or regular end of stream
@@ -570,7 +570,7 @@ pub(crate) fn builder(
 ///
 /// Keeps track of codec/postprocessors for seach stream
 /// Attention: Take care to clear out data for streams that are not used
-pub(crate) struct EventSerializer {
+pub struct EventSerializer {
     alias: String,
     // default stream handling
     pub(crate) codec: Box<dyn Codec>,
@@ -755,11 +755,8 @@ impl std::fmt::Display for SinkState {
     }
 }
 
-pub(crate) struct SinkManager<S>
-where
-    S: Sink,
-{
-    sink: S,
+pub(crate) struct SinkManager {
+    sink: Sink,
     ctx: SinkContext,
     rx: Receiver<SinkMsg>,
     reply_rx: Receiver<AsyncSinkReply>,
@@ -1065,7 +1062,7 @@ impl SinkManager {
 
 #[derive(Clone, Debug)]
 /// basic data to build contraflow messages
-pub(crate) struct ContraflowData {
+pub struct ContraflowData {
     event_id: EventId,
     ingest_ns: u64,
     op_meta: OpMeta,

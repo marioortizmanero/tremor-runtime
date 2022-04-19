@@ -28,7 +28,7 @@ use std::fmt::Display;
 use std::time::Duration;
 
 use crate::pdk::{RError, RResult};
-use abi_stable::{std_types::RBox, StableAbi};
+use abi_stable::{std_types::RBox, StableAbi, type_level::downcasting::TD_Opaque};
 use async_ffi::{BorrowingFfiFuture, FutureExt as AsyncFfiFutureExt};
 
 #[derive(Debug, PartialEq, Clone)]
@@ -220,7 +220,7 @@ pub trait ConnectionLostNotifierOpaque: Clone + Send + Sync {
     fn connection_lost(&self) -> BorrowingFfiFuture<'_, RResult<()>>;
 }
 impl ConnectionLostNotifierOpaque for ConnectionLostNotifier {
-    fn notify(&self) -> BorrowingFfiFuture<'_, RResult<()>> {
+    fn connection_lost(&self) -> BorrowingFfiFuture<'_, RResult<()>> {
         async move {
             self.0
                 .send(Msg::ConnectionLost)
@@ -288,7 +288,7 @@ impl ReconnectRuntime {
     /// asynchronously and send a `connector::Msg::Reconnect` to the connector identified by `addr`.
     pub(crate) async fn attempt(
         &mut self,
-        connector: &mut dyn Connector,
+        connector: &mut Connector,
         ctx: &ConnectorContext,
     ) -> Result<(Connectivity, bool)> {
         let (tx, rx) = bounded(2);

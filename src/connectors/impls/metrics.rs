@@ -148,7 +148,7 @@ impl RawSource for MetricsSource {
         _pull_id: &'a mut u64,
         _ctx: &'a SourceContext,
     ) -> BorrowingFfiFuture<'a, RResult<SourceReply>> {
-        match self.rx.try_recv() {
+        let reply = match self.rx.try_recv() {
             Ok(msg) => ROk(SourceReply::Structured {
                 payload: msg.payload,
                 origin_uri: msg.origin_uri.unwrap_or_else(|| self.origin_uri.clone()),

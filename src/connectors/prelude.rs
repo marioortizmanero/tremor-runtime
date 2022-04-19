@@ -27,7 +27,7 @@ pub use crate::connectors::utils::{
     url::{Defaults, Url},
 };
 pub use crate::connectors::{
-    spawn_task, CodecReq, ConnectorBuilder, ConnectorContext, ConnectorType, Context,
+    spawn_task, CodecReq, ConnectorContext, ConnectorType, Context,
     StreamDone, StreamIdGen, ACCEPT_TIMEOUT,
 };
 pub use crate::errors::{Error, Kind as ErrorKind, Result};
@@ -56,13 +56,15 @@ pub use crate::connectors::ConnectorConfig;
 pub(crate) use crate::connectors::{sink::Sink, source::Source, Connector};
 pub use crate::{
     connectors::{
-        quiescence::BoxedQuiescenceBeacon,
         sink::{
             BoxedContraflowSender, BoxedEventSerializer, BoxedRawSink, ContraflowSenderOpaque,
             EventSerializerOpaque, MutEventSerializer, RawSink,
         },
         source::{BoxedRawSource, RawSource},
-        utils::reconnect::BoxedConnectionLostNotifier,
+        utils::{
+            quiescence::BoxedQuiescenceBeacon,
+            reconnect::BoxedConnectionLostNotifier
+        },
         BoxedRawConnector, RawConnector,
     },
     pdk::{

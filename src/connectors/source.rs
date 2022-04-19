@@ -292,6 +292,10 @@ pub trait RawSource: Send {
     /// and quiescence correctly.
     fn asynchronous(&self) -> bool;
 }
+
+/// Alias for the FFI-safe dynamic source type
+pub type BoxedRawSource = RawSource_TO<'static, RBox<()>>;
+
 /// Source part of a connector.
 ///
 /// Just like `Connector`, this wraps the FFI dynamic source with `abi_stable`
@@ -435,7 +439,7 @@ impl Source {
 
 ///
 #[async_trait::async_trait]
-pub(crate) trait StreamReader: Send {
+pub trait StreamReader: Send {
     /// reads from the source reader
     async fn read(&mut self, stream: u64) -> Result<SourceReply>;
 
@@ -449,7 +453,7 @@ pub(crate) trait StreamReader: Send {
 // TODO make fields private and add some nice methods
 /// context for a source
 #[derive(Clone)]
-pub(crate) struct SourceContext {
+pub struct SourceContext {
     /// connector uid
     pub uid: u64,
     /// connector alias
@@ -490,7 +494,7 @@ impl Context for SourceContext {
 
 /// address of a source
 #[derive(Clone, Debug)]
-pub(crate) struct SourceAddr {
+pub struct SourceAddr {
     /// the actual address
     pub addr: Sender<SourceMsg>,
 }
@@ -733,11 +737,8 @@ fn conv_cow_str<'a>(cow: RCowStr<'a>) -> beef::Cow<'a, str> {
 
 /// entity driving the source task
 /// and keeping the source state around
-pub(crate) struct SourceManager<S>
-where
-    S: Source,
-{
-    source: S,
+pub(crate) struct SourceManager {
+    source: Source,
     ctx: SourceContext,
     rx: Receiver<SourceMsg>,
     addr: SourceAddr,

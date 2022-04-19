@@ -35,7 +35,7 @@ use rustls::ServerConfig;
 use simd_json::ValueAccess;
 use std::sync::Arc;
 
-use crate::pdk::RError;
+use crate::{pdk::RError, ttry};
 use abi_stable::{
     export_root_module,
     prefix_type::PrefixTypeTrait,
@@ -131,20 +131,19 @@ fn resolve_connection_meta(meta: &Value) -> Option<ConnectionMeta> {
         })
 }
 
-#[async_trait::async_trait()]
-impl Connector for TcpServer {
-    async fn create_source(
+impl RawConnector for TcpServer {
+    fn create_source(
         &mut self,
-        ctx: SourceContext,
-        builder: SourceManagerBuilder,
-    ) -> Result<Option<SourceAddr>> {
+        _source_context: SourceContext,
+        _qsize: usize,
+    ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSource>>> {
         let sink_runtime = ChannelSinkRuntime::new(self.sink_tx.clone());
         let source = TcpServerSource::new(
             self.config.clone(),
             self.tls_server_config.clone(),
             sink_runtime,
         );
-        builder.spawn(source, ctx).map(Some)
+        BoxedRawSource::from_value(source, TD_Opaque)
     }
 
     async fn create_sink(
@@ -159,7 +158,7 @@ impl Connector for TcpServer {
             self.sink_tx.clone(),
             self.sink_rx.clone(),
         );
-        builder.spawn(sink, ctx).map(Some)
+        BoxedRawSink::from_value(sink, TD_Opaque)
     }
 
     fn codec_requirements(&self) -> CodecReq {
@@ -197,126 +196,140 @@ impl TcpServerSource {
 #[async_trait::async_trait()]
 impl Source for TcpServerSource {
     #[allow(clippy::too_many_lines)]
-    async fn connect(&mut self, ctx: &SourceContext, _attempt: &Attempt) -> Result<bool> {
-        let path = vec![self.config.url.port_or_dflt().to_string()];
-        let accept_ctx = ctx.clone();
-        let buf_size = self.config.buf_size;
+    fn connect<'a>(
+        &'a mut self,
+        ctx: &'a SourceContext,
+        _attempt: &'a Attempt,
+    ) -> BorrowingFfiFuture<'a, RResult<bool>> {
+        async move {
+            let path = rvec![RString::from(self.config.url.port_or_dflt().to_string())];
+            let accept_ctx = ctx.clone();
+            let buf_size = self.config.buf_size;
 
-        // cancel last accept task if necessary, this will drop the previous listener
-        if let Some(previous_handle) = self.accept_task.take() {
-            previous_handle.cancel().await;
-        }
-
-        let host = self.config.url.host_or_local();
-        let port = self.config.url.port_or_dflt();
-
-        let listener = TcpListener::bind((host, port)).await?;
-
-        let ctx = ctx.clone();
-        let tls_server_config = self.tls_server_config.clone();
-
-        let runtime = self.runtime.clone();
-        let sink_runtime = self.sink_runtime.clone();
-        // accept task
-        self.accept_task = Some(spawn_task(ctx.clone(), async move {
-            let mut stream_id_gen = StreamIdGen::default();
-
-            while ctx.quiescence_beacon().continue_reading().await {
-                match listener.accept().timeout(ACCEPT_TIMEOUT).await {
-                    Ok(Ok((stream, peer_addr))) => {
-                        debug!("{} new connection from {}", &accept_ctx, peer_addr);
-                        let stream_id: u64 = stream_id_gen.next_stream_id();
-                        let connection_meta: ConnectionMeta = peer_addr.into();
-                        // Async<T> allows us to read in one thread and write in another concurrently - see its documentation
-                        // So we don't need no BiLock like we would when using `.split()`
-                        let origin_uri = EventOriginUri {
-                            scheme: URL_SCHEME.to_string(),
-                            host: peer_addr.ip().to_string(),
-                            port: Some(peer_addr.port()),
-                            path: path.clone(), // captures server port
-                        };
-
-                        let tls_acceptor: Option<TlsAcceptor> = tls_server_config
-                            .clone()
-                            .map(|sc| TlsAcceptor::from(Arc::new(sc)));
-                        if let Some(acceptor) = tls_acceptor {
-                            let tls_stream = acceptor.accept(stream.clone()).await?;
-                            let (tls_read_stream, tls_write_sink) = tls_stream.split();
-                            let meta = ctx.meta(literal!({
-                                "tls": true,
-                                "peer": {
-                                    "host": peer_addr.ip().to_string(),
-                                    "port": peer_addr.port()
-                                }
-                            }));
-                            let tls_reader = TcpReader::tls_server(
-                                tls_read_stream,
-                                stream.clone(),
-                                vec![0; buf_size],
-                                ctx.alias.clone(),
-                                origin_uri.clone(),
-                                meta,
-                            );
-                            runtime.register_stream_reader(stream_id, &ctx, tls_reader);
-
-                            sink_runtime.register_stream_writer(
-                                stream_id,
-                                Some(connection_meta.clone()),
-                                &ctx,
-                                TcpWriter::tls_server(tls_write_sink, stream),
-                            );
-                        } else {
-                            let meta = ctx.meta(literal!({
-                                "tls": false,
-                                "peer": {
-                                    "host": peer_addr.ip().to_string(),
-                                    "port": peer_addr.port()
-                                }
-                            }));
-                            let tcp_reader = TcpReader::new(
-                                stream.clone(),
-                                vec![0; buf_size],
-                                ctx.alias.clone(),
-                                origin_uri.clone(),
-                                meta,
-                            );
-                            runtime.register_stream_reader(stream_id, &ctx, tcp_reader);
-
-                            sink_runtime.register_stream_writer(
-                                stream_id,
-                                Some(connection_meta.clone()),
-                                &ctx,
-                                TcpWriter::new(stream),
-                            );
-                        }
-                    }
-                    Ok(Err(e)) => return Err(e.into()),
-                    Err(_) => continue,
-                };
+            // cancel last accept task if necessary, this will drop the previous listener
+            if let Some(previous_handle) = self.accept_task.take() {
+                previous_handle.cancel().await;
             }
-            Ok(())
-        }));
 
-        Ok(true)
+            let host = self.config.url.host_or_local();
+            let port = self.config.url.port_or_dflt();
+
+            let listener = TcpListener::bind((host, port)).await?;
+
+            let ctx = ctx.clone();
+            let tls_server_config = self.tls_server_config.clone();
+
+            let runtime = self.runtime.clone();
+            let sink_runtime = self.sink_runtime.clone();
+            // accept task
+            self.accept_task = Some(spawn_task(ctx.clone(), async move {
+                let mut stream_id_gen = StreamIdGen::default();
+
+                while ctx.quiescence_beacon().continue_reading().await {
+                    match listener.accept().timeout(ACCEPT_TIMEOUT).await {
+                        Ok(Ok((stream, peer_addr))) => {
+                            debug!("{} new connection from {}", &accept_ctx, peer_addr);
+                            let stream_id: u64 = stream_id_gen.next_stream_id();
+                            let connection_meta: ConnectionMeta = peer_addr.into();
+                            // Async<T> allows us to read in one thread and write in another concurrently - see its documentation
+                            // So we don't need no BiLock like we would when using `.split()`
+                            let origin_uri = EventOriginUri {
+                                scheme: RString::from(URL_SCHEME),
+                                host: peer_addr.ip().to_string(),
+                                port: RSome(peer_addr.port()),
+                                path: path.clone(), // captures server port
+                            };
+
+                            let tls_acceptor: Option<TlsAcceptor> = tls_server_config
+                                .clone()
+                                .map(|sc| TlsAcceptor::from(Arc::new(sc)));
+                            if let Some(acceptor) = tls_acceptor {
+                                let tls_stream = acceptor.accept(stream.clone()).await?;
+                                let (tls_read_stream, tls_write_sink) = tls_stream.split();
+                                let meta = ctx.meta(literal!({
+                                    "tls": true,
+                                    "peer": {
+                                        "host": peer_addr.ip().to_string(),
+                                        "port": peer_addr.port()
+                                    }
+                                }));
+                                let tls_reader = TcpReader::tls_server(
+                                    tls_read_stream,
+                                    stream.clone(),
+                                    vec![0; buf_size],
+                                    ctx.alias.clone(),
+                                    origin_uri.clone(),
+                                    meta,
+                                );
+                                runtime.register_stream_reader(stream_id, &ctx, tls_reader);
+
+                                sink_runtime.register_stream_writer(
+                                    stream_id,
+                                    Some(connection_meta.clone()),
+                                    &ctx,
+                                    TcpWriter::tls_server(tls_write_sink, stream),
+                                );
+                            } else {
+                                let meta = ctx.meta(literal!({
+                                    "tls": false,
+                                    "peer": {
+                                        "host": peer_addr.ip().to_string(),
+                                        "port": peer_addr.port()
+                                    }
+                                }));
+                                let tcp_reader = TcpReader::new(
+                                    stream.clone(),
+                                    vec![0; buf_size],
+                                    ctx.alias.clone(),
+                                    origin_uri.clone(),
+                                    meta,
+                                );
+                                runtime.register_stream_reader(stream_id, &ctx, tcp_reader);
+
+                                sink_runtime.register_stream_writer(
+                                    stream_id,
+                                    Some(connection_meta.clone()),
+                                    &ctx,
+                                    TcpWriter::new(stream),
+                                );
+                            }
+                        }
+                        Ok(Err(e)) => return RErr(RError::new(Error::new(e))),
+                        Err(_) => continue,
+                    };
+                }
+                ROk(())
+            }));
+
+            ROk(true)
+        }.into_ffi()
     }
 
-    async fn pull_data(&mut self, _pull_id: &mut u64, _ctx: &SourceContext) -> Result<SourceReply> {
-        match self.connection_rx.try_recv() {
-            Ok(reply) => Ok(reply),
-            Err(TryRecvError::Empty) => {
-                // TODO: configure pull interval in connector config?
-                Ok(SourceReply::Empty(DEFAULT_POLL_INTERVAL))
+    fn pull_data<'a>(
+        &'a mut self,
+        pull_id: &'a mut u64,
+        ctx: &'a SourceContext,
+    ) -> BorrowingFfiFuture<'a, RResult<SourceReply>> {
+        async move {
+            match self.connection_rx.try_recv() {
+                Ok(reply) => ROk(reply),
+                Err(TryRecvError::Empty) => {
+                    // TODO: configure pull interval in connector config?
+                    ROk(SourceReply::Empty(DEFAULT_POLL_INTERVAL))
+                }
+                Err(e) => RErr(RError::new(Error::from(e))),
             }
-            Err(e) => Err(e.into()),
-        }
+        }.into_ffi()
     }
 
     async fn on_stop(&mut self, _ctx: &SourceContext) -> Result<()> {
-        if let Some(accept_task) = self.accept_task.take() {
-            // stop acceptin' new connections
-            accept_task.cancel().await;
-        }
-        Ok(())
+        async move {
+            if let Some(accept_task) = self.accept_task.take() {
+                // stop acceptin' new connections
+                accept_task.cancel().await;
+            }
+            ROk(())
+        }.into_ffi()
     }
 
     fn is_transactional(&self) -> bool {

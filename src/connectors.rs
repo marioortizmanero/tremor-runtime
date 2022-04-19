@@ -61,7 +61,7 @@ use value_trait::{Builder, Mutable, ValueAccess};
 pub(crate) use utils::{metrics, reconnect};
 
 /// Accept timeout
-pub(crate) const ACCEPT_TIMEOUT: Duration = Duration::from_millis(100);
+pub const ACCEPT_TIMEOUT: Duration = Duration::from_millis(100);
 
 use crate::{
     connectors::prelude::*,
@@ -83,17 +83,6 @@ use abi_stable::{
 };
 use async_ffi::{BorrowingFfiFuture, FutureExt};
 use std::{env, future};
-
-// FIXME: make prettier or avoid duplication in pdk mod? It's a bit out of place
-// for now.
-fn conv_cow_str(cow: RCow<str>) -> beef::Cow<str> {
-    let cow: std::borrow::Cow<str> = cow.into();
-    cow.into()
-}
-// fn conv_value(value: serde_yaml::Value) -> PdkValue<'static> {
-//     let value: Value = value.into();
-//     value.into()
-// }
 
 /// connector address
 #[derive(Clone, Debug)]
@@ -278,7 +267,7 @@ impl ConnectorResult<()> {
 }
 
 /// context for a Connector or its parts
-pub(crate) trait Context: Display + Clone {
+pub trait Context: Display + Clone {
     /// provide the url of the connector
     fn alias(&self) -> &str;
 
@@ -345,7 +334,7 @@ pub(crate) trait Context: Display + Clone {
 
 /// connector context
 #[derive(Clone)]
-pub(crate) struct ConnectorContext {
+pub struct ConnectorContext {
     /// url of the connector
     pub alias: RString,
     /// type of the connector
@@ -395,7 +384,7 @@ pub struct StatusReport {
 
 /// Stream id generator
 #[derive(Debug, Default)]
-pub(crate) struct StreamIdGen(u64);
+pub struct StreamIdGen(u64);
 
 impl StreamIdGen {
     /// get the next stream id and increment the internal state
@@ -411,7 +400,7 @@ impl StreamIdGen {
 /// * `StreamClosed` -> Only this stream is closed
 /// * `ConnectorClosed` -> The entire connector is closed, notify that we are disconnected, reconnect according to chosen reconnect config
 #[derive(Debug, Clone, PartialEq, Copy)]
-pub(crate) enum StreamDone {
+pub enum StreamDone {
     /// Only this stream is closed, (only one of many)
     StreamClosed,
     /// With this stream being closed, the whole connector can be considered done/closed
@@ -420,7 +409,7 @@ pub(crate) enum StreamDone {
 
 /// Lookup table for known connectors
 pub(crate) type Known =
-    std::collections::HashMap<ConnectorType, Box<dyn ConnectorBuilder + 'static>>;
+    std::collections::HashMap<ConnectorType, ConnectorMod_Ref>;
 
 /// Spawns a connector
 ///
@@ -1054,24 +1043,25 @@ pub trait RawConnector: Send {
     ///
     /// This function is called exactly once upon connector creation.
     /// If this connector does not act as a source, return `Ok(None)`.
-    async fn create_source(
+    fn create_source(
         &mut self,
         _source_context: SourceContext,
-        _builder: source::SourceManagerBuilder,
-    ) -> BorrowingFfiFuture<'_, Result<Option<source::SourceAddr>>> {
-        futures::ready(Ok(None)).into_ffi()
+        _qsize: usize,
+    ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSource>>> {
+        future::ready(ROk(RNone)).into_ffi()
     }
 
     /// Create a sink part for this connector if applicable
     ///
     /// This function is called exactly once upon connector creation.
     /// If this connector does not act as a sink, return `Ok(None)`.
-    async fn create_sink(
+    fn create_sink(
         &mut self,
         _sink_context: SinkContext,
-        _builder: sink::SinkManagerBuilder,
-    ) -> Result<Option<sink::SinkAddr>> {
-        Ok(None)
+        _qsize: usize,
+        _reply_tx: BoxedContraflowSender,
+    ) -> BorrowingFfiFuture<'_, RResult<ROption<BoxedRawSink>>> {
+        future::ready(ROk(RNone)).into_ffi()
     }
 
     /// Attempt to connect to the outside world.
@@ -1130,7 +1120,7 @@ pub trait RawConnector: Send {
 
 /// Specifeis if a connector requires a codec
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CodecReq {
+pub enum CodecReq {
     /// No codec can be provided for this connector it always returns structured data
     Structured,
     /// A codec must be provided for this connector
@@ -1371,7 +1361,7 @@ pub(crate) async fn register_builtin_connector_types(world: &World, debug: bool)
 /// Function to spawn an acceptor task in the runtime, this forbids returning Result so
 /// that `?` can't be used in those tasks and silent errors with acceptor tasks dying
 /// are eliminated.
-pub(crate) fn spawn_task<F, C>(ctx: C, t: F) -> JoinHandle<()>
+pub fn spawn_task<F, C>(ctx: C, t: F) -> JoinHandle<()>
 where
     F: Future<Output = Result<()>> + Send + 'static,
     C: Context + Send + 'static,

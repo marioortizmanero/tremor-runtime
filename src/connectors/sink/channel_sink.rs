@@ -83,7 +83,7 @@ where
 }
 
 /// Metadata for a sink message
-pub(crate) type SinkMeta = Value<'static>;
+pub type SinkMeta = Value<'static>;
 
 /// some data for a `ChannelSink` stream
 #[derive(Clone, Debug)]
@@ -99,7 +99,7 @@ pub(crate) struct SinkData {
 }
 
 /// tracking 1 channel per stream
-pub(crate) struct ChannelSink<M, F, B>
+pub struct ChannelSink<M, F, B>
 where
     M: Hash + Eq + Send + 'static,
     F: Fn(&Value<'_>) -> Option<M>,
@@ -365,8 +365,7 @@ fn get_sink_meta<'lt, 'value>(
     meta.get(ctx.connector_type.to_string().as_str())
 }
 
-#[async_trait::async_trait()]
-impl<T, F, B> Sink for ChannelSink<T, F, B>
+impl<T, F, B> RawSink for ChannelSink<T, F, B>
 where
     T: Hash + Eq + Send + Sync,
     F: (Fn(&Value<'_>) -> Option<T>) + Send + Sync,
