@@ -48,6 +48,10 @@ use tremor_pipeline::{CbAction, Event, EventId, OpMeta, SignalKind, DEFAULT_STRE
 use tremor_script::{ast::DeployEndpoint, EventPayload};
 use tremor_value::Value;
 
+use abi_stable::{
+    StableAbi
+};
+
 /// Result for a sink function that may provide insights or response.
 ///
 ///
@@ -55,7 +59,8 @@ use tremor_value::Value;
 /// circuit breaker events, guaranteed delivery events, etc.
 ///
 /// A response is an event generated from the sink delivery.
-#[derive(Clone, Debug, Default, Copy, PartialEq)]
+#[repr(C)]
+#[derive(Clone, Debug, Default, Copy, PartialEq, StableAbi)]
 pub(crate) struct SinkReply {
     /// guaranteed delivery response - did we sent the event successfully `SinkAck::Ack` or did it fail `SinkAck::Fail`
     pub(crate) ack: SinkAck,
@@ -103,7 +108,8 @@ impl SinkReply {
 
 /// stuff a sink replies back upon an event or a signal
 /// to the calling sink/connector manager
-#[derive(Clone, Debug, Copy, PartialEq)]
+#[repr(C)]
+#[derive(Clone, Debug, Copy, PartialEq, StableAbi)]
 pub(crate) enum SinkAck {
     /// no reply - maybe no reply yet, maybe replies come asynchronously...
     None,

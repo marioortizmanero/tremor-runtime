@@ -16,6 +16,8 @@
 
 use std::{marker::PhantomData, ops::Deref};
 
+use abi_stable::StableAbi;
+
 /// operator id
 #[derive(
     Debug,
@@ -103,6 +105,7 @@ impl AsRef<u64> for ConnectorId {
 }
 
 /// Sink Identifier (reuses connector id of the containing connector)
+#[repr(C)]
 #[derive(
     Debug,
     PartialEq,
@@ -115,6 +118,7 @@ impl AsRef<u64> for ConnectorId {
     Default,
     simd_json_derive::Serialize,
     simd_json_derive::Deserialize,
+    StableAbi
 )]
 pub struct SinkId(ConnectorId);
 impl From<ConnectorId> for SinkId {
@@ -140,6 +144,7 @@ impl std::fmt::Display for SinkId {
 }
 
 /// Source Identifier (reuses connector id of the containing connector)
+#[repr(C)]
 #[derive(
     Debug,
     PartialEq,
@@ -152,6 +157,7 @@ impl std::fmt::Display for SinkId {
     Default,
     simd_json_derive::Serialize,
     simd_json_derive::Deserialize,
+    StableAbi
 )]
 pub struct SourceId(ConnectorId);
 

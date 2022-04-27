@@ -57,6 +57,11 @@ use tremor_value::Value;
 use utils::reconnect::{Attempt, ConnectionLostNotifier, ReconnectRuntime};
 use value_trait::{Builder, Mutable, ValueAccess};
 
+use abi_stable::{
+    StableAbi,
+    std_types::RStr,
+};
+
 /// quiescence stuff
 pub(crate) use utils::{metrics, reconnect};
 
@@ -1085,21 +1090,29 @@ pub(crate) trait Connector: Send {
 }
 
 /// Specifeis if a connector requires a codec
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Eq, StableAbi)]
 pub(crate) enum CodecReq {
     /// No codec can be provided for this connector it always returns structured data
     Structured,
     /// A codec must be provided for this connector
     Required,
     /// A codec can be provided for this connector otherwise the default is used
-    Optional(&'static str),
+    Optional(RStr<'static>),
 }
 
 /// the type of a connector
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-pub(crate) struct ConnectorType(String);
+#[repr(C)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default, StableAbi)]
+pub(crate) struct ConnectorType(RString);
 
 impl From<ConnectorType> for String {
+    fn from(ct: ConnectorType) -> Self {
+        ct.0.into()
+    }
+}
+
+impl From<ConnectorType> for RString {
     fn from(ct: ConnectorType) -> Self {
         ct.0
     }
@@ -1119,6 +1132,12 @@ impl Display for ConnectorType {
 
 impl From<String> for ConnectorType {
     fn from(s: String) -> Self {
+        Self(s.into())
+    }
+}
+
+impl From<RString> for ConnectorType {
+    fn from(s: RString) -> Self {
         Self(s)
     }
 }

@@ -62,6 +62,11 @@ use value_trait::Builder;
 
 use super::{CodecReq, Connectivity};
 
+use abi_stable::{
+    StableAbi,
+    std_types::{RString, ROption, RVec, RBox, RCowStr},
+};
+
 #[derive(Debug)]
 /// Messages a Source can receive
 pub(crate) enum SourceMsg {
@@ -95,26 +100,27 @@ pub(crate) enum SourceMsg {
 }
 
 /// reply from `Source::on_event`
-#[derive(Debug)]
+#[repr(C)]
+#[derive(Debug, StableAbi)]
 pub enum SourceReply {
     /// A normal data event with a `Vec<u8>` for data
     Data {
         /// origin uri
         origin_uri: EventOriginUri,
         /// the data
-        data: Vec<u8>,
+        data: RVec<u8>,
         /// metadata associated with this data
-        meta: Option<Value<'static>>,
+        meta: ROption<Value<'static>>,
         /// stream id of the data
         /// if no stream is provided, this data is treated as a discrete unit,
         /// not part of any stream. preprocessors will be finalized after this etc.
         /// The event_id will have the `DEFAULT_STREAM_ID` set as stream_id.
-        stream: Option<u64>,
+        stream: ROption<u64>,
         /// Port to send to, defaults to `out`
-        port: Option<Cow<'static, str>>,
+        port: ROption<RCowStr<'static>>,
         /// Overwrite the codec being used for deserializing this data.
         /// Should only be used when setting `stream` to `None`
-        codec_overwrite: Option<Box<dyn Codec>>,
+        codec_overwrite: ROption<RBox<dyn Codec>>,
     },
     /// an already structured event payload
     Structured {
@@ -125,7 +131,7 @@ pub enum SourceReply {
         /// stream id
         stream: u64,
         /// Port to send to, defaults to `out`
-        port: Option<Cow<'static, str>>,
+        port: ROption<RCowStr<'static>>,
     },
     /// A stream is closed
     /// This might result in additional events being flushed from
@@ -138,7 +144,7 @@ pub enum SourceReply {
         /// stream id
         stream: u64,
         /// optional metadata
-        meta: Option<Value<'static>>,
+        meta: ROption<Value<'static>>,
     },
     /// Stream Failed, resources related to that stream should be cleaned up
     StreamFail(u64),
@@ -281,12 +287,13 @@ pub(crate) trait StreamReader: Send {
 
 // TODO make fields private and add some nice methods
 /// context for a source
-#[derive(Clone)]
+#[repr(C)]
+#[derive(Clone, StableAbi)]
 pub(crate) struct SourceContext {
     /// connector uid
     pub uid: SourceId,
     /// connector alias
-    pub(crate) alias: String,
+    pub(crate) alias: RString,
 
     /// connector type
     pub(crate) connector_type: ConnectorType,
