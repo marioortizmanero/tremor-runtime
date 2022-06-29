@@ -14,22 +14,19 @@
 
 pub(crate) use crate::connectors::sink::{
     AsyncSinkReply, ChannelSink, ChannelSinkRuntime, ContraflowData, EventSerializer,
-    SingleStreamSink, SingleStreamSinkRuntime, SinkAck, SinkAddr, SinkContext, SinkManagerBuilder,
-    SinkMeta, SinkReply, SinkRuntime, StreamWriter,
+    SingleStreamSink, SingleStreamSinkRuntime, SinkAck, SinkAddr, SinkManagerBuilder, SinkMeta,
+    SinkRuntime, StreamWriter,
 };
 
 pub(crate) use crate::connectors::source::{
-    ChannelSource, ChannelSourceRuntime, SourceAddr, SourceContext, SourceManagerBuilder,
-    SourceReply, StreamReader,
+    ChannelSource, ChannelSourceRuntime, SourceAddr, SourceManagerBuilder, SourceReply,
+    StreamReader,
 };
 pub(crate) use crate::connectors::utils::{
     reconnect::Attempt,
     url::{Defaults, Url},
 };
-pub(crate) use crate::connectors::{
-    spawn_task, CodecReq, ConnectorContext, ConnectorType, Context, StreamDone, StreamIdGen,
-    ACCEPT_TIMEOUT,
-};
+pub(crate) use crate::connectors::{spawn_task, Context, StreamDone, StreamIdGen, ACCEPT_TIMEOUT};
 pub(crate) use crate::errors::{Error, Kind as ErrorKind, Result};
 pub(crate) use crate::system::BoxedKillSwitch;
 pub(crate) use crate::utils::hostname;
@@ -66,14 +63,14 @@ pub use crate::{
     connectors::{
         sink::{
             BoxedContraflowSender, BoxedEventSerializer, BoxedRawSink, ContraflowSenderOpaque,
-            EventSerializerOpaque, MutEventSerializer, RawSink,
+            EventSerializerOpaque, MutEventSerializer, RawSink, SinkContext, SinkReply,
         },
-        source::{BoxedRawSource, RawSource},
+        source::{BoxedRawSource, RawSource, SourceContext},
         utils::{
             quiescence::{BoxedQuiescenceBeacon, QuiescenceBeaconOpaque},
             reconnect::{BoxedConnectionLostNotifier, ConnectionLostNotifierOpaque},
         },
-        BoxedRawConnector, RawConnector,
+        BoxedRawConnector, CodecReq, ConnectorContext, ConnectorType, RawConnector,
     },
     pdk::{ConnectorPlugin, ConnectorPluginRef},
 };

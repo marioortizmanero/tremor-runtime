@@ -469,7 +469,7 @@ pub(crate) trait StreamReader: Send {
 /// context for a source
 #[repr(C)]
 #[derive(Clone, StableAbi)]
-pub(crate) struct SourceContext {
+pub struct SourceContext {
     /// connector uid
     pub uid: SourceId,
     /// connector alias

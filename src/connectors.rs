@@ -332,7 +332,7 @@ pub(crate) trait Context: Display + Clone {
 /// connector context
 #[repr(C)]
 #[derive(Clone, StableAbi)]
-pub(crate) struct ConnectorContext {
+pub struct ConnectorContext {
     /// url of the connector
     pub(crate) alias: RString,
     /// type of the connector
@@ -1275,7 +1275,7 @@ impl Connector {
 /// Specifeis if a connector requires a codec
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, StableAbi)]
-pub(crate) enum CodecReq {
+pub enum CodecReq {
     /// No codec can be provided for this connector it always returns structured data
     Structured,
     /// A codec must be provided for this connector
@@ -1287,7 +1287,7 @@ pub(crate) enum CodecReq {
 /// the type of a connector
 #[repr(C)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default, StableAbi)]
-pub(crate) struct ConnectorType(RString);
+pub struct ConnectorType(RString);
 
 impl From<ConnectorType> for String {
     fn from(ct: ConnectorType) -> Self {
