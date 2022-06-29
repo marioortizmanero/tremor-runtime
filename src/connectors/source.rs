@@ -64,7 +64,7 @@ use abi_stable::{
     std_types::{RBox, RCowStr, ROption, ROption::RSome, RResult::ROk, RString, RVec, Tuple2},
     StableAbi,
 };
-use async_ffi::{BorrowingFfiFuture, FutureExt};
+use async_ffi::{BorrowingFfiFuture, FutureExt as _};
 use std::future;
 use tremor_common::{
     pdk::{rcow_to_beef_str, RResult},

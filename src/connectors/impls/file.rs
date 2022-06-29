@@ -34,7 +34,7 @@ use abi_stable::{
     },
     type_level::downcasting::TD_Opaque,
 };
-use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt};
+use async_ffi::{BorrowingFfiFuture, FfiFuture, FutureExt as _};
 use std::future;
 use tremor_common::{
     pdk::{beef_to_rcow_str, RError},

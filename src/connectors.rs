@@ -71,7 +71,7 @@ use abi_stable::{
     type_level::downcasting::{TD_CanDowncast, TD_Opaque},
     StableAbi,
 };
-use async_ffi::{BorrowingFfiFuture, FutureExt};
+use async_ffi::{BorrowingFfiFuture, FutureExt as _};
 use std::{env, future};
 use tremor_common::pdk::{beef_to_rcow_str, rcow_to_beef_str, RResult};
 

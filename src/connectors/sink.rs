@@ -60,7 +60,7 @@ use abi_stable::{
     type_level::downcasting::TD_Opaque,
     RMut, StableAbi,
 };
-use async_ffi::{BorrowingFfiFuture, FutureExt};
+use async_ffi::{BorrowingFfiFuture, FutureExt as _};
 use std::future;
 use tremor_common::{
     pdk::{RError, RResult},
