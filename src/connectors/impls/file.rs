@@ -23,7 +23,7 @@ use async_std::{
 use futures::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tremor_common::asy::file;
 
-use crate::{errors::Error, system::World};
+use crate::{errors::Error, system::BoxedKillSwitch};
 use abi_stable::{
     prefix_type::PrefixTypeTrait,
     rtry, rvec, sabi_extern_fn,
@@ -120,7 +120,7 @@ pub fn from_config<'a>(
     _: RStr<'a>,
     _: &'a ConnectorConfig,
     config: &'a Value,
-    _: ROption<World>,
+    _: &'a BoxedKillSwitch,
 ) -> BorrowingFfiFuture<'a, RResult<BoxedRawConnector>> {
     async move {
         let config = ttry!(Config::new(config));

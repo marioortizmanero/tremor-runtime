@@ -18,7 +18,7 @@ use beef::Cow;
 use tremor_pipeline::{MetricsMsg, METRICS_CHANNEL};
 use tremor_script::utils::hostname;
 
-use crate::system::World;
+use crate::system::BoxedKillSwitch;
 use abi_stable::{
     prefix_type::PrefixTypeTrait,
     rstr, rvec, sabi_extern_fn,
@@ -81,7 +81,7 @@ pub fn from_config<'a>(
     _id: RStr<'a>,
     _raw_config: &'a ConnectorConfig,
     _config: &'a Value,
-    _world: ROption<World>,
+    _kill_switch: &'a BoxedKillSwitch,
 ) -> BorrowingFfiFuture<'a, RResult<BoxedRawConnector>> {
     let connector = BoxedRawConnector::from_value(MetricsConnector::new(), TD_Opaque);
     future::ready(ROk(connector)).into_ffi()

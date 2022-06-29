@@ -36,7 +36,7 @@ use self::utils::quiescence::QuiescenceBeacon;
 pub(crate) use crate::config::Connector as ConnectorConfig;
 use crate::instance::State;
 use crate::pipeline;
-use crate::system::World;
+use crate::system::{BoxedKillSwitch, World};
 use crate::{
     errors::{Error, Kind as ErrorKind, Result},
     log_error,
@@ -416,22 +416,20 @@ pub(crate) async fn spawn(
     alias: &str,
     connector_id_gen: &mut ConnectorIdGen,
     builder: &ConnectorPluginRef,
-    config: ConnectorConfig,
+    raw_config: ConnectorConfig,
+    kill_switch: &BoxedKillSwitch,
 ) -> Result<Addr> {
     // instantiate connector
     // TODO: what to do here??
-    let connector = builder.from_config()(
-        alias.clone().into(),
-        config,
-        config.config.unwrap_or_default(),
-    )
-    .await;
+    let config = raw_config.config.clone().unwrap_or_default();
+    let connector =
+        builder.from_config()(alias.clone().into(), &raw_config, &config, kill_switch).await;
     let connector = Result::from(connector.map_err(Error::from))?;
     let connector = Connector(connector);
     let r = connector_task(
         alias.to_string(),
         connector,
-        config,
+        raw_config,
         connector_id_gen.next_id(),
     )
     .await?;
@@ -1383,12 +1381,13 @@ pub(crate) fn builtin_connector_types() -> Vec<ConnectorPluginRef> {
 /// debug connector types
 
 #[must_use]
-pub(crate) fn debug_connector_types(world: &World) -> Vec<ConnectorPluginRef> {
+pub(crate) fn debug_connector_types() -> Vec<ConnectorPluginRef> {
     vec![
         /*
-        Box::new(impls::cb::Builder::new(world.clone())),
-        Box::new(impls::bench::Builder::new(world.clone())),
+        Box::new(impls::cb::Builder::default()),
+        Box::new(impls::bench::Builder::default()),
         Box::new(impls::null::Builder::default()),
+        Box::new(impls::exit::Builder::default()),
         */
     ]
 }
@@ -1403,12 +1402,9 @@ pub(crate) async fn register_builtin_connector_types(world: &World, debug: bool)
         world.register_builtin_connector_type(builder).await?;
     }
     if debug {
-        for builder in debug_connector_types(world) {
+        for builder in debug_connector_types() {
             world.register_builtin_connector_type(builder).await?;
         }
-        todo!()
-        // let builder = impls::exit::instantiate_root_module(world);
-        // world.register_builtin_connector_type(builder).await?;
     }
 
     Ok(())
