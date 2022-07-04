@@ -297,11 +297,11 @@ simd-json-derive = { git = "https://github.com/marioortizmanero/simd-json-derive
 # FIXME: remove once abi_stable is updated to 0.11.
 # This patch just modifies its `abi_stable` dependency so that it's the same as
 # the one above.
-value-trait = { path = "/home/mario/Programming/value-trait" }
+value-trait = { git = "https://github.com/marioortizmanero/value-trait.git", branch = "tremor-patches" }
 # FIXME: remove once abi_stable is updated to 0.11
 # This patch just modifies its `abi_stable` dependency so that it's the same as
 # the one above.
-async-ffi = { path = "/home/mario/Programming/async-ffi" }
+async-ffi = { git = "https://github.com/marioortizmanero/async-ffi.git", branch = "tremor-patches" }
 
 # for use during debian packaging, via cargo-deb
 # https://github.com/mmstick/cargo-deb#packagemetadatadeb-options

@@ -278,6 +278,7 @@ dependencies = [
 [[package]]
 name = "async-ffi"
 version = "0.4.0"
+source = "git+https://github.com/marioortizmanero/async-ffi.git?branch=tremor-patches#377f52757742d403a59fbf870473520041d0f708"
 dependencies = [
  "abi_stable",
 ]
@@ -5619,6 +5620,7 @@ dependencies = [
 name = "tremor-cli"
 version = "0.12.4"
 dependencies = [
+ "abi_stable",
  "anyhow",
  "async-std",
  "clap 3.2.7",
@@ -6169,6 +6171,7 @@ dependencies = [
 [[package]]
 name = "value-trait"
 version = "0.2.12"
+source = "git+https://github.com/marioortizmanero/value-trait.git?branch=tremor-patches#bb0c3009fc9388b7e290036592d254574c4c42fe"
 dependencies = [
  "abi_stable",
  "float-cmp",
