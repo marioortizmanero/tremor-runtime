@@ -1,26 +1,23 @@
 define flow demo
 flow
-  define connector clock from metronome
-  with
-    config = {
-      "interval": 1000
-    }
-  end;
+  # define connector clock from metronome
+  # with
+  #   config = {
+  #     "interval": 1000
+  #   }
+  # end;
 
   define connector server from tcp_server
-  args
-      codec = "string"
   with
+    codec = "string",
     config = {
-      "port": 4242,
-      "host": "127.0.0.1"
+      "url": "127.0.0.1:4242"
     }
   end;
 
   define connector log from file
-  args
-    codec = "json"
   with
+    codec = "json",
     config = {
       "path": "output.log",
       "mode": "write"
@@ -34,14 +31,14 @@ flow
   end;
 
 
-  create connector clock;
+  # create connector clock;
   create connector server;
   create connector log;
 
   create pipeline main;
 
   connect /connector/server to /pipeline/main;
-  connect /connector/clock to /pipeline/main;
+  # connect /connector/clock to /pipeline/main;
   connect /pipeline/main to /connector/log;
 end;
 

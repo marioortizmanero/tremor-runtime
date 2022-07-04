@@ -13,4 +13,4 @@ fi
 
 echo ">> Please make sure you've compiled the tremor-cli binary"
 echo ">> Running on $MODE..."
-../target/$MODE/tremor server run -f "$1" --debug-connectors
+../target/$MODE/tremor server run "$1" --debug-connectors
