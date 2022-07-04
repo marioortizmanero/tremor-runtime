@@ -12,7 +12,6 @@ dependencies = [
  "const_panic",
  "core_extensions",
  "generational-arena",
- "halfbrown",
  "hashbrown 0.12.1",
  "libloading",
  "lock_api",
@@ -278,7 +277,7 @@ dependencies = [
 [[package]]
 name = "async-ffi"
 version = "0.4.0"
-source = "git+https://github.com/marioortizmanero/async-ffi.git?branch=tremor-patches#377f52757742d403a59fbf870473520041d0f708"
+source = "git+https://github.com/marioortizmanero/async-ffi.git?branch=tremor-patches-hashbrown#069ec026dc6827ca3ac57765f0e41eece8732b18"
 dependencies = [
  "abi_stable",
 ]
@@ -6172,7 +6171,7 @@ dependencies = [
 [[package]]
 name = "value-trait"
 version = "0.2.12"
-source = "git+https://github.com/marioortizmanero/value-trait.git?branch=tremor-patches#bb0c3009fc9388b7e290036592d254574c4c42fe"
+source = "git+https://github.com/marioortizmanero/value-trait.git?branch=tremor-patches-hashbrown#2d0ea8ede02821006baab4195b5b5f345fabfc07"
 dependencies = [
  "abi_stable",
  "float-cmp",
