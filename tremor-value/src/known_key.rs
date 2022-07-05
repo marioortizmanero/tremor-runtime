@@ -23,10 +23,10 @@ use tremor_common::pdk::{beef_to_rcow_str, RHashMap};
 
 /// Well known key that can be looked up in a `Value` faster.
 /// It achives this by memorizing the hash.
+#[repr(transparent)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct KnownKey<'key> {
     key: RCowStr<'key>,
-    hash: u64,
 }
 impl<'key> std::fmt::Display for KnownKey<'key> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -53,11 +53,7 @@ impl std::error::Error for Error {}
 
 impl<'key> From<RCowStr<'key>> for KnownKey<'key> {
     fn from(key: RCowStr<'key>) -> Self {
-        let hash_builder = halfbrown::DefaultHashBuilder::default();
-        let mut hasher = hash_builder.build_hasher();
-        key.hash(&mut hasher);
         Self {
-            hash: hasher.finish(),
             key,
         }
     }
@@ -69,7 +65,6 @@ impl<'key> From<beef::Cow<'key, str>> for KnownKey<'key> {
         let mut hasher = hash_builder.build_hasher();
         key.hash(&mut hasher);
         Self {
-            hash: hasher.finish(),
             key,
         }
     }
@@ -130,14 +125,7 @@ impl<'key> KnownKey<'key> {
     where
         'value: 'target,
     {
-        // map.get(self.key())
-        map
-            // TODO: update to better ergonomics when available
-            // .raw_entry()
-            // .from_key_hashed_nocheck(self.hash, self.key())
-            .raw_entry_key_hashed_nocheck(self.hash, self.key())
-            .map(|kv| kv.1)
-            .into()
+        map.get(self.key())
     }
 
     /// Looks up this key in a `Value`, returns None if the
@@ -201,15 +189,7 @@ impl<'key> KnownKey<'key> {
         'key: 'value,
         'value: 'target,
     {
-        match map
-            // TODO: update to better ergonomics when available
-            // .raw_entry_mut()
-            // .from_key_hashed_nocheck(self.hash, &self.key)
-            .raw_entry_mut_key_hashed_nocheck(self.hash, &self.key)
-        {
-            RRawEntryMut::Occupied(e) => Some(e.into_mut()),
-            RRawEntryMut::Vacant(_e) => None,
-        }
+        map.get_mut(self.key())
     }
 
     /// Looks up this key in a `Value`, inserts `with` when the key
@@ -302,13 +282,7 @@ impl<'key> KnownKey<'key> {
         'value: 'target,
         F: FnOnce() -> Value<'value>,
     {
-        map
-            // TODO: update to better ergonomics when available
-            // .raw_entry_mut()
-            // .from_key_hashed_nocheck(self.hash, key)
-            .raw_entry_mut_key_hashed_nocheck(self.hash, &self.key)
-            .or_insert_with(|| (self.key.clone(), with()))
-            .1
+        map.entry(self.key.clone()).or_insert_with(with)
     }
 
     /// Inserts a value key into  `Value`, returns None if the
@@ -391,18 +365,7 @@ impl<'key> KnownKey<'key> {
         'key: 'value,
         'value: 'target,
     {
-        match map
-            // TODO: update to better ergonomics when available
-            // .raw_entry_mut()
-            // .from_key_hashed_nocheck(self.hash, self.key())
-            .raw_entry_mut_key_hashed_nocheck(self.hash, &self.key)
-        {
-            RRawEntryMut::Occupied(mut e) => Some(e.insert(value)),
-            RRawEntryMut::Vacant(e) => {
-                e.insert_hashed_nocheck(self.hash, self.key.clone(), value);
-                None
-            }
-        }
+        map.insert(self.key.clone(), value).into()
     }
 }
 
@@ -410,10 +373,9 @@ impl<'script> KnownKey<'script> {
     /// turns the key into one with static lifetime
     #[must_use]
     pub fn into_static(self) -> KnownKey<'static> {
-        let KnownKey { key, hash } = self;
+        let KnownKey { key } = self;
         KnownKey {
             key: RCowStr::Owned(key.to_string().into()),
-            hash,
         }
     }
 }
