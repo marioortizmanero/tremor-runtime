@@ -40,7 +40,7 @@ pub use crate::serde::to_value;
 pub use r#static::StaticValue;
 
 /// Representation of a JSON object
-pub type Object<'value> = RHashMap<RCowStr<'value>, Value<'value>>;
+pub type Object<'value> = RHashMap<RCowStr<'value>, Value<'value>, halfbrown::DefaultHashBuilder>;
 /// Bytes
 pub type Bytes<'value> = RCowSlice<'value, u8>;
 
