@@ -511,7 +511,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
     {
         let size = map.size_hint().unwrap_or_default();
 
-        let mut m = Object::with_capacity(size);
+        let mut m = Object::with_capacity_and_hasher(size, Default::default());
         while let Some(k) = map.next_key::<&str>()? {
             let v = map.next_value()?;
             m.insert(k.into(), v);

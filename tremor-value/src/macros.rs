@@ -192,7 +192,7 @@ macro_rules! literal_internal {
     // Done. Insert all entries from the stack
     (@object $object:ident [@entries $(($value:expr => $($key:tt)+))*] () () ()) => {
         let len = literal_internal!(@object @count [@entries $(($value:expr => $($key:tt)+))*]);
-        $object = $crate::Object::with_capacity(len);
+        $object = $crate::Object::with_capacity_and_hasher(len, Default::default());
         $(
             // ALLOW: this is a macro, we don't care about the return value
             let _ = $object.insert(($($key)+).into(), $value);

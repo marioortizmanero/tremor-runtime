@@ -40,7 +40,7 @@ pub use crate::serde::to_value;
 pub use r#static::StaticValue;
 
 /// Representation of a JSON object
-pub type Object<'value> = RHashMap<RCowStr<'value>, Value<'value>, halfbrown::DefaultHashBuilder>;
+pub type Object<'value> = RHashMap<RCowStr<'value>, Value<'value>>;
 /// Bytes
 pub type Bytes<'value> = RCowSlice<'value, u8>;
 
@@ -369,7 +369,10 @@ impl<'value> Builder<'value> for Value<'value> {
     #[inline]
     #[must_use]
     fn object_with_capacity(capacity: usize) -> Self {
-        Self::Object(Object::with_capacity(capacity))
+        Self::Object(Object::with_capacity_and_hasher(
+            capacity,
+            Default::default(),
+        ))
     }
 }
 
@@ -602,7 +605,7 @@ impl<'de> ValueDeserializer<'de> {
 
     #[cfg_attr(not(feature = "no-inline"), inline(always))]
     fn parse_map(&mut self, len: usize) -> Value<'de> {
-        let mut res = Object::with_capacity(len);
+        let mut res = Object::with_capacity_and_hasher(len, Default::default());
 
         for _ in 0..len {
             // We know the tape is sane

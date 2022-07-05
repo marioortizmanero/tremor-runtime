@@ -101,7 +101,7 @@ impl<'input, 'tape> ValueDeser<'input, 'tape> {
     #[inline(always)]
     #[allow(clippy::unwrap_used)]
     fn parse_map(&mut self, len: usize) -> Value<'input> {
-        let mut res = Object::with_capacity(len);
+        let mut res = Object::with_capacity_and_hasher(len, Default::default());
 
         // Since we checked if it's empty we know that we at least have one
         // element so we eat this
