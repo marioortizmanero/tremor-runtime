@@ -15,7 +15,6 @@
 use crate::Value;
 use beef::Cow;
 use std::fmt;
-use std::hash::{BuildHasher, Hash, Hasher};
 use value_trait::{Mutable, Value as ValueTrait, ValueAccess, ValueType};
 
 use abi_stable::std_types::{map::RRawEntryMut, RCowStr};
@@ -61,9 +60,6 @@ impl<'key> From<RCowStr<'key>> for KnownKey<'key> {
 impl<'key> From<beef::Cow<'key, str>> for KnownKey<'key> {
     fn from(key: beef::Cow<'key, str>) -> Self {
         let key = beef_to_rcow_str(key);
-        let hash_builder = halfbrown::DefaultHashBuilder::default();
-        let mut hasher = hash_builder.build_hasher();
-        key.hash(&mut hasher);
         Self {
             key,
         }
