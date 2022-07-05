@@ -31,9 +31,10 @@ use std::{
 };
 
 use abi_stable::{
-    std_types::{RCowSlice, RCowStr, RHashMap, RVec, Tuple2},
+    std_types::{RCowSlice, RCowStr, RVec, Tuple2},
     StableAbi,
 };
+use tremor_common::pdk::RHashMap;
 
 pub use crate::serde::to_value;
 pub use r#static::StaticValue;

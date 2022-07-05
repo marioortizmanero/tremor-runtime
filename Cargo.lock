@@ -5668,6 +5668,7 @@ dependencies = [
  "abi_stable",
  "async-std",
  "beef",
+ "halfbrown",
  "rand 0.8.5",
  "simd-json",
  "simd-json-derive",
